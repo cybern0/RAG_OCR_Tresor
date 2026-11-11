@@ -1,1 +1,0 @@
-// with option like hash tabular

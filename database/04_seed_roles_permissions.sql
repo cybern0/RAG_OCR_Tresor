@@ -1,0 +1,1 @@
+-- 4/4 - Données initiales : rôles, permissions, premier compte administrateur (mot de passe haché, jamais en clair).

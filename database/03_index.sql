@@ -1,0 +1,1 @@
+-- 3/4 - Index : clés étrangères, hash du fichier, recherche plein texte (config french) ; index vectoriel HNSW seulement si la recherche devient lente.
