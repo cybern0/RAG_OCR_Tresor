@@ -1,1 +1,1 @@
-// Types TypeScript des utilisateurs, rôles et permissions.
+// Types TypeScript du profil connecté : utilisateur, rôle (ADMIN ou UTILISATEUR), permissions, service.

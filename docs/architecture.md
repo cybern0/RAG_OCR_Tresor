@@ -20,3 +20,10 @@
 - `core/` : sécurité et permissions
 - `schemas/` : formats d'entrée et de sortie de l'API
 - `workers/` : tâches lentes en arrière-plan
+
+## Contrôle d'accès
+- Deux rôles : ADMIN et UTILISATEUR. Les deux gèrent les documents de leur propre service ; seul ADMIN consulte le journal d'audit.
+- Aucun rôle ne crée d'agent ni d'utilisateur dans l'application : les comptes sont créés hors application (backend/scripts/creer_compte.py).
+- Le service est déduit côté serveur (utilisateur, agent, service), jamais fourni par le client.
+- Le filtre par service s'applique à la recherche vectorielle avant tout appel au LLM.
+- Détail et consignes d'implémentation : docs/PROMPT_SUITE_APP.md

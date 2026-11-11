@@ -1,1 +1,1 @@
-# Dépendances FastAPI partagées : session de base de données, utilisateur courant, vérification de permission.
+# Dépendances FastAPI partagées : session DB, utilisateur courant, require_permission(...), service autorisé de l'utilisateur.

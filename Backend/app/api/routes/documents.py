@@ -1,3 +1,3 @@
-# Routes CRUD des documents : ajout (upload), modification, suppression, liste des métadonnées.
-# Pas de route de lecture du contenu : le contenu n'est consultable qu'à travers le chat.
-# Renvoie aussi le statut d'ingestion (pending, processing, ready, error).
+# Routes CRUD des documents, limitées au service de l'utilisateur connecté (le service n'est jamais reçu du client).
+# Pas de route de lecture du contenu : seul le chat l'interroge.
+# Renvoie le statut d'ingestion (pending, processing, ready, error).
