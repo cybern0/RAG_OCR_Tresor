@@ -21,6 +21,20 @@ RAG_OCR_Tresor/
 - PostgreSQL + pgvector : base métier et base vectorielle
 - ocr_server (port 8829) : OCR des images et des scans
 
+## Initialiser la base
+
+PostgreSQL avec l'extension pgvector doit être installé. Créer la base puis exécuter les scripts dans l'ordre :
+
+```
+psql -U postgres -c "CREATE DATABASE rag;"
+psql -U postgres -d rag -f database/01_schema_metier.sql
+psql -U postgres -d rag -f database/02_schema_documents_vecteurs.sql
+psql -U postgres -d rag -f database/03_index.sql
+psql -U postgres -d rag -f database/04_seed_roles_permissions.sql
+```
+
+Les scripts sont répétables. Le compte `admin` est créé verrouillé : voir l'en-tête de `04_seed_roles_permissions.sql`.
+
 ## État
 
 Structure en place : les fichiers ne contiennent que des commentaires décrivant leur rôle, hors contenu d'origine conservé tel quel.

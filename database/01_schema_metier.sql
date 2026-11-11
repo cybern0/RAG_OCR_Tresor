@@ -1,4 +1,5 @@
--- 1/4 - Schéma rag_sys : organisation (direction, _service, agent) et comptes (_role, permission, _user).
+-- 1/4 - Schéma rag_sys : organisation (direction, _service, agent), comptes (_role, permission, _user),
+-- journal d'audit et conversations du chatbot.
 -- À exécuter en premier : crée le schéma utilisé par les scripts suivants.
 
 CREATE SCHEMA IF NOT EXISTS rag_sys;
@@ -59,5 +60,34 @@ CREATE TABLE IF NOT EXISTS _user (
     role_id BIGINT NOT NULL REFERENCES _role(id),
     actif BOOLEAN NOT NULL DEFAULT TRUE,
     derniere_connexion TIMESTAMPTZ,
+    cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 3. Journal d'audit (qui a fait quoi : ajout, modification, suppression, connexion...)
+CREATE TABLE IF NOT EXISTS journal_audit (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id BIGINT REFERENCES _user(id) ON DELETE SET NULL,
+    action VARCHAR(60) NOT NULL,          -- ex. document.creer, connexion.echec
+    entite VARCHAR(60),                   -- ex. document, utilisateur
+    entite_id BIGINT,
+    detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+    adresse_ip INET,
+    cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 4. Conversations du chatbot
+CREATE TABLE IF NOT EXISTS conversation (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES _user(id) ON DELETE CASCADE,
+    titre VARCHAR(200),
+    cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS message (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    conversation_id BIGINT NOT NULL REFERENCES conversation(id) ON DELETE CASCADE,
+    emetteur VARCHAR(10) NOT NULL CHECK (emetteur IN ('utilisateur', 'assistant')),
+    contenu TEXT NOT NULL,
+    sources JSONB NOT NULL DEFAULT '[]'::jsonb,   -- documents cités : id, titre, page, extrait court
     cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
