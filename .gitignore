@@ -1,0 +1,7 @@
+# Secrets : ne jamais versionner
+.env
+*.local
+# Fichiers déposés par les utilisateurs
+Backend/storage/uploads/*
+!Backend/storage/uploads/.gitkeep
+.DS_Store

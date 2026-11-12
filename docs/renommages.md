@@ -38,11 +38,3 @@
 | components/add_doc.tsx | features/documents/AddDocumentForm.tsx |
 | components/update_doc.tsx | features/documents/UpdateDocumentForm.tsx |
 | components/chatbot.tsx | features/chat/Chatbot.tsx |
-
-## Retirés après la décision sur les rôles (pas de création de comptes dans l'application)
-| Supprimé | Remplacé par |
-|---|---|
-| backend/app/api/routes/users.py | backend/app/api/routes/me.py |
-| frontend/src/features/users/AddUserForm.tsx | (aucun) |
-| frontend/src/api/users.ts | (aucun) |
-| (nouveau) | backend/scripts/creer_compte.py |

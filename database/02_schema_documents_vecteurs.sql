@@ -2,6 +2,9 @@
 -- document : un fichier déposé, rattaché à un service, avec son statut d'ingestion.
 -- chunk : un extrait de document, avec son embedding et son texte indexé pour la recherche plein texte.
 -- La dimension de l'embedding (768) correspond à EmbeddingGemma : à vérifier, et à changer ici si le modèle change.
+-- Les embeddings sont TOUJOURS normalisés (norme L2 = 1) : le backend les normalise avant écriture et la contrainte
+-- ck_chunk_embedding_normalise refuse tout vecteur qui ne l'est pas. La recherche utilise le produit scalaire
+-- (opérateur <#>, index vector_ip_ops), qui n'est équivalent au cosinus que si les vecteurs sont normalisés.
 
 SET search_path TO rag_sys, public;
 CREATE EXTENSION IF NOT EXISTS vector SCHEMA public;
@@ -52,5 +55,7 @@ CREATE TABLE IF NOT EXISTS chunk (
     embedding vector(768) NOT NULL,
     contenu_tsv tsvector GENERATED ALWAYS AS (to_tsvector('french', contenu)) STORED,
     cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_chunk_document_index UNIQUE (document_id, chunk_index)
+    CONSTRAINT uq_chunk_document_index UNIQUE (document_id, chunk_index),
+    -- tolérance de 0,1 % : les vecteurs sont stockés en float32
+    CONSTRAINT ck_chunk_embedding_normalise CHECK (vector_norm(embedding) BETWEEN 0.999 AND 1.001)
 );

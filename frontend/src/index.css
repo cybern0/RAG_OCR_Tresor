@@ -1,112 +1,86 @@
 @import "tailwindcss";
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+/* Thème : fonds vert végétal, texte blanc cassé, composants jaune doré. */
+@theme {
+  --color-leaf-950: #0c2014;
+  --color-leaf-900: #123020;
+  --color-leaf-800: #1a4029;
+  --color-leaf-700: #235233;
+  --color-leaf-600: #2d6842;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --color-cream-50: #f6f8ef;
+  --color-cream-100: #e8efdc;
+  --color-cream-300: #bccdb0;
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  --color-gold-300: #f2d680;
+  --color-gold-400: #e9c24f;
+  --color-gold-500: #d9a92b;
+  --color-gold-600: #b78a1d;
+
+  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
+html,
+body,
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  background: var(--color-leaf-900);
+  color: var(--color-cream-50);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+::selection {
+  background: var(--color-gold-500);
+  color: var(--color-leaf-950);
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+@layer components {
+  .card {
+    @apply rounded-xl border border-gold-500/40 bg-leaf-800 shadow-lg shadow-black/20;
   }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-gold-500 px-4 py-2 text-sm font-semibold
+      text-leaf-950 transition hover:bg-gold-400 focus-visible:outline-2 focus-visible:outline-offset-2
+      focus-visible:outline-gold-300 disabled:cursor-not-allowed disabled:opacity-50;
   }
-}
-p {
-  margin: 0;
-}
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-gold-500 bg-transparent px-3 py-1.5
+      text-sm font-medium text-gold-400 transition hover:bg-gold-500/15 focus-visible:outline-2
+      focus-visible:outline-offset-2 focus-visible:outline-gold-300 disabled:cursor-not-allowed disabled:opacity-50;
+  }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-red-300/70 bg-transparent px-3
+      py-1.5 text-sm font-medium text-red-200 transition hover:bg-red-400/15 focus-visible:outline-2
+      focus-visible:outline-offset-2 focus-visible:outline-red-300 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-gold-500/50 bg-leaf-950/70 px-3 py-2 text-sm text-cream-50
+      placeholder:text-cream-300/60 focus:border-gold-400 focus:outline-2 focus:outline-offset-0
+      focus:outline-gold-400/40 disabled:opacity-60;
+  }
+
+  .label {
+    @apply mb-1 block text-sm font-medium text-cream-100;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold;
+  }
+
+  .th {
+    @apply border-b border-gold-500/40 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gold-400;
+  }
+
+  .td {
+    @apply border-b border-leaf-700 px-3 py-2.5 align-top text-sm text-cream-50;
+  }
 }

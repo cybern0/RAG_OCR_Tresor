@@ -7,7 +7,7 @@ Les utilisateurs ajoutent, modifient et suppriment des documents, sans en lire l
 
 ```
 RAG_OCR_Tresor/
-├── backend/        API FastAPI (Python, uv)
+├── Backend/        API FastAPI (Python, uv)
 ├── frontend/       Interface React + TypeScript (Vite)
 ├── database/       Scripts SQL, à exécuter dans l'ordre 01 à 04
 ├── ocr_server/     Serveur PaddleOCR, séparé du backend
@@ -33,8 +33,22 @@ psql -U postgres -d rag -f database/03_index.sql
 psql -U postgres -d rag -f database/04_seed_roles_permissions.sql
 ```
 
-Les scripts sont répétables. Le compte `admin` est créé verrouillé : voir l'en-tête de `04_seed_roles_permissions.sql`.
+Les scripts sont répétables. Pour contrôler que les embeddings sont bien normalisés : `psql -U postgres -d rag -f database/verif_vecteurs_normalises.sql` (attendu : 0 non normalisé). Le compte `admin` est créé verrouillé : voir l'en-tête de `04_seed_roles_permissions.sql`.
 
-## État
+## Démarrer
 
-Structure en place : les fichiers ne contiennent que des commentaires décrivant leur rôle, hors contenu d'origine conservé tel quel.
+1. Base : voir ci-dessus, puis `cp .env.example .env` et renseigner `SECRET_KEY`.
+2. Ollama : `ollama pull qwen3:4b-instruct-2507-q4_K_M` et `ollama pull embeddinggemma:300m-qat-q4_0`.
+3. OCR (optionnel tant qu'on ne dépose pas de scans ni d'images) : `cd ocr_server && uv run server.py`.
+4. Backend : `cd Backend && uv sync && uv run python -m app.cli set-password admin && uv run uvicorn app.main:app --reload`.
+5. Frontend : `cd frontend && npm install && npm run dev` puis http://localhost:5173 (le proxy `/api` vise le port 8000).
+
+Connexion avec `admin` et le mot de passe choisi à l'étape 4. L'admin crée ensuite une direction, un service, des agents, puis les
+comptes utilisateurs (chaque utilisateur est lié à un agent, donc à un service).
+
+## Rôles
+
+- **ADMIN** : tout (utilisateurs, agents, services, documents et chat de tous les services, audit).
+- **UTILISATEUR** : ajoute, modifie, supprime les documents de son service et interroge le chatbot sur ce service ; ne crée ni agent ni utilisateur.
+
+Détails dans `docs/architecture.md`.

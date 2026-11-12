@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS conversation (
 CREATE TABLE IF NOT EXISTS message (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     conversation_id BIGINT NOT NULL REFERENCES conversation(id) ON DELETE CASCADE,
-    emetteur VARCHAR(10) NOT NULL CHECK (emetteur IN ('utilisateur', 'assistant')),
+    emetteur VARCHAR(15) NOT NULL CHECK (emetteur IN ('utilisateur', 'assistant')),
     contenu TEXT NOT NULL,
     sources JSONB NOT NULL DEFAULT '[]'::jsonb,   -- documents cités : id, titre, page, extrait court
     cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -11,4 +11,14 @@ export default defineConfig({
 
     babel({ presets: [reactCompilerPreset()] })
   ],
+  server: {
+    // En développement, /api est relayé vers le backend FastAPI (port 8000) : pas de CORS à gérer.
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
+  },
 })
