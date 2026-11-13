@@ -8,7 +8,7 @@ __pycache__/
 .ruff_cache/
 .pyre/
 .pdm-build/
-
+storage/
 # Virtual environments / uv
 .venv/
 venv/
