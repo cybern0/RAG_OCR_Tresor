@@ -207,6 +207,32 @@ def test_connexion_et_me(client, world):
     assert client.get("/auth/me", headers={"Authorization": "Bearer faux.jeton"}).status_code == 401
 
 
+def test_document_corbeille_soft_delete_et_restore(client, world):
+    h = world["admin"]
+    dossier_id = world["A"]["id"]
+    doc = ready_doc(client, h, dossier_id, "Document de test corbeille")
+    doc_id = doc["id"]
+
+    r = client.delete(f"/documents/{doc_id}", headers=h)
+    assert r.status_code == 204, r.text
+
+    r = client.get("/documents", headers=h, params={"dossier_id": dossier_id})
+    assert r.status_code == 200, r.text
+    assert doc_id not in [item["id"] for item in r.json()]
+
+    r = client.get("/documents", headers=h, params={"dossier_id": dossier_id, "corbeille": True})
+    assert r.status_code == 200, r.text
+    ids = [item["id"] for item in r.json()]
+    assert doc_id in ids
+
+    r = client.post(f"/documents/{doc_id}/restore", headers=h)
+    assert r.status_code == 204, r.text
+
+    r = client.get("/documents", headers=h, params={"dossier_id": dossier_id})
+    assert r.status_code == 200, r.text
+    assert doc_id in [item["id"] for item in r.json()]
+
+
 def test_mauvais_mot_de_passe_et_compte_verrouille(client, world):
     assert login(client, world["a"]["name"], "mauvais-mot-de-passe").status_code == 401
     assert login(client, "compte_qui_n_existe_pas").status_code == 401

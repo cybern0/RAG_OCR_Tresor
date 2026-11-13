@@ -12,9 +12,15 @@ RAG_OCR_Tresor/
 ├── frontend/       Interface React + TypeScript (Vite)
 ├── database/       Scripts SQL, à exécuter dans l'ordre 01 à 05 (+ retour arrière et vérification de 05)
 ├── ocr_server/     Serveur PaddleOCR, séparé du backend
-├── docs/           Architecture et historique des renommages
+├── docs/           Architecture, historique des renommages et plans d'implémentation
 └── .env.example
 ```
+
+### Documentation complémentaire
+
+- [docs/architecture.md](docs/architecture.md) : architecture applicative et règles de sécurité.
+- [docs/renommages.md](docs/renommages.md) : historique des renommages de fichiers et modules.
+- [docs/plan_ged_implementation.md](docs/plan_ged_implementation.md) : plan détaillé de la GED (classement, statistiques, partage, collaboration, corbeille).
 
 ## Services externes
 

@@ -31,13 +31,13 @@ export default function DeleteDocumentDialog({ doc, onClose, onDone }: Props) {
   return (
     <Modal title="Supprimer le fichier" onClose={onClose}>
       <p className="text-sm">
-        Supprimer <span className="font-semibold text-gold-300">« {doc.titre} »</span> et ses {doc.nb_versions} version{doc.nb_versions > 1 ? 's' : ''} ?
-        Les fichiers et leur contenu indexé seront effacés définitivement ; le chatbot ne pourra plus s’y référer.
+        Mettre <span className="font-semibold text-gold-300">« {doc.titre} »</span> dans la corbeille ?
+        Il restera accessible depuis l’administration locale pour restauration, mais il ne sera plus visible dans le dossier actif ni dans le chatbot.
       </p>
       <div className="mt-4"><ErrorBox message={error} /></div>
       <div className="mt-5 flex justify-end gap-2">
         <button className="btn-ghost" onClick={onClose}>Annuler</button>
-        <button className="btn-danger" disabled={busy} onClick={() => void confirm()}>{busy ? 'Suppression…' : 'Supprimer'}</button>
+        <button className="btn-danger" disabled={busy} onClick={() => void confirm()}>{busy ? 'Déplacement…' : 'Mettre dans la corbeille'}</button>
       </div>
     </Modal>
   )

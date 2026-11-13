@@ -45,3 +45,70 @@ class DocumentOut(BaseModel):
     cree_par_nom: str | None
     cree_le: datetime
     modifie_le: datetime
+
+
+class DocumentPageOut(BaseModel):
+    items: list[DocumentOut]
+    total: int
+    page: int
+    taille: int
+
+
+class DocumentPartageIn(BaseModel):
+    role: str
+    user_id: int | None = None
+    service_id: int | None = None
+    expire_le: datetime | None = None
+    is_anonymous: bool = True
+    token: str | None = None
+
+
+class DocumentPartageOut(BaseModel):
+    id: int
+    document_id: int
+    user_id: int | None = None
+    service_id: int | None = None
+    role: str
+    expire_le: datetime | None = None
+    is_anonymous: bool = True
+    token_hash: str | None = None
+    token: str | None = None
+    cree_le: datetime
+
+
+class DocumentLienPartageIn(BaseModel):
+    role: str = "LECTEUR"
+    expire_le: datetime | None = None
+    est_anonyme: bool = True
+    token: str | None = None
+
+
+class DocumentLienPartageOut(BaseModel):
+    id: int
+    document_id: int
+    role: str
+    est_anonyme: bool = True
+    expire_le: datetime | None = None
+    token_hash: str | None = None
+    token: str | None = None
+    cree_le: datetime
+
+
+class PartageRequestIn(BaseModel):
+    requested_role: str = "LECTEUR"
+    message: str = ""
+
+
+class AccessRequestDecisionIn(BaseModel):
+    decision: str
+    granted_role: str | None = None
+    message: str | None = None
+
+
+class CommentaireIn(BaseModel):
+    contenu: str
+    parent_id: int | None = None
+
+
+class FavoriIn(BaseModel):
+    entity_type: str = "document"

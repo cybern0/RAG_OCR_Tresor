@@ -7,23 +7,63 @@ Les droits se vérifient dans services/documents (rôle du dossier) ; dossier ho
 Ajouter une version AJOUTE : l'ancienne reste indexée, téléchargeable et interrogeable.
 """
 
-from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
+from datetime import datetime
+
+from fastapi import APIRouter, Body, Depends, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip, get_db, get_principal
-from app.core.permissions import APERCU, TELECHARGER, Principal
-from app.schemas.document import DocumentOut, VersionOut
+from app.core.permissions import APERCU, MODIFIER, TELECHARGER, Principal, exiger_acces
+from app.db.vecteur import Document
+from app.schemas.document import DocumentOut, DocumentPageOut, VersionOut
+from app.services.classement import definir_classement_manuel
 from app.services.documents import apercu, crud
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
-@router.get("", response_model=list[DocumentOut])
+@router.get("", response_model=list[DocumentOut] | DocumentPageOut)
 def list_documents(
-    dossier_id: int | None = None, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)
+    dossier_id: int | None = None,
+    q: str | None = None,
+    categorie_id: int | None = Query(default=None),
+    type_id: int | None = Query(default=None),
+    tag_id: list[int] | None = Query(default=None),
+    confidentialite: str | None = None,
+    statut: str | None = None,
+    extension: str | None = None,
+    du: datetime | None = None,
+    au: datetime | None = None,
+    auteur_id: int | None = None,
+    tri: str = "date_desc",
+    page: int | None = Query(default=None),
+    taille: int | None = Query(default=None),
+    partages: bool = False,
+    corbeille: bool = Query(default=False),
+    principal: Principal = Depends(get_principal),
+    db: Session = Depends(get_db),
 ):
-    return crud.list_documents(db, principal, dossier_id)
+    return crud.list_documents(
+        db,
+        principal,
+        dossier_id,
+        q=q,
+        categorie_id=categorie_id,
+        type_id=type_id,
+        tag_ids=tag_id,
+        confidentialite=confidentialite,
+        statut=statut,
+        extension=extension,
+        du=du,
+        au=au,
+        auteur_id=auteur_id,
+        tri=tri,
+        page=page,
+        taille=taille,
+        partages=partages,
+        corbeille=corbeille,
+    )
 
 
 @router.post("", response_model=DocumentOut, status_code=201)
@@ -54,11 +94,61 @@ def update_document(
     )
 
 
+@router.post("/classer-lot")
+def classer_lot(
+    payload: dict = Body(...),
+    principal: Principal = Depends(get_principal),
+    db: Session = Depends(get_db),
+):
+    ids = payload.get("ids", [])
+    categorie_id = payload.get("categorie_id")
+    type_document_id = payload.get("type_document_id")
+    tags = payload.get("tags")
+    confidentialite = payload.get("confidentialite")
+    result = {"ok": [], "not_found": [], "forbidden": []}
+    for document_id in ids:
+        doc = db.get(Document, document_id)
+        if doc is None:
+            result["not_found"].append(document_id)
+            continue
+        try:
+            exiger_acces(db, principal, doc.dossier_id, MODIFIER)
+        except Exception:
+            result["forbidden"].append(document_id)
+            continue
+        definir_classement_manuel(
+            db,
+            doc,
+            categorie_id=categorie_id,
+            type_document_id=type_document_id,
+            tags=tags,
+            confidentialite=confidentialite,
+        )
+        result["ok"].append(document_id)
+    db.commit()
+    return result
+
+
 @router.delete("/{document_id}", status_code=204)
 def delete_document(
-    document_id: int, request: Request, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)
+    document_id: int,
+    request: Request,
+    force: bool = False,
+    principal: Principal = Depends(get_principal),
+    db: Session = Depends(get_db),
 ) -> Response:
-    crud.delete_document(db, principal, document_id, client_ip(request))
+    crud.delete_document(db, principal, document_id, client_ip(request), force=force)
+    return Response(status_code=204)
+
+
+@router.post("/{document_id}/restore", status_code=204)
+def restore_document(
+    document_id: int,
+    request: Request,
+    principal: Principal = Depends(get_principal),
+    db: Session = Depends(get_db),
+) -> Response:
+    crud.restore_document(db, principal, document_id, client_ip(request))
     return Response(status_code=204)
 
 

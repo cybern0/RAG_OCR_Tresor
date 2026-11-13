@@ -18,12 +18,13 @@ interdite par le rôle renvoie 403. La matrice ci-dessous est la seule source de
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.db.metier import Dossier, DossierMembre, DossierService, Permission, User, role_permission
+from app.db.metier import Dossier, DossierMembre, DossierService, DocumentPartage, Permission, User, role_permission
 
 ROLE_ADMIN = "ADMIN"
 ROLE_UTILISATEUR = "UTILISATEUR"
@@ -36,6 +37,8 @@ UTILISATEUR_LISTER = "utilisateur.lister"
 UTILISATEUR_CREER = "utilisateur.creer"
 UTILISATEUR_MODIFIER = "utilisateur.modifier"
 STRUCTURE_GERER = "structure.gerer"
+CLASSEMENT_GERER = "classement.gerer"
+STATISTIQUES_GLOBALES = "statistiques.globales"
 AUDIT_CONSULTER = "audit.consulter"
 DOSSIER_GERER = "dossier.gerer"
 
@@ -56,14 +59,15 @@ AJOUTER_FICHIER = "ajouter_fichier"
 AJOUTER_VERSION = "ajouter_version"
 MODIFIER = "modifier"  # titre et cases tableaux / images
 SUPPRIMER = "supprimer"  # un fichier ou une version
+PARTAGER = "partager"  # gestion des accès du dossier et des services / membres
 
-ACTIONS_ECRITURE = frozenset({AJOUTER_FICHIER, AJOUTER_VERSION, MODIFIER, SUPPRIMER})
+ACTIONS_ECRITURE = frozenset({AJOUTER_FICHIER, AJOUTER_VERSION, MODIFIER, SUPPRIMER, PARTAGER})
 
 _LECTURE = frozenset({VOIR, APERCU, TELECHARGER, CHAT})
 MATRICE: dict[str, frozenset[str]] = {
     LECTEUR: _LECTURE,
     CONTRIBUTEUR: _LECTURE | {AJOUTER_FICHIER, AJOUTER_VERSION, MODIFIER},
-    GESTIONNAIRE: _LECTURE | {AJOUTER_FICHIER, AJOUTER_VERSION, MODIFIER, SUPPRIMER},
+    GESTIONNAIRE: _LECTURE | {AJOUTER_FICHIER, AJOUTER_VERSION, MODIFIER, SUPPRIMER, PARTAGER},
 }
 
 
@@ -148,6 +152,57 @@ def ids_dossiers_accessibles(db: Session, principal: Principal, inclure_archives
 def ids_dossiers_interrogeables(db: Session, principal: Principal) -> list[int]:
     """Dossiers sur lesquels le chat et la recherche peuvent porter : accessibles et non archivés."""
     return ids_dossiers_accessibles(db, principal, inclure_archives=False)
+
+
+def role_effectif_document(db: Session, principal: Principal, document) -> str | None:
+    """Rôle effectif sur un document : dossier + partage direct local."""
+    if document is None:
+        return None
+    if principal.is_admin:
+        return GESTIONNAIRE
+    dossier_role = roles_par_dossier(db, principal).get(document.dossier_id)
+    role = dossier_role
+    if principal.user.id is not None:
+        direct_role = db.scalar(
+            select(DocumentPartage.role).where(
+                DocumentPartage.document_id == document.id,
+                DocumentPartage.user_id == principal.user.id,
+                or_(DocumentPartage.expire_le.is_(None), DocumentPartage.expire_le > func.now()),
+            )
+        )
+        if direct_role is not None:
+            role = plus_haut(role, direct_role)
+    service_id = principal.service_actif_id
+    if service_id is not None:
+        direct_service_role = db.scalar(
+            select(DocumentPartage.role).where(
+                DocumentPartage.document_id == document.id,
+                DocumentPartage.service_id == service_id,
+                or_(DocumentPartage.expire_le.is_(None), DocumentPartage.expire_le > func.now()),
+            )
+        )
+        if direct_service_role is not None:
+            role = plus_haut(role, direct_service_role)
+    return role
+
+
+def exiger_acces_document(db: Session, principal: Principal, document, action: str) -> tuple[Any, str]:
+    """Vérifie les droits effectifs sur un document, sans révéler les dossiers non accessibles."""
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
+    if document.dossier_id is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dossier introuvable.")
+    dossier = db.get(Dossier, document.dossier_id)
+    if dossier is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dossier introuvable.")
+    role = role_effectif_document(db, principal, document)
+    if role is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
+    if action not in MATRICE[role]:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Action non autorisée pour votre rôle sur ce document.")
+    if dossier.archive and action in ACTIONS_ECRITURE:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Ce dossier est archivé : il est en lecture seule.")
+    return document, role
 
 
 def exiger_acces(db: Session, principal: Principal, dossier_id: int, action: str) -> tuple[Dossier, str]:

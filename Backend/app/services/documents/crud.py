@@ -11,17 +11,20 @@ Droits : rôle de l'utilisateur dans le DOSSIER du fichier (core/permissions.py)
 import hashlib
 import re
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.config import get_settings
 from app.core.permissions import (
-    AJOUTER_FICHIER, AJOUTER_VERSION, MODIFIER, SUPPRIMER, VOIR, Principal, exiger_acces, roles_par_dossier,
+    AJOUTER_FICHIER, AJOUTER_VERSION, MODIFIER, SUPPRIMER, VOIR, Principal, exiger_acces, exiger_acces_document,
+    role_effectif_document, roles_par_dossier,
 )
+from app.db.metier import DocumentPartage
 from app.db.vecteur import Document, DocumentVersion
 from app.schemas.document import DocumentOut, VersionOut
 from app.services.audit import log_action
@@ -82,11 +85,11 @@ def _query():
 # --- Accès -----------------------------------------------------------------------------------------------------------
 
 def get_document(db: Session, principal: Principal, document_id: int, action: str) -> tuple[Document, str]:
-    """Le fichier et le rôle effectif, si l'action est permise dans son dossier (sinon 404 / 403 / 409)."""
+    """Le fichier et le rôle effectif, incluant les partages locaux sur le document."""
     doc = db.scalars(_query().where(Document.id == document_id)).unique().one_or_none()
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
-    _, role = exiger_acces(db, principal, doc.dossier_id, action)  # 404 si le dossier est hors des accès
+    _, role = exiger_acces_document(db, principal, doc, action)
     return doc, role
 
 
@@ -98,17 +101,161 @@ def get_version(db: Session, principal: Principal, document_id: int, numero: int
     raise HTTPException(status.HTTP_404_NOT_FOUND, "Version introuvable.")
 
 
-def list_documents(db: Session, principal: Principal, dossier_id: int | None = None) -> list[DocumentOut]:
+def _document_latest_version(doc: Document) -> DocumentVersion | None:
+    return doc.versions[-1] if doc.versions else None
+
+
+def _document_extension(doc: Document) -> str | None:
+    version = _document_latest_version(doc)
+    if version is None or not version.nom_fichier:
+        return None
+    return Path(version.nom_fichier).suffix.lower().lstrip('.')
+
+
+def apply_document_filters(
+    docs: list[Document],
+    q: str | None = None,
+    categorie_id: int | None = None,
+    type_id: int | None = None,
+    tag_ids: list[int] | None = None,
+    confidentialite: str | None = None,
+    statut: str | None = None,
+    extension: str | None = None,
+    du=None,
+    au=None,
+    auteur_id: int | None = None,
+    tri: str = "date_desc",
+    page: int | None = None,
+    taille: int | None = None,
+):
+    """Applique les filtres métier sur une liste de documents et retourne une page paginée."""
+    filtered = list(docs)
+
+    if q:
+        needle = q.strip().lower()
+        if needle:
+            filtered = [
+                d for d in filtered
+                if needle in (d.titre or "").lower()
+                or any(needle in (v.nom_fichier or "").lower() for v in d.versions)
+            ]
+
+    if extension:
+        ext = extension.strip().lower().lstrip('.')
+        filtered = [d for d in filtered if _document_extension(d) == ext]
+
+    if statut:
+        filtered = [d for d in filtered if (_document_latest_version(d) is not None and _document_latest_version(d).statut == statut)]
+
+    if du is not None:
+        filtered = [d for d in filtered if d.cree_le >= du]
+    if au is not None:
+        filtered = [d for d in filtered if d.cree_le <= au]
+    if auteur_id is not None:
+        filtered = [d for d in filtered if d.cree_par == auteur_id]
+
+    if tri in {"titre_asc", "titre_desc"}:
+        filtered.sort(key=lambda d: (d.titre or "").lower(), reverse=(tri == "titre_desc"))
+    else:
+        filtered.sort(key=lambda d: (d.cree_le, d.id), reverse=True)
+
+    total = len(filtered)
+    page = max(page or 1, 1)
+    taille = max(taille or total or 20, 1)
+    start = (page - 1) * taille
+    end = start + taille
+    return {
+        "items": filtered[start:end],
+        "total": total,
+        "page": page,
+        "taille": taille,
+    }
+
+
+def list_documents(
+    db: Session,
+    principal: Principal,
+    dossier_id: int | None = None,
+    q: str | None = None,
+    categorie_id: int | None = None,
+    type_id: int | None = None,
+    tag_ids: list[int] | None = None,
+    confidentialite: str | None = None,
+    statut: str | None = None,
+    extension: str | None = None,
+    du=None,
+    au=None,
+    auteur_id: int | None = None,
+    tri: str = "date_desc",
+    page: int | None = None,
+    taille: int | None = None,
+    partages: bool = False,
+    corbeille: bool = False,
+) -> list[DocumentOut] | dict:
     roles = roles_par_dossier(db, principal)
+    dossier_ids = set(roles)
     if dossier_id is not None:
         exiger_acces(db, principal, dossier_id, VOIR)  # 404 hors des accès
-        roles = {dossier_id: roles[dossier_id]}
-    if not roles:
-        return []
+        dossier_ids = {dossier_id}
+
+    shared_doc_ids: set[int] = set()
+    if partages:
+        shared_doc_ids.update(
+            db.scalars(
+                select(DocumentPartage.document_id).where(
+                    DocumentPartage.user_id == principal.user.id,
+                    DocumentPartage.expire_le.is_(None) | (DocumentPartage.expire_le > func.now()),
+                )
+            ).all()
+        )
+        service_id = principal.service_actif_id
+        if service_id is not None:
+            shared_doc_ids.update(
+                db.scalars(
+                    select(DocumentPartage.document_id).where(
+                        DocumentPartage.service_id == service_id,
+                        DocumentPartage.expire_le.is_(None) | (DocumentPartage.expire_le > func.now()),
+                    )
+                ).all()
+            )
+
+    if not dossier_ids and not shared_doc_ids:
+        return {"items": [], "total": 0, "page": page or 1, "taille": taille or 20} if page is not None or taille is not None else []
+
+    doc_filter = []
+    if dossier_ids:
+        doc_filter.append(Document.dossier_id.in_(dossier_ids))
+    if shared_doc_ids:
+        doc_filter.append(Document.id.in_(shared_doc_ids))
+    if corbeille:
+        doc_filter.append(Document.corbeille_le.is_not(None))
+    else:
+        doc_filter.append(Document.corbeille_le.is_(None))
+
     docs = db.scalars(
-        _query().where(Document.dossier_id.in_(roles)).order_by(Document.cree_le.desc(), Document.id.desc())
-    ).unique()
-    return [to_out(d, roles[d.dossier_id]) for d in docs]
+        _query().where(or_(*doc_filter)).order_by(Document.cree_le.desc(), Document.id.desc())
+    ).unique().all()
+    ordered_docs = [d for d in docs if d.dossier_id in dossier_ids or d.id in shared_doc_ids]
+    filtered = apply_document_filters(
+        ordered_docs,
+        q=q,
+        categorie_id=categorie_id,
+        type_id=type_id,
+        tag_ids=tag_ids,
+        confidentialite=confidentialite,
+        statut=statut,
+        extension=extension,
+        du=du,
+        au=au,
+        auteur_id=auteur_id,
+        tri=tri,
+        page=page,
+        taille=taille,
+    )
+    items = [to_out(d, roles[d.dossier_id]) for d in filtered["items"]]
+    if page is not None or taille is not None:
+        return {"items": items, "total": filtered["total"], "page": filtered["page"], "taille": filtered["taille"]}
+    return items
 
 
 def list_versions(db: Session, principal: Principal, document_id: int) -> list[VersionOut]:
@@ -312,16 +459,38 @@ def delete_version(db: Session, principal: Principal, document_id: int, numero: 
     apercu.remove_cache(version_id)
 
 
-def delete_document(db: Session, principal: Principal, document_id: int, ip: str | None) -> None:
+def delete_document(db: Session, principal: Principal, document_id: int, ip: str | None, force: bool = False) -> None:
+    """Met un document dans la corbeille par défaut ; force=true effectue une purge définitive."""
     doc, _ = get_document(db, principal, document_id, SUPPRIMER)
     versions = [(v.id, v.chemin_stockage) for v in doc.versions]
-    log_action(db, principal.user.id, "document.supprimer", "document", doc.id,
-               {"titre": doc.titre, "dossier_id": doc.dossier_id, "versions": len(versions)}, ip)
-    db.delete(doc)  # versions et chunks partent en cascade
+    if force:
+        log_action(db, principal.user.id, "document.supprimer_definitivement", "document", doc.id,
+                   {"titre": doc.titre, "dossier_id": doc.dossier_id, "versions": len(versions)}, ip)
+        db.delete(doc)  # versions et chunks partent en cascade
+        db.commit()
+        for version_id, path in versions:
+            _remove_file(path)
+            apercu.remove_cache(version_id)
+        return
+
+    if doc.corbeille_le is None:
+        doc.corbeille_le = datetime.now(UTC)
+        doc.modifie_par = principal.user.id
+        log_action(db, principal.user.id, "document.corbeille", "document", doc.id,
+                   {"titre": doc.titre, "dossier_id": doc.dossier_id, "versions": len(versions)}, ip)
+        db.commit()
+
+
+def restore_document(db: Session, principal: Principal, document_id: int, ip: str | None) -> None:
+    """Restaure un document depuis la corbeille."""
+    doc, _ = get_document(db, principal, document_id, SUPPRIMER)
+    if doc.corbeille_le is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Le document n'est pas dans la corbeille.")
+    doc.corbeille_le = None
+    doc.modifie_par = principal.user.id
+    log_action(db, principal.user.id, "document.restaurer", "document", doc.id,
+               {"titre": doc.titre, "dossier_id": doc.dossier_id}, ip)
     db.commit()
-    for version_id, path in versions:
-        _remove_file(path)
-        apercu.remove_cache(version_id)
 
 
 def count_versions(db: Session, document_id: int) -> int:

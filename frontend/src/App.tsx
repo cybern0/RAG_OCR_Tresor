@@ -20,7 +20,7 @@ export default function App() {
   const pages: { id: Page; label: string; allowed: boolean }[] = [
     { id: 'documents', label: 'Dossiers et fichiers', allowed: can('document.lister') },
     { id: 'chat', label: 'Chatbot', allowed: can('chat.utiliser') },
-    { id: 'admin', label: 'Administration', allowed: can('dossier.gerer') || can('utilisateur.lister') || can('structure.gerer') || can('audit.consulter') },
+    { id: 'admin', label: 'Administration', allowed: can('dossier.gerer') || can('utilisateur.lister') || can('structure.gerer') || can('audit.consulter') || can('statistiques.globales') || can('classement.gerer') },
   ]
   const visible = pages.filter((p) => p.allowed)
   const page = visible.find((p) => p.id === requested)?.id ?? visible[0]?.id

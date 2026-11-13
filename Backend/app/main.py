@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import audit, auth, chat, documents, dossiers, health, structure, users
+from app.api.routes import audit, auth, chat, classement, documents, dossiers, health, partage, structure, users
 from app.config import get_settings
 from app.workers import ingestion_worker
 
@@ -34,5 +34,5 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-for module in (health, auth, users, structure, dossiers, documents, chat, audit):
+for module in (health, auth, users, structure, dossiers, documents, classement, partage, chat, audit):
     app.include_router(module.router)

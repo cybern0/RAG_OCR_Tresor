@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.metier import SessionLocal
 from app.db.vecteur import Chunk, DocumentVersion
+from app.services.classement import appliquer
 from app.services.ingestion.chunking import chunk_documents
 from app.services.ingestion.embedding import EmbeddingError, embed_documents
 from app.services.ingestion.parser import IngestionError, parse_file
@@ -72,6 +73,8 @@ def run_ingestion(version_id: int) -> None:
                 )
                 for c, vec in zip(chunks, vectors, strict=True)
             )
+            texte = "\n".join(c.page_content for c in chunks)[:20_000]
+            appliquer(db, doc, version, texte)
             version.nb_pages = parsed.nb_pages
             version.ocr_utilise = parsed.ocr_utilise
             if parsed.has_tabular and not doc.has_tabular:

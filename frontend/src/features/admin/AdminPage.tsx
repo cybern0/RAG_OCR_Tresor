@@ -6,8 +6,9 @@ import DossiersPanel from '../dossiers/DossiersPanel'
 import AgentsPanel from '../structure/AgentsPanel'
 import ServicesPanel from '../structure/ServicesPanel'
 import UsersPanel from '../users/UsersPanel'
+import GedDashboardPanel from './GedDashboardPanel'
 
-type Tab = 'dossiers' | 'users' | 'agents' | 'services' | 'audit'
+type Tab = 'dossiers' | 'users' | 'agents' | 'services' | 'audit' | 'ged'
 
 export default function AdminPage() {
   const { can } = useAuth()
@@ -16,6 +17,7 @@ export default function AdminPage() {
     { id: 'users', label: 'Utilisateurs', allowed: can('utilisateur.lister') },
     { id: 'agents', label: 'Agents', allowed: can('structure.gerer') },
     { id: 'services', label: 'Services', allowed: can('structure.gerer') },
+    { id: 'ged', label: 'GED / Dashboard', allowed: can('statistiques.globales') || can('classement.gerer') },
     { id: 'audit', label: "Journal d'audit", allowed: can('audit.consulter') },
   ]
   const visible = tabs.filter((t) => t.allowed)
@@ -34,6 +36,7 @@ export default function AdminPage() {
       {tab === 'users' && <UsersPanel />}
       {tab === 'agents' && <AgentsPanel />}
       {tab === 'services' && <ServicesPanel />}
+      {tab === 'ged' && <GedDashboardPanel />}
       {tab === 'audit' && <AuditPanel />}
     </section>
   )

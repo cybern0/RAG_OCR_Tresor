@@ -206,6 +206,105 @@ class DossierService(Base):
     service: Mapped[Service] = relationship()
 
 
+class DocumentPartage(Base):
+    """Accès direct à un document sans passer par le dossier."""
+
+    __tablename__ = "document_partage"
+
+    id: Mapped[int] = _pk()
+    document_id: Mapped[int] = mapped_column(ForeignKey("document.id", ondelete="CASCADE"))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
+    service_id: Mapped[int | None] = mapped_column(ForeignKey("_service.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(15))
+    expire_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cree_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User | None] = relationship(foreign_keys=[user_id])
+    service: Mapped[Service | None] = relationship()
+
+
+class DocumentLienPartage(Base):
+    """Lien de partage local d'un document : interne ou anonyme, avec token hashé."""
+
+    __tablename__ = "document_lien_partage"
+
+    id: Mapped[int] = _pk()
+    document_id: Mapped[int] = mapped_column(ForeignKey("document.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True)
+    role: Mapped[str] = mapped_column(String(30), default="LECTEUR", server_default="LECTEUR")
+    est_anonyme: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    expire_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cree_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    createur: Mapped[User | None] = relationship(foreign_keys=[cree_par])
+
+
+class DemandeAcces(Base):
+    """Demande locale d'accès à un document ou un dossier."""
+
+    __tablename__ = "demande_acces"
+
+    id: Mapped[int] = _pk()
+    sujet_type: Mapped[str] = mapped_column(String(20))
+    sujet_id: Mapped[int] = mapped_column(BigInteger)
+    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
+    role_demande: Mapped[str] = mapped_column(String(30), default="LECTEUR", server_default="LECTEUR")
+    message: Mapped[str | None] = mapped_column(Text)
+    statut: Mapped[str] = mapped_column(String(15), default="pending", server_default="pending")
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship()
+
+
+class Commentaire(Base):
+    """Commentaire local porté par un document ou un dossier."""
+
+    __tablename__ = "commentaire"
+
+    id: Mapped[int] = _pk()
+    sujet_type: Mapped[str] = mapped_column(String(20))
+    sujet_id: Mapped[int] = mapped_column(BigInteger)
+    auteur_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
+    contenu: Mapped[str] = mapped_column(Text)
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("commentaire.id", ondelete="CASCADE"))
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    auteur: Mapped[User] = relationship()
+
+
+class NotificationInterne(Base):
+    """Notification locale interne pour l'utilisateur."""
+
+    __tablename__ = "notification_interne"
+
+    id: Mapped[int] = _pk()
+    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
+    type_notification: Mapped[str] = mapped_column(String(25), default="info", server_default="info")
+    sujet_type: Mapped[str] = mapped_column(String(20))
+    sujet_id: Mapped[int] = mapped_column(BigInteger)
+    message: Mapped[str] = mapped_column(Text)
+    lu: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship()
+
+
+class Favori(Base):
+    """Favori local sur un document ou un dossier."""
+
+    __tablename__ = "favori"
+
+    id: Mapped[int] = _pk()
+    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
+    sujet_type: Mapped[str] = mapped_column(String(20))
+    sujet_id: Mapped[int] = mapped_column(BigInteger)
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship()
+
+
 class PreferenceUtilisateur(Base):
     __tablename__ = "preference_utilisateur"
 
@@ -225,3 +324,53 @@ class MemoireChat(Base):
     resume: Mapped[str] = mapped_column(Text)
     dossier_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default=list, server_default="{}")
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Categorie(Base):
+    __tablename__ = "categorie"
+
+    id: Mapped[int] = _pk()
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("categorie.id", ondelete="SET NULL"))
+    nom: Mapped[str] = mapped_column(String(120))
+    couleur: Mapped[str | None] = mapped_column(String(9))
+    ordre: Mapped[int] = mapped_column(default=0, server_default="0")
+    actif: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class TypeDocument(Base):
+    __tablename__ = "type_document"
+
+    id: Mapped[int] = _pk()
+    nom: Mapped[str] = mapped_column(String(120), unique=True)
+    actif: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class Tag(Base):
+    __tablename__ = "tag"
+
+    id: Mapped[int] = _pk()
+    nom: Mapped[str] = mapped_column(String(60))
+
+
+class DocumentTag(Base):
+    __tablename__ = "document_tag"
+
+    document_id: Mapped[int] = mapped_column(ForeignKey("document.id", ondelete="CASCADE"), primary_key=True)
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True)
+    source: Mapped[str] = mapped_column(String(10), default="manuel", server_default="manuel")
+
+
+class RegleClassement(Base):
+    __tablename__ = "regle_classement"
+
+    id: Mapped[int] = _pk()
+    nom: Mapped[str] = mapped_column(String(120))
+    priorite: Mapped[int] = mapped_column(default=100, server_default="100")
+    actif: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    critere: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    categorie_id: Mapped[int | None] = mapped_column(ForeignKey("categorie.id", ondelete="SET NULL"))
+    type_document_id: Mapped[int | None] = mapped_column(ForeignKey("type_document.id", ondelete="SET NULL"))
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String(60)), default=list, server_default="{}")
+    confidentialite: Mapped[str | None] = mapped_column(String(15))
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    modifie_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

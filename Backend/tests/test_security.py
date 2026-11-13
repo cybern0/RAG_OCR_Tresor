@@ -1,5 +1,6 @@
 import time
 
+from app.core.permissions import CONTRIBUTEUR, GESTIONNAIRE, LECTEUR, MATRICE, PARTAGER
 from app.core.security import (
     LoginThrottle, create_access_token, hash_password, is_locked_hash, read_token, token_matches_password,
     verify_password,
@@ -53,3 +54,9 @@ def test_limitation_des_essais():
     assert not t.is_blocked("ip|bob", now=161)        # la fenêtre a expiré
     t.record_failure("ip|bob", now=200); t.reset("ip|bob")
     assert not t.is_blocked("ip|bob", now=200)
+
+
+def test_partager_est_restreint_aux_gestionnaires_de_dossier():
+    assert PARTAGER in MATRICE[GESTIONNAIRE]
+    assert PARTAGER not in MATRICE[CONTRIBUTEUR]
+    assert PARTAGER not in MATRICE[LECTEUR]
