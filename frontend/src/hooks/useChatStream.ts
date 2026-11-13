@@ -9,6 +9,7 @@ export interface ChatMessage {
   role: 'utilisateur' | 'assistant'
   text: string
   sources: Source[]
+  masque?: boolean // réponse masquée : accès perdu à l'un des dossiers cités
 }
 
 const newId = () => crypto.randomUUID()
@@ -77,7 +78,7 @@ export function useChatStream() {
     try {
       const stored = await getConversation(id)
       setConversationId(id)
-      setMessages(stored.map((s) => ({ id: newId(), role: s.emetteur, text: s.contenu, sources: s.sources })))
+      setMessages(stored.map((s) => ({ id: newId(), role: s.emetteur, text: s.contenu, sources: s.sources, masque: s.masque })))
     } catch (e) {
       setError(errorMessage(e))
     }

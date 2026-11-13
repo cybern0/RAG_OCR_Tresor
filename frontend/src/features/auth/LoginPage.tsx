@@ -2,7 +2,9 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { errorMessage } from '../../api/client'
+import ExampleButton from '../../components/ui/ExampleButton'
 import { ErrorBox } from '../../components/ui/Feedback'
+import { exempleIdentifiant, exempleMotDePasse } from '../../lib/exemples'
 import { useAuth } from '../../hooks/useAuth'
 
 export default function LoginPage() {
@@ -30,7 +32,10 @@ export default function LoginPage() {
         <div className="text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gold-500 text-2xl text-leaf-950">❦</div>
           <h1 className="text-2xl font-bold text-gold-400">Trésor RAG</h1>
-          <p className="mt-1 text-sm text-cream-300">Assistant documentaire de votre service</p>
+          <p className="mt-1 text-sm text-cream-300">Assistant documentaire de vos dossiers</p>
+        </div>
+        <div className="flex justify-end">
+          <ExampleButton onFill={() => { setUsername(exempleIdentifiant()); setPassword(exempleMotDePasse()) }} />
         </div>
         <div>
           <label className="label" htmlFor="username">Nom d'utilisateur</label>

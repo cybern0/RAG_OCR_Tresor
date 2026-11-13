@@ -68,7 +68,7 @@ def test_vecteur_nul_refuse_a_l_indexation(monkeypatch):
 def test_la_recherche_refuse_une_question_non_normalisee():
     # le contrôle précède tout accès à la base : db=None suffit
     with pytest.raises(EmbeddingError, match="non normalisé"):
-        search_chunks(None, [3.0] * 768, "question", service_ids=None)
+        search_chunks(None, [3.0] * 768, "question", dossier_ids=[1])
 
 
 def test_la_requete_utilise_le_produit_scalaire():

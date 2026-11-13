@@ -1,4 +1,4 @@
-// Racine de l'interface : connexion, puis navigation entre Documents, Chatbot et Administration
+// Racine de l'interface : connexion, puis navigation entre Dossiers et fichiers, Chatbot et Administration
 // selon les permissions du compte.
 import { useState } from 'react'
 import { Loading } from './components/ui/Feedback'
@@ -18,9 +18,9 @@ export default function App() {
   if (status === 'anonymous' || !user) return <LoginPage />
 
   const pages: { id: Page; label: string; allowed: boolean }[] = [
-    { id: 'documents', label: 'Documents', allowed: can('document.lister') },
+    { id: 'documents', label: 'Dossiers et fichiers', allowed: can('document.lister') },
     { id: 'chat', label: 'Chatbot', allowed: can('chat.utiliser') },
-    { id: 'admin', label: 'Administration', allowed: can('utilisateur.lister') || can('structure.gerer') || can('audit.consulter') },
+    { id: 'admin', label: 'Administration', allowed: can('dossier.gerer') || can('utilisateur.lister') || can('structure.gerer') || can('audit.consulter') },
   ]
   const visible = pages.filter((p) => p.allowed)
   const page = visible.find((p) => p.id === requested)?.id ?? visible[0]?.id

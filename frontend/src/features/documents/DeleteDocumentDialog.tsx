@@ -1,4 +1,4 @@
-// Confirmation de suppression d'un document (supprime aussi ses passages indexés et le fichier).
+// Confirmation de suppression d'un fichier entier (toutes ses versions, leurs passages indexés et les fichiers).
 import { useState } from 'react'
 import { deleteDocument } from '../../api/documents'
 import { errorMessage } from '../../api/client'
@@ -29,10 +29,10 @@ export default function DeleteDocumentDialog({ doc, onClose, onDone }: Props) {
   }
 
   return (
-    <Modal title="Supprimer le document" onClose={onClose}>
+    <Modal title="Supprimer le fichier" onClose={onClose}>
       <p className="text-sm">
-        Supprimer <span className="font-semibold text-gold-300">« {doc.titre} »</span> ? Le fichier et son contenu indexé seront
-        effacés définitivement ; le chatbot ne pourra plus s'y référer.
+        Supprimer <span className="font-semibold text-gold-300">« {doc.titre} »</span> et ses {doc.nb_versions} version{doc.nb_versions > 1 ? 's' : ''} ?
+        Les fichiers et leur contenu indexé seront effacés définitivement ; le chatbot ne pourra plus s’y référer.
       </p>
       <div className="mt-4"><ErrorBox message={error} /></div>
       <div className="mt-5 flex justify-end gap-2">

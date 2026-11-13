@@ -18,14 +18,15 @@ LibreOffice doit être installé pour lire Word, PowerPoint, Excel ancien format
 
 | | ADMIN | UTILISATEUR |
 |---|---|---|
-| Documents (liste, ajout, modification, suppression) | tous les services | son service uniquement |
-| Chatbot | tous les services | son service uniquement |
-| Créer / modifier des utilisateurs | oui | non |
-| Créer / modifier agents, services, directions | oui | non |
+| Créer / renommer / archiver / supprimer un dossier, gérer ses membres et rôles | oui | non |
+| Fichiers et chat | tous les dossiers | selon son rôle dans chaque dossier (LECTEUR, CONTRIBUTEUR, GESTIONNAIRE_DE_CONTENU) |
+| Créer / modifier des utilisateurs, agents, services, directions | oui | non |
 | Journal d'audit | oui | non |
 
-Le service d'un utilisateur est celui de l'agent auquel son compte est lié : un compte UTILISATEUR doit donc être lié à un agent rattaché à un service.
-Les droits sont vérifiés côté serveur (`app/core/permissions.py`, `app/api/deps.py`) ; l'interface ne fait que masquer les boutons.
+Un rôle de dossier est donné à un utilisateur ou à un service entier ; le rôle effectif est le plus élevé des deux, recalculé à chaque requête
+(un retrait prend effet immédiatement). La matrice des actions par rôle est la constante `MATRICE` de `app/core/permissions.py`.
+Un compte UTILISATEUR doit rester lié à un agent rattaché à un service (c'est ce service qui porte l'accès par service).
+Les droits sont vérifiés côté serveur ; l'interface ne fait que masquer les boutons.
 
 ## Tests
 
@@ -34,5 +35,5 @@ uv run pytest                    # tests unitaires (aucun service externe)
 TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rag_test uv run pytest   # + tests d'API
 ```
 
-La base de test doit avoir reçu les scripts `database/01` à `04`. Ollama et l'OCR sont simulés pendant les tests.
+La base de test doit avoir reçu les scripts `database/01` à `05`. Ollama et l'OCR sont simulés pendant les tests.
 Voir `../docs/architecture.md` pour le rôle de chaque dossier.

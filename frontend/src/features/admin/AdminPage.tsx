@@ -1,16 +1,18 @@
-// Page d'administration (ADMIN) : utilisateurs, agents, services, journal d'audit.
+// Page d'administration (ADMIN) : dossiers et accès, utilisateurs, agents, services, journal d'audit.
 import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import AuditPanel from '../audit/AuditPanel'
+import DossiersPanel from '../dossiers/DossiersPanel'
 import AgentsPanel from '../structure/AgentsPanel'
 import ServicesPanel from '../structure/ServicesPanel'
 import UsersPanel from '../users/UsersPanel'
 
-type Tab = 'users' | 'agents' | 'services' | 'audit'
+type Tab = 'dossiers' | 'users' | 'agents' | 'services' | 'audit'
 
 export default function AdminPage() {
   const { can } = useAuth()
   const tabs: { id: Tab; label: string; allowed: boolean }[] = [
+    { id: 'dossiers', label: 'Dossiers et accès', allowed: can('dossier.gerer') },
     { id: 'users', label: 'Utilisateurs', allowed: can('utilisateur.lister') },
     { id: 'agents', label: 'Agents', allowed: can('structure.gerer') },
     { id: 'services', label: 'Services', allowed: can('structure.gerer') },
@@ -28,6 +30,7 @@ export default function AdminPage() {
             className={tab === t.id ? 'btn' : 'btn-ghost'}>{t.label}</button>
         ))}
       </div>
+      {tab === 'dossiers' && <DossiersPanel />}
       {tab === 'users' && <UsersPanel />}
       {tab === 'agents' && <AgentsPanel />}
       {tab === 'services' && <ServicesPanel />}

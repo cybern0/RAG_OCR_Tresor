@@ -2,6 +2,7 @@
 
 - PDF, Office, OpenDocument : LiteParse (markdown page par page, OCR via le serveur PaddleOCR si besoin).
   Les formats Office/OpenDocument demandent LibreOffice sur la machine du backend.
+  Avec l'option « images » (force_images), les images embarquées sont extraites puis passées à l'OCR EN PLUS du texte natif.
 - Images : client OCR (clients/ocr_paddle.py), avec reconstruction des tableaux par position des boîtes.
 - CSV / XLSX : lecture directe, chaque feuille devient un tableau markdown (est_tableau).
 - TXT / MD : lecture directe.
@@ -25,6 +26,24 @@ TABULAR_EXT = {".csv", ".xlsx"}
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
 DOCUMENT_EXT = {".pdf", ".docx", ".doc", ".pptx", ".ppt", ".odt", ".ods", ".odp", ".rtf", ".xls"}
 ALLOWED_EXT = TEXT_EXT | TABULAR_EXT | IMAGE_EXT | DOCUMENT_EXT
+
+# Règle des cases « tableaux » / « images » : un fichier de type tableur ou image les impose (cochées, non modifiables) ;
+# pour les autres types (pdf, word...) c'est l'utilisateur qui coche. .xls et .ods sont des tableurs au même titre
+# que .xlsx, même s'ils sont lus par LiteParse/LibreOffice et non en lecture directe.
+TABLE_TYPE_EXT = TABULAR_EXT | {".xls", ".ods"}
+IMAGE_TYPE_EXT = IMAGE_EXT
+
+
+def forced_flags(ext: str) -> tuple[bool, bool]:
+    """(tableaux imposés, images imposées) d'après l'extension."""
+    ext = ext.lower()
+    return ext in TABLE_TYPE_EXT, ext in IMAGE_TYPE_EXT
+
+
+def apply_flags(ext: str, tableaux: bool, images: bool) -> tuple[bool, bool]:
+    """Valeurs finales des cases : l'imposé l'emporte toujours sur ce que le client a envoyé."""
+    forced_t, forced_i = forced_flags(ext)
+    return tableaux or forced_t, images or forced_i
 
 MAX_TABLE_ROWS = 50_000
 _TABLE_SEPARATOR = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$")
@@ -235,15 +254,18 @@ def parse_image(path: Path, force_tabular: bool = False) -> ParsedFile:
 # --- PDF, Word, PowerPoint... (LiteParse) --------------------------------------------------------------------------
 
 MIN_NATIVE_CHARS = 30  # en dessous, une page est considérée comme un scan (pas de couche texte)
+MIN_IMAGE_SIDE = 60  # pixels : les images plus petites (puces, logos, filets) ne valent pas un appel OCR
+MAX_EMBEDDED_IMAGES = 40  # borne de temps de traitement sur CPU
 
 
-def _liteparse(ocr: bool):
+def _liteparse(ocr: bool, extract_images: bool = False):
     from liteparse import LiteParse
 
     s = get_settings()
     return LiteParse(
         output_format="markdown",
         image_mode="off",
+        extract_images=extract_images,
         ocr_enabled=ocr,
         ocr_server_url=s.ocr_endpoint if ocr else None,
         ocr_language=s.ocr_language,
@@ -252,16 +274,48 @@ def _liteparse(ocr: bool):
     )
 
 
-def parse_document(path: Path) -> ParsedFile:
+def _ocr_embedded_images(images, skip_pages: set[int]) -> list[Document]:
+    """OCR des images embarquées (option « images »). `images` : result.images de LiteParse (chacune porte son numéro
+    de page). Les pages déjà passées en OCR intégral (scans) sont ignorées : leur image EST la page, la relire
+    doublerait le texte."""
+    import tempfile
+
+    docs: list[Document] = []
+    done = 0
+    for img in images:
+        if img.page in skip_pages:
+            continue
+        if img.duplicate_of is not None or min(img.width, img.height) < MIN_IMAGE_SIDE or not img.bytes:
+            continue
+        if done >= MAX_EMBEDDED_IMAGES:
+            break
+        done += 1
+        suffix = "." + (img.format or "png").lower().lstrip(".")
+        with tempfile.NamedTemporaryFile(suffix=suffix) as tmp:
+            tmp.write(img.bytes)
+            tmp.flush()
+            try:
+                boxes = ocr_image(Path(tmp.name))
+            except OcrError as e:
+                raise IngestionError(f"OCR des images de la page {img.page} impossible : {e}") from e
+        for d in ocr_boxes_to_documents(boxes):
+            d.page_content = f"[Texte lu dans une image de la page {img.page}]\n{d.page_content}"
+            d.metadata.update({"page": img.page, "image": True})
+            docs.append(d)
+    return docs
+
+
+def parse_document(path: Path, force_images: bool = False) -> ParsedFile:
     """Lecture en deux temps : d'abord sans OCR (rapide, et le serveur OCR peut être éteint) ;
-    l'OCR n'est lancé que si une page n'a pas de texte natif (scan)."""
+    l'OCR n'est lancé que si une page n'a pas de texte natif (scan).
+    force_images : en plus, l'OCR des images embarquées des pages qui ont déjà du texte natif."""
     from liteparse import ParseError
 
     try:
-        result = _liteparse(ocr=False).parse(str(path))
-        needs_ocr = any(len((p.markdown or p.text).strip()) < MIN_NATIVE_CHARS for p in result.pages)
-        if needs_ocr:
-            result = _liteparse(ocr=True).parse(str(path))
+        result = _liteparse(ocr=False, extract_images=force_images).parse(str(path))
+        scan_pages = {p.page_num for p in result.pages if len((p.markdown or p.text).strip()) < MIN_NATIVE_CHARS}
+        if scan_pages:
+            result = _liteparse(ocr=True, extract_images=force_images).parse(str(path))
     except ParseError as e:
         raise IngestionError(f"Lecture du document impossible : {str(e)[:400]}") from e
 
@@ -271,6 +325,10 @@ def parse_document(path: Path) -> ParsedFile:
         # confidence n'est renseignée que pour le texte venant de l'OCR
         ocr_used = ocr_used or any(item.confidence is not None for item in page.text_items)
         docs.extend(_documents_from_markdown(page.markdown or page.text, page.page_num))
+    if force_images:
+        image_docs = _ocr_embedded_images(result.images, scan_pages)
+        docs.extend(image_docs)
+        ocr_used = ocr_used or bool(image_docs)
     return ParsedFile(
         docs,
         nb_pages=result.total_pages,
@@ -294,7 +352,7 @@ def parse_text(path: Path) -> ParsedFile:
 
 # --- Point d'entrée ------------------------------------------------------------------------------------------------
 
-def parse_file(path: Path, force_tabular: bool = False) -> ParsedFile:
+def parse_file(path: Path, force_tabular: bool = False, force_images: bool = False) -> ParsedFile:
     ext = path.suffix.lower()
     if ext in TABULAR_EXT:
         parsed = parse_tabular(path, ext)
@@ -303,7 +361,7 @@ def parse_file(path: Path, force_tabular: bool = False) -> ParsedFile:
     elif ext in TEXT_EXT:
         parsed = parse_text(path)
     elif ext in DOCUMENT_EXT:
-        parsed = parse_document(path)
+        parsed = parse_document(path, force_images)
     else:
         raise IngestionError(f"Type de fichier non pris en charge : {ext or 'sans extension'}.")
     if not any(d.page_content.strip() for d in parsed.documents):

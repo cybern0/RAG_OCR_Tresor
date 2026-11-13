@@ -62,7 +62,7 @@ export function errorMessage(error: unknown): string {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   json?: unknown
   form?: FormData
   signal?: AbortSignal

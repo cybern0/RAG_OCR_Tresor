@@ -1,13 +1,15 @@
 """Connexion à la base métier (schéma rag_sys) : engine SQLAlchemy, session, modèles des tables
-direction, _service, agent, _role, permission, role_permission, _user, journal_audit, conversation, message.
+direction, _service, agent, _role, permission, role_permission, _user, journal_audit, conversation, message,
+dossier, dossier_membre, dossier_service, preference_utilisateur, memoire_chat.
 
-Les modèles document et chunk sont dans db/vecteur.py (même base, même schéma).
+Les modèles document, document_version et chunk sont dans db/vecteur.py (même base, même schéma).
 """
 
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    ARRAY,
     BigInteger,
     Boolean,
     Column,
@@ -159,4 +161,67 @@ class Message(Base):
     emetteur: Mapped[str] = mapped_column(String(15))  # 'utilisateur' | 'assistant'
     contenu: Mapped[str] = mapped_column(Text)
     sources: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default="[]")
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# --- Dossiers partagés et rôles --------------------------------------------------------------------------------------
+
+class Dossier(Base):
+    """Un dossier : groupe isolé et plat (pas de sous-dossier), sans lien avec les directions ni les services."""
+
+    __tablename__ = "dossier"
+
+    id: Mapped[int] = _pk()
+    nom: Mapped[str] = mapped_column(String(150))
+    description: Mapped[str | None] = mapped_column(Text)
+    archive: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    cree_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    modifie_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DossierMembre(Base):
+    """Rôle direct d'un utilisateur dans un dossier."""
+
+    __tablename__ = "dossier_membre"
+
+    dossier_id: Mapped[int] = mapped_column(ForeignKey("dossier.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"), primary_key=True)
+    role: Mapped[str] = mapped_column(String(30))
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship()
+
+
+class DossierService(Base):
+    """Rôle donné à un service entier dans un dossier."""
+
+    __tablename__ = "dossier_service"
+
+    dossier_id: Mapped[int] = mapped_column(ForeignKey("dossier.id", ondelete="CASCADE"), primary_key=True)
+    service_id: Mapped[int] = mapped_column(ForeignKey("_service.id"), primary_key=True)
+    role: Mapped[str] = mapped_column(String(30))
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    service: Mapped[Service] = relationship()
+
+
+class PreferenceUtilisateur(Base):
+    __tablename__ = "preference_utilisateur"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"), primary_key=True)
+    memoire_inter_sessions: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    derniere_version_seulement: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
+class MemoireChat(Base):
+    """Résultat retenu d'une session pour enrichir les suivantes ; dossier_ids sert au filtre d'accès."""
+
+    __tablename__ = "memoire_chat"
+
+    id: Mapped[int] = _pk()
+    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
+    conversation_id: Mapped[int | None] = mapped_column(ForeignKey("conversation.id", ondelete="CASCADE"))
+    resume: Mapped[str] = mapped_column(Text)
+    dossier_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default=list, server_default="{}")
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

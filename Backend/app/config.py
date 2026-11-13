@@ -43,7 +43,14 @@ class Settings(BaseSettings):
     # RAG
     chunk_size: int = 1000
     chunk_overlap: int = 150
-    retrieval_k: int = 5
+    # nombre de passages renvoyés : calculé entre ces bornes d'après la taille des fichiers concernés (top-k dynamique)
+    retrieval_k_min: int = 3
+    retrieval_k_max: int = 8
+    # contexte envoyé au LLM (≈ 8192 tokens de fenêtre) : caractères maximum pour les passages, l'historique et la mémoire
+    context_max_chars: int = 9000
+    history_max_messages: int = 6
+    history_message_chars: int = 1200
+    memory_max_entries: int = 5
 
     @property
     def sqlalchemy_url(self) -> str:

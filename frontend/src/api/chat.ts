@@ -4,9 +4,17 @@ import { api, rawFetch } from './client'
 export interface Source {
   ref: number
   document_id: number
+  dossier_id: number | null
   titre: string
+  version: number | null
+  date: string | null
   page: number | null
   extrait: string
+}
+
+export interface ChatPreferences {
+  memoire_inter_sessions: boolean
+  derniere_version_seulement: boolean
 }
 
 export interface ConversationItem {
@@ -20,6 +28,7 @@ export interface StoredMessage {
   emetteur: 'utilisateur' | 'assistant'
   contenu: string
   sources: Source[]
+  masque: boolean
   cree_le: string
 }
 
@@ -74,3 +83,7 @@ export async function streamChat(
 export const listConversations = () => api<ConversationItem[]>('/chat/conversations')
 export const getConversation = (id: number) => api<StoredMessage[]>(`/chat/conversations/${id}`)
 export const deleteConversation = (id: number) => api<void>(`/chat/conversations/${id}`, { method: 'DELETE' })
+
+export const getPreferences = () => api<ChatPreferences>('/chat/preferences')
+export const setPreferences = (data: Partial<ChatPreferences>) =>
+  api<ChatPreferences>('/chat/preferences', { method: 'PUT', json: data })

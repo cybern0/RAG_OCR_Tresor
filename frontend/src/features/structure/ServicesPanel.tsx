@@ -3,7 +3,9 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { errorMessage } from '../../api/client'
 import { createDirection, createService, listDirections, listServices, updateDirection, updateService } from '../../api/structure'
+import ExampleButton from '../../components/ui/ExampleButton'
 import { ErrorBox, Loading } from '../../components/ui/Feedback'
+import { exempleCode, exempleNomDirection, exempleNomService } from '../../lib/exemples'
 import { useLoad } from '../../hooks/useLoad'
 
 export default function ServicesPanel() {
@@ -41,7 +43,10 @@ export default function ServicesPanel() {
       <div className="lg:col-span-2"><ErrorBox message={error ?? directions.error ?? services.error} /></div>
 
       <section className="card space-y-3 p-4">
-        <h2 className="font-semibold text-gold-400">Directions</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-semibold text-gold-400">Directions</h2>
+          <ExampleButton onFill={() => setDir({ code: exempleCode('DIR'), nom: exempleNomDirection() })} />
+        </div>
         <form onSubmit={addDirection} className="flex flex-wrap gap-2">
           <input aria-label="Code de la direction" className="input w-28" placeholder="Code" required value={dir.code} onChange={(e) => setDir({ ...dir, code: e.target.value })} />
           <input aria-label="Nom de la direction" className="input min-w-0 flex-1" placeholder="Nom de la direction" required value={dir.nom} onChange={(e) => setDir({ ...dir, nom: e.target.value })} />
@@ -58,7 +63,13 @@ export default function ServicesPanel() {
       </section>
 
       <section className="card space-y-3 p-4">
-        <h2 className="font-semibold text-gold-400">Services</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-semibold text-gold-400">Services</h2>
+          <ExampleButton onFill={() => {
+            setSrv({ code: exempleCode('SRV'), nom: exempleNomService() })
+            setSrvDirection((directions.data ?? []).find((d) => d.actif)?.id ?? '')
+          }} />
+        </div>
         <form onSubmit={addService} className="flex flex-wrap gap-2">
           <input aria-label="Code du service" className="input w-28" placeholder="Code" required value={srv.code} onChange={(e) => setSrv({ ...srv, code: e.target.value })} />
           <input aria-label="Nom du service" className="input min-w-0 flex-1" placeholder="Nom du service" required value={srv.nom} onChange={(e) => setSrv({ ...srv, nom: e.target.value })} />

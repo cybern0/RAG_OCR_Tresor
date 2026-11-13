@@ -1,10 +1,13 @@
 // Formulaire de création d'utilisateur (ADMIN). Un UTILISATEUR doit être lié à un agent : son service en découle.
+// Ses droits sur les fichiers viennent des dossiers (rôle direct, ou rôle de son service).
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { createUser } from '../../api/users'
 import { errorMessage } from '../../api/client'
 import Modal from '../../components/ui/Modal'
+import ExampleButton from '../../components/ui/ExampleButton'
 import { ErrorBox } from '../../components/ui/Feedback'
+import { exempleIdentifiant, exempleMotDePasse } from '../../lib/exemples'
 import type { Agent } from '../../types/structure'
 import type { Role } from '../../types/user'
 
@@ -40,6 +43,14 @@ export default function AddUserForm({ agents, onClose, onDone }: Props) {
   return (
     <Modal title="Nouvel utilisateur" onClose={onClose}>
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
+        <div className="flex justify-end">
+          <ExampleButton onFill={() => {
+            setUsername(exempleIdentifiant())
+            setPassword(exempleMotDePasse())
+            setRole('UTILISATEUR')
+            setAgentId(free[0]?.id ?? '')
+          }} />
+        </div>
         <div>
           <label className="label" htmlFor="nu-name">Nom d'utilisateur</label>
           <input id="nu-name" className="input" required autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} />
@@ -53,7 +64,7 @@ export default function AddUserForm({ agents, onClose, onDone }: Props) {
         <div>
           <label className="label" htmlFor="nu-role">Rôle</label>
           <select id="nu-role" className="input" value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="UTILISATEUR">Utilisateur (documents de son service)</option>
+            <option value="UTILISATEUR">Utilisateur (accès par dossiers)</option>
             <option value="ADMIN">Administrateur (tout)</option>
           </select>
         </div>

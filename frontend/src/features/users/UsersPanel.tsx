@@ -4,7 +4,9 @@ import type { FormEvent } from 'react'
 import { errorMessage } from '../../api/client'
 import { listAgents } from '../../api/structure'
 import { listUsers, updateUser } from '../../api/users'
+import ExampleButton from '../../components/ui/ExampleButton'
 import { ErrorBox, Loading } from '../../components/ui/Feedback'
+import { exempleMotDePasse } from '../../lib/exemples'
 import Modal from '../../components/ui/Modal'
 import { useAuth } from '../../hooks/useAuth'
 import { useLoad } from '../../hooks/useLoad'
@@ -44,6 +46,7 @@ function EditUserForm({ target, agents, isSelf, onClose, onDone }: { target: Use
   return (
     <Modal title={`Modifier ${target.nom_utilisateur}`} onClose={onClose}>
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
+        <div className="flex justify-end"><ExampleButton onFill={() => setPassword(exempleMotDePasse())} /></div>
         <div>
           <label className="label" htmlFor="eu-role">Rôle</label>
           <select id="eu-role" className="input" disabled={isSelf} value={role} onChange={(e) => setRole(e.target.value as Role)}>

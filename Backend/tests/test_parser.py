@@ -116,3 +116,55 @@ def test_ocr_texte_sans_tableau():
     docs = ocr_boxes_to_documents(boxes)
     assert len(docs) == 1 and docs[0].page_content == "Bonjour le monde\nDeuxième ligne"
     assert not docs[0].metadata["est_tableau"]
+
+
+# --- cases « tableaux / images » et OCR des images embarquées --------------------------------------------------------
+
+def test_regle_des_cases_selon_le_type():
+    from app.services.ingestion.parser import apply_flags, forced_flags
+
+    assert forced_flags(".csv") == (True, False) and forced_flags(".XLSX") == (True, False)
+    assert forced_flags(".xls") == (True, False) and forced_flags(".ods") == (True, False)
+    assert forced_flags(".png") == (False, True) and forced_flags(".jpeg") == (False, True)
+    assert forced_flags(".pdf") == (False, False) and forced_flags(".docx") == (False, False)
+    assert apply_flags(".csv", False, False) == (True, False)        # imposé : l'envoi du client ne compte pas
+    assert apply_flags(".png", True, False) == (True, True)          # libre + imposé
+    assert apply_flags(".pdf", True, True) == (True, True)           # libre : ce que coche l'utilisateur
+    assert apply_flags(".pdf", False, False) == (False, False)
+
+
+def test_ocr_des_images_embarquees(monkeypatch):
+    """Les images embarquées sont lues par l'OCR en plus du texte ; les petites, les doublons et celles des pages déjà
+    passées en OCR intégral (scans) sont ignorées."""
+    from types import SimpleNamespace as NS
+
+    from app.services.ingestion import parser
+
+    def img(page=1, w=300, h=200, dup=None, data=b"x"):
+        return NS(page=page, width=w, height=h, duplicate_of=dup, bytes=data, format="png")
+
+    images = [img(), img(w=30, h=30), img(dup="p1_1"), img(data=b""), img(page=2), img(page=3)]
+    seen = []
+    monkeypatch.setattr(
+        parser, "ocr_image",
+        lambda path: seen.append(path) or [OcrBox("Facture n° 42", 0, 0, 100, 10, 0.9)],
+    )
+    docs = parser._ocr_embedded_images(images, skip_pages={2})
+    assert len(seen) == 2 and len(docs) == 2                     # page 1 (1 image utile) et page 3 ; pas la page 2
+    assert [d.metadata["page"] for d in docs] == [1, 3] and all(d.metadata["image"] for d in docs)
+    assert "Facture n° 42" in docs[0].page_content and "image de la page 1" in docs[0].page_content
+
+
+def test_ocr_image_embarquee_en_echec_est_une_erreur_claire(monkeypatch):
+    from types import SimpleNamespace as NS
+
+    from app.clients.ocr_paddle import OcrError
+    from app.services.ingestion import parser
+
+    def boom(path):
+        raise OcrError("serveur éteint")
+
+    monkeypatch.setattr(parser, "ocr_image", boom)
+    images = [NS(page=4, width=300, height=200, duplicate_of=None, bytes=b"x", format="png")]
+    with pytest.raises(IngestionError, match="page 4"):
+        parser._ocr_embedded_images(images, set())

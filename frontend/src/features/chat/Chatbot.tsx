@@ -1,11 +1,18 @@
-// Interface de chat : historique des conversations, réponses en streaming, sources citées.
+// Interface de chat : historique des conversations, réponses en streaming, sources citées (avec version et date).
+// Mémoire dans une session : obligatoire (la conversation est relue côté serveur) ; la dernière conversation se rouvre
+// toute seule après une reconnexion. Deux options personnelles : mémoire entre sessions, dernière version seulement.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { deleteConversation, listConversations } from '../../api/chat'
+import { deleteConversation, getPreferences, listConversations, setPreferences } from '../../api/chat'
+import type { ChatPreferences } from '../../api/chat'
+import { errorMessage } from '../../api/client'
+import ExampleButton from '../../components/ui/ExampleButton'
 import { ErrorBox } from '../../components/ui/Feedback'
 import { useChatStream } from '../../hooks/useChatStream'
 import type { ChatMessage } from '../../hooks/useChatStream'
 import { useLoad } from '../../hooks/useLoad'
+import { formatDay } from '../../lib/fichiers'
+import { exempleQuestion } from '../../lib/exemples'
 
 function Sources({ message }: { message: ChatMessage }) {
   if (message.sources.length === 0) return null
@@ -19,6 +26,7 @@ function Sources({ message }: { message: ChatMessage }) {
           <li key={s.ref} className="rounded-lg border border-gold-500/30 bg-leaf-950/50 p-2.5">
             <p className="font-medium text-gold-300">
               [{s.ref}] {s.titre}
+              {s.version ? <span className="text-cream-300"> · version {s.version}{s.date ? ` du ${formatDay(s.date)}` : ''}</span> : null}
               {s.page ? <span className="text-cream-300"> · page {s.page}</span> : null}
             </p>
             <p className="mt-1 text-xs text-cream-300">{s.extrait}…</p>
@@ -29,11 +37,54 @@ function Sources({ message }: { message: ChatMessage }) {
   )
 }
 
+function Options() {
+  const prefs = useLoad(getPreferences)
+  const [error, setError] = useState<string | null>(null)
+  const reload = prefs.reload
+
+  async function change(patch: Partial<ChatPreferences>) {
+    setError(null)
+    try {
+      await setPreferences(patch)
+      await reload()
+    } catch (e) {
+      setError(errorMessage(e))
+    }
+  }
+
+  if (!prefs.data) return <ErrorBox message={prefs.error} />
+  return (
+    <div className="space-y-1 rounded-lg border border-gold-500/30 p-2.5 text-sm">
+      <ErrorBox message={error} />
+      <label className="flex items-start gap-2">
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-gold-500" checked={prefs.data.derniere_version_seulement}
+          onChange={(e) => void change({ derniere_version_seulement: e.target.checked })} />
+        <span>Dernière version seulement<span className="block text-xs text-cream-300">Ignorer les anciennes versions des fichiers dans les réponses.</span></span>
+      </label>
+      <label className="flex items-start gap-2">
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-gold-500" checked={prefs.data.memoire_inter_sessions}
+          onChange={(e) => void change({ memoire_inter_sessions: e.target.checked })} />
+        <span>Mémoire entre sessions<span className="block text-xs text-cream-300">Retenir le résultat de mes échanges pour enrichir mes prochaines conversations.</span></span>
+      </label>
+    </div>
+  )
+}
+
 export default function Chatbot() {
   const chat = useChatStream()
   const [question, setQuestion] = useState('')
   const bottom = useRef<HTMLDivElement>(null)
   const history = useLoad(listConversations)
+  const autoOpened = useRef(false)
+
+  // Après une (re)connexion, on rouvre la dernière conversation : l'historique est rechargé depuis le serveur
+  const firstConversation = history.data?.[0]?.id ?? null
+  const loadConversation = chat.load
+  useEffect(() => {
+    if (autoOpened.current || history.data === null) return
+    autoOpened.current = true
+    if (firstConversation !== null) void loadConversation(firstConversation)
+  }, [history.data, firstConversation, loadConversation])
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -84,7 +135,8 @@ export default function Chatbot() {
         <div className="flex-1 space-y-4 overflow-y-auto pr-1">
           {chat.messages.length === 0 && (
             <p className="py-16 text-center text-cream-300">
-              Posez une question : la réponse s'appuie uniquement sur les documents auxquels vous avez accès.
+              Posez une question : la réponse s'appuie uniquement sur les fichiers des dossiers auxquels vous avez accès.
+              La conversation est mémorisée et retrouvée après une reconnexion.
             </p>
           )}
           {chat.messages.map((m) => (
@@ -96,7 +148,7 @@ export default function Chatbot() {
                     : 'border border-gold-500/30 bg-leaf-900 text-cream-50'
                 }`}
               >
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                <p className={`whitespace-pre-wrap text-sm leading-relaxed ${m.masque ? 'italic text-cream-300' : ''}`}>
                   {m.text || (m.role === 'assistant' && chat.busy ? 'Recherche dans les documents…' : '')}
                 </p>
                 {m.role === 'assistant' && <Sources message={m} />}
@@ -107,7 +159,9 @@ export default function Chatbot() {
         </div>
 
         <div className="mt-3 space-y-2">
+          <Options />
           <ErrorBox message={chat.error} />
+          <div className="flex justify-end"><ExampleButton onFill={() => setQuestion(exempleQuestion())} /></div>
           <form onSubmit={(e) => void submit(e)} className="flex gap-2">
             <input
               className="input"

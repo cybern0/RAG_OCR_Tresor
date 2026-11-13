@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import audit, auth, chat, documents, health, structure, users
+from app.api.routes import audit, auth, chat, documents, dossiers, health, structure, users
 from app.config import get_settings
 from app.workers import ingestion_worker
 
@@ -25,14 +25,14 @@ async def lifespan(_: FastAPI):
     ingestion_worker.stop()
 
 
-app = FastAPI(title="RAG OCR Trésor", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="RAG OCR Trésor", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
-for module in (health, auth, users, structure, documents, chat, audit):
+for module in (health, auth, users, structure, dossiers, documents, chat, audit):
     app.include_router(module.router)

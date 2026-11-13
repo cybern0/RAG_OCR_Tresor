@@ -3,7 +3,9 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { errorMessage } from '../../api/client'
 import { createAgent, listAgents, listServices, updateAgent } from '../../api/structure'
+import ExampleButton from '../../components/ui/ExampleButton'
 import { ErrorBox, Loading } from '../../components/ui/Feedback'
+import { exempleEmail, exempleFonction, exempleMatricule, exempleNom, exemplePrenom } from '../../lib/exemples'
 import Modal from '../../components/ui/Modal'
 import { useLoad } from '../../hooks/useLoad'
 import type { ServiceItem } from '../../types/structure'
@@ -32,6 +34,14 @@ function AddAgentForm({ services, onClose, onDone }: { services: ServiceItem[]; 
   return (
     <Modal title="Nouvel agent" onClose={onClose}>
       <form onSubmit={(e) => void submit(e)} className="grid gap-3 sm:grid-cols-2">
+        <div className="flex justify-end sm:col-span-2">
+          <ExampleButton onFill={() => {
+            const nom = exempleNom()
+            const prenom = exemplePrenom()
+            setF({ matricule: exempleMatricule(), nom, prenom, fonction: exempleFonction(), email: exempleEmail(prenom, nom) })
+            setServiceId(services.find((s) => s.actif)?.id ?? '')
+          }} />
+        </div>
         <div><label className="label" htmlFor="ag-mat">Matricule</label><input id="ag-mat" className="input" required value={f.matricule} onChange={set('matricule')} /></div>
         <div><label className="label" htmlFor="ag-fn">Fonction</label><input id="ag-fn" className="input" value={f.fonction} onChange={set('fonction')} /></div>
         <div><label className="label" htmlFor="ag-nom">Nom</label><input id="ag-nom" className="input" required value={f.nom} onChange={set('nom')} /></div>

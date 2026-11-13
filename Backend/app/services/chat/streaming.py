@@ -2,7 +2,7 @@
 
 Format : Server-Sent Events. Événements, dans l'ordre :
   meta    {conversation_id}
-  sources [{ref, document_id, titre, page, extrait}, ...]
+  sources [{ref, document_id, dossier_id, titre, version, date, page, extrait}, ...]
   token   {t: "texte"}        (répété)
   done    {message_id}
   error   {detail}            (à la place de done si la génération échoue)
@@ -10,7 +10,9 @@ Format : Server-Sent Events. Événements, dans l'ordre :
 
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+
+from sqlalchemy.orm import Session
 
 from app.db.metier import Message, SessionLocal
 from app.services.chat.rag_chain import Prepared, stream_answer
@@ -22,7 +24,10 @@ def sse(event: str, data: object) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def event_stream(prepared: Prepared, conversation_id: int) -> Iterator[str]:
+def event_stream(
+    prepared: Prepared, conversation_id: int, after_answer: Callable[[Session, str, list[dict]], None] | None = None,
+) -> Iterator[str]:
+    """after_answer(db, texte, sources) est appelée une fois la réponse enregistrée (ex. mémoire entre sessions)."""
     sources = prepared.sources() if prepared.has_context else []
     yield sse("meta", {"conversation_id": conversation_id})
     yield sse("sources", sources)
@@ -42,4 +47,9 @@ def event_stream(prepared: Prepared, conversation_id: int) -> Iterator[str]:
         )
         db.add(message)
         db.commit()
+        if after_answer is not None:
+            try:
+                after_answer(db, message.contenu, sources)
+            except Exception:  # noqa: BLE001 - la réponse est déjà enregistrée : une mémoire ratée ne doit rien casser
+                logger.exception("Échec après réponse (mémoire)")
         yield sse("done", {"message_id": message.id})
