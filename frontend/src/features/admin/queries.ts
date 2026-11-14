@@ -10,6 +10,7 @@ export const adminKeys = {
 }
 
 export const useUsers = () => useQuery({ queryKey: adminKeys.users, queryFn: api.listUsers })
+export const useUser = (id: number) => useQuery({ queryKey: [...adminKeys.users, id], queryFn: () => api.getUser(id), enabled: Number.isFinite(id) })
 export const useDirections = () => useQuery({ queryKey: adminKeys.directions, queryFn: api.listDirections })
 export const useServices = () => useQuery({ queryKey: adminKeys.services, queryFn: api.listServices })
 export const useAgents = () => useQuery({ queryKey: adminKeys.agents, queryFn: api.listAgents })

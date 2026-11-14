@@ -54,3 +54,10 @@ export function useAuth() {
     canAny: (...permissions: string[]) => permissions.some((p) => hasPermission(current.user, p)),
   }
 }
+
+/** Modification de son profil : le serveur renvoie un nouveau jeton et l'utilisateur à jour. */
+export async function saveProfile(data: authApi.ProfileInput): Promise<void> {
+  const result = await authApi.updateProfile(data)
+  tokenStore.set(result.access_token)
+  setState({ status: 'authenticated', user: result.user })
+}

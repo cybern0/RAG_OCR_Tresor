@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.security import PASSWORD_MIN_LENGTH
 
@@ -85,3 +85,38 @@ class UserUpdate(BaseModel):
     @classmethod
     def _pwd(cls, v: str | None) -> str | None:
         return _check_password(v) if v is not None else v
+
+
+class ProfileUpdate(BaseModel):
+    """Modification de son propre profil : nom d'utilisateur et/ou mot de passe (l'ancien est alors exigé)."""
+
+    nom_utilisateur: str | None = None
+    ancien_mot_de_passe: str | None = Field(default=None, max_length=200)
+    nouveau_mot_de_passe: str | None = Field(default=None, max_length=200)
+    confirmation_mot_de_passe: str | None = Field(default=None, max_length=200)
+
+    @field_validator("nom_utilisateur")
+    @classmethod
+    def _username(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = v.strip().lower()
+        if not _USERNAME_RE.match(v):
+            raise ValueError("3 à 80 caractères : lettres minuscules, chiffres, point, tiret, tiret bas.")
+        return v
+
+    @field_validator("nouveau_mot_de_passe")
+    @classmethod
+    def _pwd(cls, v: str | None) -> str | None:
+        return _check_password(v) if v is not None else v
+
+    @model_validator(mode="after")
+    def _coherence(self) -> "ProfileUpdate":
+        if self.nouveau_mot_de_passe is not None:
+            if not self.ancien_mot_de_passe:
+                raise ValueError("Saisir le mot de passe actuel pour en définir un nouveau.")
+            if self.confirmation_mot_de_passe != self.nouveau_mot_de_passe:
+                raise ValueError("La confirmation ne correspond pas au nouveau mot de passe.")
+        if self.nom_utilisateur is None and self.nouveau_mot_de_passe is None:
+            raise ValueError("Rien à modifier.")
+        return self

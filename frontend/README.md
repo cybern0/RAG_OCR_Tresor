@@ -26,7 +26,9 @@ npm run lint
 | `/chat/:conversationId?` | Assistant, historique des conversations | `chat.utiliser` |
 | `/admin` | Tableau de bord (indicateurs, répartitions, état du système) | `statistiques.globales` |
 | `/admin/dossiers`, `/admin/demandes` | Dossiers et accès, demandes d'accès | `dossier.gerer` |
-| `/admin/utilisateurs` | Comptes | `utilisateur.lister` |
+| `/profil` | Mon profil : nom d'utilisateur, mot de passe (ancien vérifié, nouveau confirmé) — tout compte | session |
+| `/admin/utilisateurs` | Comptes (création : `utilisateur.creer`) | `utilisateur.lister` |
+| `/admin/utilisateurs/:id` | Compte : rôle, agent, activation, mot de passe défini directement par l'admin (sans ancien) | `utilisateur.lister` (modification : `utilisateur.modifier`) |
 | `/admin/agents`, `/admin/structure` | Agents, directions et services | `structure.gerer` |
 | `/admin/classement` | Catégories, types, étiquettes, règles, simulation | `classement.gerer` |
 | `/admin/audit` | Journal d'audit | `audit.consulter` |

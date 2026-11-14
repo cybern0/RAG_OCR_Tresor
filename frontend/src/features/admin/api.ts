@@ -4,6 +4,7 @@ import type { AccessRequest, Agent, AuditRow, CategoryItem, DashboardStats, Dire
 
 // --- utilisateurs
 export const listUsers = () => api<UserOut[]>('/users')
+export const getUser = (id: number) => api<UserOut>(`/users/${id}`)
 export const createUser = (data: UserCreate) => api<UserOut>('/users', { method: 'POST', json: data })
 export const updateUser = (id: number, data: UserUpdate) => api<UserOut>(`/users/${id}`, { method: 'PATCH', json: data })
 

@@ -12,9 +12,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.permissions import ROLE_ADMIN, ROLE_UTILISATEUR, Principal
-from app.core.security import hash_password
+from app.core.security import hash_password, login_throttle, verify_password
 from app.db.metier import Agent, Role, User
-from app.schemas.user import AgentBrief, MeOut, UserCreate, UserOut, UserUpdate
+from app.schemas.user import AgentBrief, MeOut, ProfileUpdate, UserCreate, UserOut, UserUpdate
 from app.services.audit import log_action
 
 
@@ -144,3 +144,44 @@ def update_user(db: Session, actor: Principal, user_id: int, data: UserUpdate, i
         log_action(db, actor.user.id, "utilisateur.modifier", "utilisateur", user.id, changes, ip)
         db.commit()
     return get_user(db, user.id)
+
+
+def update_profile(db: Session, user: User, data: ProfileUpdate, ip: str | None) -> bool:
+    """Modifie son propre profil. Retourne True si le mot de passe a changé (les anciens jetons ne valent alors plus rien).
+
+    Le mot de passe actuel est exigé pour en définir un nouveau ; les échecs sont comptés comme ceux de la connexion
+    (blocage temporaire), pour qu'une session volée ne serve pas à deviner le mot de passe.
+    """
+    changes: dict = {}
+    password_changed = False
+
+    if data.nom_utilisateur is not None and data.nom_utilisateur != user.nom_utilisateur:
+        taken = db.scalar(select(User.id).where(User.nom_utilisateur == data.nom_utilisateur, User.id != user.id))
+        if taken is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Ce nom d'utilisateur existe déjà.")
+        changes["nom_utilisateur"] = {"ancien": user.nom_utilisateur, "nouveau": data.nom_utilisateur}
+
+    if data.nouveau_mot_de_passe is not None:
+        key = f"{ip}|{user.nom_utilisateur}"
+        if login_throttle.is_blocked(key):
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de tentatives. Réessayer dans quelques minutes.")
+        if not verify_password(data.ancien_mot_de_passe or "", user.mot_de_passe_hash):
+            login_throttle.record_failure(key)
+            log_action(db, user.id, "profil.mot_de_passe_echec", "utilisateur", user.id, {}, ip)
+            db.commit()
+            # 400 et non 401 : un 401 déconnecterait l'interface comme une session expirée
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Le mot de passe actuel est incorrect.")
+        if data.nouveau_mot_de_passe == data.ancien_mot_de_passe:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Le nouveau mot de passe doit être différent de l'actuel.")
+        login_throttle.reset(key)
+        password_changed = True
+        changes["mot_de_passe"] = "modifié"
+
+    if "nom_utilisateur" in changes:
+        user.nom_utilisateur = data.nom_utilisateur
+    if password_changed:
+        user.mot_de_passe_hash = hash_password(data.nouveau_mot_de_passe)
+    if changes:
+        log_action(db, user.id, "profil.modifier", "utilisateur", user.id, changes, ip)
+        db.commit()
+    return password_changed

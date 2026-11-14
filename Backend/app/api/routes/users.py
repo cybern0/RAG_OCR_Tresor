@@ -17,6 +17,11 @@ def list_users(_: Principal = Depends(require(UTILISATEUR_LISTER)), db: Session 
     return [crud.to_user_out(u) for u in crud.list_users(db)]
 
 
+@router.get("/{user_id}", response_model=UserOut)
+def get_user(user_id: int, _: Principal = Depends(require(UTILISATEUR_LISTER)), db: Session = Depends(get_db)):
+    return crud.to_user_out(crud.get_user(db, user_id))
+
+
 @router.post("", response_model=UserOut, status_code=201)
 def create_user(
     data: UserCreate, request: Request,

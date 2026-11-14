@@ -22,6 +22,7 @@ export const router = createBrowserRouter([
             lazy: () => import('./layouts/AppLayout'),
             children: [
               { index: true, element: <Home /> },
+              { path: 'profil', lazy: () => import('../features/auth/ProfilePage') },
               guarded(['document.lister'], [
                 { path: 'dossiers', lazy: () => import('../features/dossiers/DossiersPage') },
                 { path: 'dossiers/:dossierId', lazy: () => import('../features/dossiers/DossierPage') },
@@ -36,7 +37,10 @@ export const router = createBrowserRouter([
                 { path: 'admin/dossiers', lazy: () => import('../features/admin/dossiers/AdminDossiersPage') },
                 { path: 'admin/demandes', lazy: () => import('../features/admin/demandes/DemandesPage') },
               ]),
-              guarded(['utilisateur.lister'], [{ path: 'admin/utilisateurs', lazy: () => import('../features/admin/users/UsersPage') }]),
+              guarded(['utilisateur.lister'], [
+                { path: 'admin/utilisateurs', lazy: () => import('../features/admin/users/UsersPage') },
+                { path: 'admin/utilisateurs/:userId', lazy: () => import('../features/admin/users/UserDetailPage') },
+              ]),
               guarded(['structure.gerer'], [
                 { path: 'admin/agents', lazy: () => import('../features/admin/structure/AgentsPage') },
                 { path: 'admin/structure', lazy: () => import('../features/admin/structure/StructurePage') },

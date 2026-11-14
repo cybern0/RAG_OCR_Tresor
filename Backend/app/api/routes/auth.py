@@ -12,8 +12,9 @@ from app.core.security import (
     DUMMY_HASH, create_access_token, login_throttle, verify_password,
 )
 from app.db.metier import Agent, User
-from app.schemas.user import LoginIn, MeOut, TokenOut
+from app.schemas.user import LoginIn, MeOut, ProfileUpdate, TokenOut
 from app.services.audit import log_action
+from app.services.users import crud as users_crud
 from app.services.users.crud import to_me_out
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -63,3 +64,17 @@ def logout(request: Request, principal: Principal = Depends(get_principal), db: 
 @router.get("/me", response_model=MeOut)
 def me(principal: Principal = Depends(get_principal)) -> MeOut:
     return to_me_out(principal)
+
+
+@router.patch("/me", response_model=TokenOut)
+def update_me(
+    data: ProfileUpdate, request: Request,
+    principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
+) -> TokenOut:
+    """Modifier son profil (nom d'utilisateur, mot de passe). Accessible à tout compte connecté, admin compris.
+
+    Les jetons sont liés au mot de passe : on en renvoie un nouveau pour que la session en cours continue.
+    """
+    users_crud.update_profile(db, principal.user, data, client_ip(request))
+    token, ttl = create_access_token(principal.user.id, principal.user.mot_de_passe_hash)
+    return TokenOut(access_token=token, expires_in=ttl, user=to_me_out(principal))

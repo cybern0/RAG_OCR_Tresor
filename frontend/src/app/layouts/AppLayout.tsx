@@ -1,5 +1,5 @@
 // Cadre de l'application connectée : barre latérale (menu, compte) fixe sur grand écran, tiroir sur mobile.
-import { Leaf, LogOut, Menu, X } from 'lucide-react'
+import { Leaf, LogOut, Menu, UserCircle, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import { signOut, useAuth } from '../../features/auth/session'
@@ -41,10 +41,14 @@ export function Component() {
         <NavSection title="Administration" items={admin} onNavigate={() => setOpen(false)} />
       </nav>
       <div className="border-t border-gold-500/20 p-3">
-        <div className="mb-2 min-w-0 px-1">
-          <p className="truncate text-sm font-medium text-cream-50">{user?.nom_utilisateur}</p>
-          <p className="truncate text-xs text-cream-300">{user?.role === 'ADMIN' ? 'Administrateur' : user?.service_nom ?? 'Utilisateur'}</p>
-        </div>
+        <NavLink to="/profil" onClick={() => setOpen(false)} aria-label="Mon profil"
+          className={({ isActive }) => cn('mb-2 flex items-center gap-3 rounded-lg px-2 py-2 transition', isActive ? 'bg-gold-500/20' : 'hover:bg-gold-500/15')}>
+          <UserCircle className="h-8 w-8 shrink-0 text-gold-400" aria-hidden />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-cream-50">{user?.nom_utilisateur}</span>
+            <span className="block truncate text-xs text-cream-300">{user?.role === 'ADMIN' ? 'Administrateur' : user?.service_nom ?? 'Utilisateur'} · Mon profil</span>
+          </span>
+        </NavLink>
         <button className="btn-ghost w-full" onClick={() => void signOut()}><LogOut className="h-4 w-4" /> Déconnexion</button>
       </div>
     </div>
