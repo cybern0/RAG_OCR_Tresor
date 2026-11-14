@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import audit, auth, chat, classement, documents, dossiers, health, partage, structure, users
+from app.api.routes import audit, auth, chat, classement, commentaires, documents, dossiers, health, structure, users
 from app.config import get_settings
 from app.workers import ingestion_worker
 
@@ -61,7 +61,7 @@ def create_app() -> FastAPI:
     )
 
     prefix = "/" + settings.api_prefix.strip("/") if settings.api_prefix.strip("/") else ""
-    for module in (health, auth, users, structure, dossiers, documents, classement, partage, chat, audit):
+    for module in (health, auth, users, structure, dossiers, documents, classement, commentaires, chat, audit):
         api.include_router(module.router, prefix=prefix)
     if prefix:
         api.include_router(health.router)  # /health reste disponible pour la supervision

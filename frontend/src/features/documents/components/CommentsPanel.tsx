@@ -26,10 +26,10 @@ export function CommentsPanel({ documentId }: { documentId: number }) {
     <div className="space-y-3">
       {comments.isPending ? <Loading className="py-3" /> : (comments.data ?? []).length === 0 ? <p className="text-sm text-cream-300">Aucun commentaire.</p> : (
         <ul className="space-y-2">
-          {(comments.data ?? []).map((c, i) => (
-            <li key={i} className="rounded-lg border border-gold-500/25 bg-leaf-950/40 p-2.5 text-sm">
-              <p className="text-xs text-cream-300"><span className="font-medium text-gold-300">{c.author_name ?? `Utilisateur ${c.author_id}`}</span> · {formatDate(c.created_at)}</p>
-              <p className="mt-1 whitespace-pre-wrap">{c.content}</p>
+          {(comments.data ?? []).map((c) => (
+            <li key={c.id} className="rounded-lg border border-gold-500/25 bg-leaf-950/40 p-2.5 text-sm">
+              <p className="text-xs text-cream-300"><span className="font-medium text-gold-300">{c.auteur_nom}</span> · {formatDate(c.cree_le)}</p>
+              <p className="mt-1 whitespace-pre-wrap">{c.contenu}</p>
             </li>
           ))}
         </ul>

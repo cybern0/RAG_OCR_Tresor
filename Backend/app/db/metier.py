@@ -206,60 +206,8 @@ class DossierService(Base):
     service: Mapped[Service] = relationship()
 
 
-class DocumentPartage(Base):
-    """Accès direct à un document sans passer par le dossier."""
-
-    __tablename__ = "document_partage"
-
-    id: Mapped[int] = _pk()
-    document_id: Mapped[int] = mapped_column(ForeignKey("document.id", ondelete="CASCADE"))
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
-    service_id: Mapped[int | None] = mapped_column(ForeignKey("_service.id", ondelete="CASCADE"))
-    role: Mapped[str] = mapped_column(String(15))
-    expire_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    cree_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
-    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    user: Mapped[User | None] = relationship(foreign_keys=[user_id])
-    service: Mapped[Service | None] = relationship()
-
-
-class DocumentLienPartage(Base):
-    """Lien de partage local d'un document : interne ou anonyme, avec token hashé."""
-
-    __tablename__ = "document_lien_partage"
-
-    id: Mapped[int] = _pk()
-    document_id: Mapped[int] = mapped_column(ForeignKey("document.id", ondelete="CASCADE"))
-    token_hash: Mapped[str] = mapped_column(String(128), unique=True)
-    role: Mapped[str] = mapped_column(String(30), default="LECTEUR", server_default="LECTEUR")
-    est_anonyme: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
-    expire_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    cree_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
-    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    createur: Mapped[User | None] = relationship(foreign_keys=[cree_par])
-
-
-class DemandeAcces(Base):
-    """Demande locale d'accès à un document ou un dossier."""
-
-    __tablename__ = "demande_acces"
-
-    id: Mapped[int] = _pk()
-    sujet_type: Mapped[str] = mapped_column(String(20))
-    sujet_id: Mapped[int] = mapped_column(BigInteger)
-    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
-    role_demande: Mapped[str] = mapped_column(String(30), default="LECTEUR", server_default="LECTEUR")
-    message: Mapped[str | None] = mapped_column(Text)
-    statut: Mapped[str] = mapped_column(String(15), default="pending", server_default="pending")
-    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    user: Mapped[User] = relationship()
-
-
 class Commentaire(Base):
-    """Commentaire local porté par un document ou un dossier."""
+    """Commentaire sur un fichier (visible des contributeurs et plus)."""
 
     __tablename__ = "commentaire"
 
@@ -272,37 +220,6 @@ class Commentaire(Base):
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     auteur: Mapped[User] = relationship()
-
-
-class NotificationInterne(Base):
-    """Notification locale interne pour l'utilisateur."""
-
-    __tablename__ = "notification_interne"
-
-    id: Mapped[int] = _pk()
-    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
-    type_notification: Mapped[str] = mapped_column(String(25), default="info", server_default="info")
-    sujet_type: Mapped[str] = mapped_column(String(20))
-    sujet_id: Mapped[int] = mapped_column(BigInteger)
-    message: Mapped[str] = mapped_column(Text)
-    lu: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
-    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    user: Mapped[User] = relationship()
-
-
-class Favori(Base):
-    """Favori local sur un document ou un dossier."""
-
-    __tablename__ = "favori"
-
-    id: Mapped[int] = _pk()
-    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
-    sujet_type: Mapped[str] = mapped_column(String(20))
-    sujet_id: Mapped[int] = mapped_column(BigInteger)
-    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    user: Mapped[User] = relationship()
 
 
 class PreferenceUtilisateur(Base):

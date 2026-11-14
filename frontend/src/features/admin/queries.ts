@@ -6,7 +6,7 @@ export const adminKeys = {
   users: ['admin', 'users'] as const, directions: ['admin', 'directions'] as const, services: ['admin', 'services'] as const,
   agents: ['admin', 'agents'] as const, audit: ['admin', 'audit'] as const, stats: ['admin', 'stats'] as const, health: ['admin', 'health'] as const,
   categories: ['admin', 'classement', 'categories'] as const, types: ['admin', 'classement', 'types'] as const,
-  tags: ['admin', 'classement', 'tags'] as const, rules: ['admin', 'classement', 'rules'] as const, demandes: ['admin', 'demandes'] as const,
+  tags: ['admin', 'classement', 'tags'] as const, rules: ['admin', 'classement', 'rules'] as const,
 }
 
 export const useUsers = () => useQuery({ queryKey: adminKeys.users, queryFn: api.listUsers })
@@ -21,7 +21,6 @@ export const useCategories = () => useQuery({ queryKey: adminKeys.categories, qu
 export const useTypes = () => useQuery({ queryKey: adminKeys.types, queryFn: api.listTypes })
 export const useTags = () => useQuery({ queryKey: adminKeys.tags, queryFn: api.listTags })
 export const useRules = () => useQuery({ queryKey: adminKeys.rules, queryFn: api.listRules })
-export const useAccessRequests = (status?: string) => useQuery({ queryKey: [...adminKeys.demandes, status ?? 'all'], queryFn: () => api.listAccessRequests(status) })
 
 /** Mutation qui invalide les clés données (préfixes) en cas de succès. */
 export function useAdminMutation<TVars, TData>(fn: (v: TVars) => Promise<TData>, invalidate: readonly (readonly unknown[])[]) {

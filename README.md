@@ -20,7 +20,7 @@ RAG_OCR_Tresor/
 
 - [docs/architecture.md](docs/architecture.md) : architecture applicative et règles de sécurité.
 - [docs/renommages.md](docs/renommages.md) : historique des renommages de fichiers et modules.
-- [docs/plan_ged_implementation.md](docs/plan_ged_implementation.md) : plan détaillé de la GED (classement, statistiques, partage, collaboration, corbeille).
+- [docs/plan_ged_implementation.md](docs/plan_ged_implementation.md) : plan historique de la GED (classement, statistiques, corbeille ; les fonctions de partage y sont abandonnées).
 
 ## Services externes
 
@@ -40,11 +40,17 @@ psql -U postgres -d rag -f database/03_index.sql
 psql -U postgres -d rag -f database/04_seed_roles_permissions.sql
 psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/05_dossiers_versions.sql
 psql -U postgres -d rag -f database/05_verification.sql
+psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/06_classement_stats.sql
+psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/08_commentaires.sql
 ```
 
 Le script `05` sert aussi bien à une installation neuve qu'à la **migration d'une base déjà remplie** (un dossier est créé pour chaque
 service et ouvert à ce service ; les documents existants deviennent la version 1). Il tourne en une seule transaction, est répétable,
 et a son retour arrière `database/05_retour_arriere.sql`. Pas à pas : `docs/migration_05.md`.
+
+`06` ajoute le classement (catégories, types, étiquettes, règles) et la vue des statistiques ; `08` la table des commentaires.
+Base qui avait déjà reçu les anciens `07_partage.sql` / `08_collaboration.sql` : exécuter une fois `database/09_nettoyage_partage.sql`
+(retire les tables du partage par fichier, des liens, des demandes d'accès, des favoris et des notifications).
 
 Pour contrôler que les embeddings sont bien normalisés : `psql -U postgres -d rag -f database/verif_vecteurs_normalises.sql` (attendu : 0 non normalisé).
 Le compte `admin` est créé verrouillé : voir l'en-tête de `04_seed_roles_permissions.sql`.

@@ -1,6 +1,6 @@
 import { api, query } from '../../shared/api/client'
 import type { UserCreate, UserOut, UserUpdate } from '../auth/types'
-import type { AccessRequest, Agent, AuditRow, CategoryItem, DashboardStats, Direction, Health, RuleItem, ServiceItem, SimulationResult, TagItem, TypeItem } from './types'
+import type { Agent, AuditRow, CategoryItem, DashboardStats, Direction, Health, RuleItem, ServiceItem, SimulationResult, TagItem, TypeItem } from './types'
 
 // --- utilisateurs
 export const listUsers = () => api<UserOut[]>('/users')
@@ -42,8 +42,3 @@ export const createRule = (d: RuleInput) => api<RuleItem>('/classement/regles', 
 export const updateRule = (id: number, d: Partial<RuleInput>) => api<RuleItem>(`/classement/regles/${id}`, { method: 'PATCH', json: d })
 export const deleteRule = (id: number) => api<unknown>(`/classement/regles/${id}`, { method: 'DELETE' })
 export const simulate = (d: { nom_fichier?: string; extension?: string; texte?: string }) => api<SimulationResult>('/classement/simuler', { method: 'POST', json: d })
-
-// --- demandes d'accès
-export const listAccessRequests = (status?: string) => api<AccessRequest[]>(`/partage/demandes-acces${query({ status })}`)
-export const decideAccessRequest = (id: number, decision: 'accepted' | 'rejected', granted_role?: string) =>
-  api<AccessRequest>(`/partage/demandes-acces/${id}`, { method: 'PATCH', json: { decision, granted_role } })

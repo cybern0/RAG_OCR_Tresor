@@ -33,10 +33,7 @@ export const router = createBrowserRouter([
                 { path: 'chat/:conversationId?', lazy: () => import('../features/chat/ChatPage') },
               ]),
               guarded(['statistiques.globales'], [{ path: 'admin', lazy: () => import('../features/admin/stats/StatsPage') }]),
-              guarded(['dossier.gerer'], [
-                { path: 'admin/dossiers', lazy: () => import('../features/admin/dossiers/AdminDossiersPage') },
-                { path: 'admin/demandes', lazy: () => import('../features/admin/demandes/DemandesPage') },
-              ]),
+              guarded(['dossier.gerer'], [{ path: 'admin/dossiers', lazy: () => import('../features/admin/dossiers/AdminDossiersPage') }]),
               guarded(['utilisateur.lister'], [
                 { path: 'admin/utilisateurs', lazy: () => import('../features/admin/users/UsersPage') },
                 { path: 'admin/utilisateurs/:userId', lazy: () => import('../features/admin/users/UserDetailPage') },

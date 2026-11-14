@@ -67,7 +67,6 @@ export async function downloadVersion(id: number, numero: number, nomFichier: st
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
-export interface CommentItem { entity_type: string; entity_id: number; author_id: number; content: string; created_at: string | null; parent_id: number | null; author_name: string | null }
-export const listComments = (id: number) => api<CommentItem[]>(`/partage/documents/${id}/commentaires`)
-export const addComment = (id: number, contenu: string) =>
-  api<CommentItem>(`/partage/documents/${id}/commentaires`, { method: 'POST', json: { contenu } })
+export interface CommentItem { id: number; auteur_nom: string; contenu: string; cree_le: string }
+export const listComments = (id: number) => api<CommentItem[]>(`/documents/${id}/commentaires`)
+export const addComment = (id: number, contenu: string) => api<CommentItem>(`/documents/${id}/commentaires`, { method: 'POST', json: { contenu } })

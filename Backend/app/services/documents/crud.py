@@ -15,16 +15,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.config import get_settings
 from app.core.permissions import (
     AJOUTER_FICHIER, AJOUTER_VERSION, MODIFIER, SUPPRIMER, VOIR, Principal, exiger_acces, exiger_acces_document,
-    role_effectif_document, roles_par_dossier,
+    roles_par_dossier,
 )
-from app.db.metier import DocumentPartage, DocumentTag
+from app.db.metier import DocumentTag
 from app.db.vecteur import Document, DocumentVersion
 from app.schemas.document import DocumentOut, VersionOut
 from app.services.audit import log_action
@@ -92,7 +92,7 @@ def _query():
 # --- Accès -----------------------------------------------------------------------------------------------------------
 
 def get_document(db: Session, principal: Principal, document_id: int, action: str) -> tuple[Document, str]:
-    """Le fichier et le rôle effectif, incluant les partages locaux sur le document."""
+    """Le fichier et le rôle effectif (celui du dossier) ; 404 hors des accès."""
     doc = db.scalars(_query().where(Document.id == document_id)).unique().one_or_none()
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
@@ -207,7 +207,6 @@ def list_documents(
     tri: str = "date_desc",
     page: int | None = None,
     taille: int | None = None,
-    partages: bool = False,
     corbeille: bool = False,
 ) -> list[DocumentOut] | dict:
     roles = roles_par_dossier(db, principal)
@@ -216,44 +215,19 @@ def list_documents(
         exiger_acces(db, principal, dossier_id, VOIR)  # 404 hors des accès
         dossier_ids = {dossier_id}
 
-    shared_doc_ids: set[int] = set()
-    if partages:
-        shared_doc_ids.update(
-            db.scalars(
-                select(DocumentPartage.document_id).where(
-                    DocumentPartage.user_id == principal.user.id,
-                    DocumentPartage.expire_le.is_(None) | (DocumentPartage.expire_le > func.now()),
-                )
-            ).all()
-        )
-        service_id = principal.service_actif_id
-        if service_id is not None:
-            shared_doc_ids.update(
-                db.scalars(
-                    select(DocumentPartage.document_id).where(
-                        DocumentPartage.service_id == service_id,
-                        DocumentPartage.expire_le.is_(None) | (DocumentPartage.expire_le > func.now()),
-                    )
-                ).all()
-            )
-
-    if not dossier_ids and not shared_doc_ids:
+    if not dossier_ids:
         return {"items": [], "total": 0, "page": page or 1, "taille": taille or 20} if page is not None or taille is not None else []
 
-    doc_filter = []
-    if dossier_ids:
-        doc_filter.append(Document.dossier_id.in_(dossier_ids))
-    if shared_doc_ids:
-        doc_filter.append(Document.id.in_(shared_doc_ids))
+    doc_filter = [Document.dossier_id.in_(dossier_ids)]
     if corbeille:
         doc_filter.append(Document.corbeille_le.is_not(None))
     else:
         doc_filter.append(Document.corbeille_le.is_(None))
 
     docs = db.scalars(
-        _query().where(or_(*doc_filter)).order_by(Document.cree_le.desc(), Document.id.desc())
+        _query().where(*doc_filter).order_by(Document.cree_le.desc(), Document.id.desc())
     ).unique().all()
-    ordered_docs = [d for d in docs if d.dossier_id in dossier_ids or d.id in shared_doc_ids]
+    ordered_docs = list(docs)
     filtered = apply_document_filters(
         ordered_docs,
         q=q,

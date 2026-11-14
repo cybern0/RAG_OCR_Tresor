@@ -25,7 +25,7 @@ npm run lint
 | `/dossiers/:id/fichiers/:docId` | Fiche d'un fichier : aperçu, classement, versions, commentaires | idem |
 | `/chat/:conversationId?` | Assistant, historique des conversations | `chat.utiliser` |
 | `/admin` | Tableau de bord (indicateurs, répartitions, état du système) | `statistiques.globales` |
-| `/admin/dossiers`, `/admin/demandes` | Dossiers et accès, demandes d'accès | `dossier.gerer` |
+| `/admin/dossiers` | Dossiers et accès | `dossier.gerer` |
 | `/profil` | Mon profil : nom d'utilisateur, mot de passe (ancien vérifié, nouveau confirmé) — tout compte | session |
 | `/admin/utilisateurs` | Comptes (création : `utilisateur.creer`) | `utilisateur.lister` |
 | `/admin/utilisateurs/:id` | Compte : rôle, agent, activation, mot de passe défini directement par l'admin (sans ancien) | `utilisateur.lister` (modification : `utilisateur.modifier`) |
@@ -46,7 +46,7 @@ src/
     hooks/      useToast, useDebounce
     lib/        format (dates, tailles), fichiers (types, CSV), exemples (bouton « Remplir avec exemple »), cn
   features/     un dossier par domaine : api.ts (appels), queries.ts (TanStack Query), types.ts, pages et composants
-    auth/ dossiers/ documents/ chat/ admin/{stats,dossiers,demandes,users,structure,classement,audit}
+    auth/ dossiers/ documents/ chat/ admin/{stats,dossiers,users,structure,classement,audit}
   styles/       index.css (thème)
 ```
 

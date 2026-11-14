@@ -26,6 +26,8 @@ Le service d'un compte est celui de son agent (`_user.agent_id -> agent.service_
 Règles de comptes : un UTILISATEUR doit être lié à un agent actif ayant un service ; un agent n'a qu'un compte ; on ne peut ni se rétrograder, ni se désactiver,
 ni retirer le dernier admin actif. Un admin ne peut pas être membre d'un dossier (il a déjà tout).
 
+**Pas d'autre voie d'accès** : ni invitation, ni lien de partage, ni partage d'un seul fichier, ni demande d'accès. Le rôle sur un fichier est toujours celui de son dossier ; seul l'admin ouvre ou ferme un accès.
+
 ## Authentification
 Connexion `POST /auth/login` -> jeton signé (HMAC-SHA256) envoyé en `Authorization: Bearer`. Mots de passe hachés avec scrypt.
 Le jeton devient invalide si le mot de passe change ou si le compte est désactivé. Un hash commençant par `!` verrouille le compte
@@ -94,6 +96,7 @@ Au redémarrage de l'API, les versions restées `pending` ou `processing` sont r
 
 ## Migrations
 Schéma : `database/01` à `05` (voir `docs/migration_05.md`). `05_dossiers_versions.sql` installe ou migre ; `05_retour_arriere.sql` défait ; `05_verification.sql` contrôle.
+`06` : classement et statistiques ; `08` : commentaires ; `09` : nettoyage des tables du partage abandonné (bases existantes seulement).
 
 ## Interface
 Thème : fonds vert végétal, texte blanc cassé, composants (boutons, bordures, badges, éléments actifs) jaune doré ;
@@ -101,4 +104,4 @@ définis une seule fois dans `frontend/src/styles/index.css`.
 Application monopage (React Router, TanStack Query) : une route par écran, liens profonds et boutons précédent/suivant du navigateur (voir `frontend/README.md` pour la table des routes).
 L'API vit sous `/api` ; le backend sert aussi `frontend/dist` (repli sur `index.html`) quand il existe.
 Pages : « Dossiers et fichiers » (dossiers, fichiers avec recherche, filtres, tri, pagination, corbeille, fiche avec aperçu, versions, classement, commentaires), « Assistant » (historique dans l'URL, options personnelles, sources avec version et date),
-« Administration » (tableau de bord, dossiers et accès, demandes d'accès, utilisateurs, agents, directions et services, classement, audit). Chaque formulaire a un bouton « Remplir avec exemple » (fausses données, champs vides avant le clic, sans drapeau de désactivation).
+« Administration » (tableau de bord, dossiers et accès, utilisateurs, agents, directions et services, classement, audit). Chaque formulaire a un bouton « Remplir avec exemple » (fausses données, champs vides avant le clic, sans drapeau de désactivation).

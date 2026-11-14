@@ -35,10 +35,3 @@ export function EmptyState({ icon, title, children, action }: { icon?: ReactNode
     </div>
   )
 }
-
-/** Charge une requête : squelette, erreur, ou contenu. */
-export function QueryState({ isPending, error, children }: { isPending: boolean; error: string | null; children: ReactNode }) {
-  if (error) return <ErrorBox message={error} />
-  if (isPending) return <Loading />
-  return <>{children}</>
-}

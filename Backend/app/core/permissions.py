@@ -21,10 +21,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.metier import Dossier, DossierMembre, DossierService, DocumentPartage, Permission, User, role_permission
+from app.db.metier import Dossier, DossierMembre, DossierService, Permission, User, role_permission
 
 ROLE_ADMIN = "ADMIN"
 ROLE_UTILISATEUR = "UTILISATEUR"
@@ -155,35 +155,12 @@ def ids_dossiers_interrogeables(db: Session, principal: Principal) -> list[int]:
 
 
 def role_effectif_document(db: Session, principal: Principal, document) -> str | None:
-    """Rôle effectif sur un document : dossier + partage direct local."""
+    """Rôle effectif sur un fichier : celui du dossier qui le contient (aucun accès au fichier hors du dossier)."""
     if document is None:
         return None
     if principal.is_admin:
         return GESTIONNAIRE
-    dossier_role = roles_par_dossier(db, principal).get(document.dossier_id)
-    role = dossier_role
-    if principal.user.id is not None:
-        direct_role = db.scalar(
-            select(DocumentPartage.role).where(
-                DocumentPartage.document_id == document.id,
-                DocumentPartage.user_id == principal.user.id,
-                or_(DocumentPartage.expire_le.is_(None), DocumentPartage.expire_le > func.now()),
-            )
-        )
-        if direct_role is not None:
-            role = plus_haut(role, direct_role)
-    service_id = principal.service_actif_id
-    if service_id is not None:
-        direct_service_role = db.scalar(
-            select(DocumentPartage.role).where(
-                DocumentPartage.document_id == document.id,
-                DocumentPartage.service_id == service_id,
-                or_(DocumentPartage.expire_le.is_(None), DocumentPartage.expire_le > func.now()),
-            )
-        )
-        if direct_service_role is not None:
-            role = plus_haut(role, direct_service_role)
-    return role
+    return roles_par_dossier(db, principal).get(document.dossier_id)
 
 
 def exiger_acces_document(db: Session, principal: Principal, document, action: str) -> tuple[Any, str]:

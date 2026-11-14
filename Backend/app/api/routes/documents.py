@@ -39,7 +39,6 @@ def list_documents(
     tri: str = "date_desc",
     page: int | None = Query(default=None),
     taille: int | None = Query(default=None),
-    partages: bool = False,
     corbeille: bool = Query(default=False),
     principal: Principal = Depends(get_principal),
     db: Session = Depends(get_db),
@@ -61,7 +60,6 @@ def list_documents(
         tri=tri,
         page=page,
         taille=taille,
-        partages=partages,
         corbeille=corbeille,
     )
 

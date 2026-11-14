@@ -1,5 +1,10 @@
 # Plan d'implémentation : GED (classement, tableau de bord, partage) dans RAG_OCR_Tresor
 
+> **Document historique.** Le classement, les statistiques, la corbeille et les commentaires sont réalisés. Le partage d'un seul
+> fichier, les liens de partage, les demandes d'accès, les favoris et les notifications (sections 6 et 7, phases 3b, 3c et 4) ont été
+> **abandonnés et retirés du code** : les accès se définissent uniquement par dossier, par l'administrateur (voir `docs/architecture.md`).
+> Les scripts `database/07_partage.sql` et `08_collaboration.sql` n'existent plus ; `09_nettoyage_partage.sql` retire leurs tables d'une base existante.
+
 Ce document décrit la feuille de route pour ajouter à `RAG_OCR_Tresor` une gestion documentaire complète : classement, tableau de bord avec graphiques groupés et croisés, partage de documents amélioré, collaboration et corbeille.
 
 ## 0. Principes et contraintes

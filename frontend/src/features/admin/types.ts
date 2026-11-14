@@ -1,4 +1,4 @@
-// Types de l'administration : structure, journal d'audit, classement, statistiques, demandes d'accès.
+// Types de l'administration : structure, journal d'audit, classement, statistiques.
 export interface Direction { id: number; code: string; nom: string; actif: boolean }
 export interface ServiceItem { id: number; code: string; nom: string; site: string | null; actif: boolean; direction_id: number; direction_nom: string }
 export interface Agent {
@@ -26,12 +26,6 @@ export interface DashboardStats {
   statut: Record<string, number>
   par_categorie: StatLine[]; par_type: StatLine[]; par_service: StatLine[]; par_direction: StatLine[]; par_dossier: StatLine[]
   par_confidentialite: Record<string, number>; par_extension: Record<string, number>
-}
-
-export interface AccessRequest {
-  id: number | null; subject_type: 'document' | 'dossier'; subject_id: number; requested_by: number
-  requested_role: string; message: string; status: string; created_at: string | null
-  subject_name: string | null; requester_name: string | null
 }
 
 export interface Health { status: string; api: boolean; [key: string]: unknown }
