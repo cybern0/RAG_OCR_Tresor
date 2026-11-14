@@ -28,7 +28,7 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import get_settings
-from app.db.metier import Base, Dossier, User
+from app.db.metier import Base, Categorie, Dossier, DocumentTag, TypeDocument, User
 
 STATUTS = ("pending", "processing", "ready", "error")
 
@@ -55,6 +55,12 @@ class Document(Base):
     modifie_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     dossier: Mapped[Dossier] = relationship()
+    categorie: Mapped[Categorie | None] = relationship()
+    type_document: Mapped[TypeDocument | None] = relationship()
+    # lecture seule : les étiquettes s'écrivent via services/classement (requêtes directes sur DocumentTag)
+    tag_liens: Mapped[list[DocumentTag]] = relationship(
+        primaryjoin="Document.id == foreign(DocumentTag.document_id)", viewonly=True
+    )
     createur: Mapped[User | None] = relationship(foreign_keys=[cree_par])
     versions: Mapped[list["DocumentVersion"]] = relationship(
         back_populates="document", order_by="DocumentVersion.numero", cascade="all, delete-orphan",

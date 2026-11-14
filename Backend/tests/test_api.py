@@ -63,6 +63,13 @@ def condense_calls() -> list[list]:
     return [c for c in LLM_CALLS if str(c[0].content).startswith("Tu reformules")]
 
 
+class ApiClient(TestClient):
+    """Client de test : l'API vit sous le préfixe /api (les tests écrivent les chemins sans lui)."""
+
+    def request(self, method, url, *args, **kwargs):
+        return super().request(method, "/api" + url, *args, **kwargs)
+
+
 @pytest.fixture(scope="module")
 def client():
     mp = pytest.MonkeyPatch()
@@ -73,7 +80,7 @@ def client():
         if db.scalar(select(User).where(User.nom_utilisateur == ADMIN)) is None:
             db.add(User(nom_utilisateur=ADMIN, mot_de_passe_hash=hash_password(PWD), role_id=role.id))
             db.commit()
-    with TestClient(app) as c:
+    with ApiClient(app) as c:
         yield c
     mp.undo()
 

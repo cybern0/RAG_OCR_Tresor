@@ -9,14 +9,14 @@ Ajouter une version AJOUTE : l'ancienne reste indexée, téléchargeable et inte
 
 from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, File, Form, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip, get_db, get_principal
-from app.core.permissions import APERCU, MODIFIER, TELECHARGER, Principal, exiger_acces
+from app.core.permissions import APERCU, MODIFIER, TELECHARGER, VOIR, Principal, exiger_acces
 from app.db.vecteur import Document
-from app.schemas.document import DocumentOut, DocumentPageOut, VersionOut
+from app.schemas.document import ClasserLotIn, ClasserLotOut, DocumentOut, DocumentPageOut, VersionOut
 from app.services.classement import definir_classement_manuel
 from app.services.documents import apercu, crud
 
@@ -94,39 +94,38 @@ def update_document(
     )
 
 
-@router.post("/classer-lot")
+@router.post("/classer-lot", response_model=ClasserLotOut)
 def classer_lot(
-    payload: dict = Body(...),
+    data: ClasserLotIn,
     principal: Principal = Depends(get_principal),
     db: Session = Depends(get_db),
 ):
-    ids = payload.get("ids", [])
-    categorie_id = payload.get("categorie_id")
-    type_document_id = payload.get("type_document_id")
-    tags = payload.get("tags")
-    confidentialite = payload.get("confidentialite")
+    """Classement manuel (catégorie, type, étiquettes, confidentialité) : rôle contributeur ou plus dans chaque dossier."""
     result = {"ok": [], "not_found": [], "forbidden": []}
-    for document_id in ids:
+    for document_id in dict.fromkeys(data.ids):
         doc = db.get(Document, document_id)
         if doc is None:
             result["not_found"].append(document_id)
             continue
         try:
             exiger_acces(db, principal, doc.dossier_id, MODIFIER)
-        except Exception:
+        except HTTPException:
             result["forbidden"].append(document_id)
             continue
         definir_classement_manuel(
-            db,
-            doc,
-            categorie_id=categorie_id,
-            type_document_id=type_document_id,
-            tags=tags,
-            confidentialite=confidentialite,
+            db, doc, categorie_id=data.categorie_id, type_document_id=data.type_document_id,
+            tags=data.tags, confidentialite=data.confidentialite,
         )
         result["ok"].append(document_id)
     db.commit()
     return result
+
+
+@router.get("/{document_id}", response_model=DocumentOut)
+def get_document(document_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    """Un fichier (lien profond de l'interface) ; hors des accès : 404."""
+    doc, role = crud.get_document(db, principal, document_id, VOIR)
+    return crud.to_out(doc, role)
 
 
 @router.delete("/{document_id}", status_code=204)

@@ -24,7 +24,7 @@ from app.core.permissions import (
     AJOUTER_FICHIER, AJOUTER_VERSION, MODIFIER, SUPPRIMER, VOIR, Principal, exiger_acces, exiger_acces_document,
     role_effectif_document, roles_par_dossier,
 )
-from app.db.metier import DocumentPartage
+from app.db.metier import DocumentPartage, DocumentTag
 from app.db.vecteur import Document, DocumentVersion
 from app.schemas.document import DocumentOut, VersionOut
 from app.services.audit import log_action
@@ -61,6 +61,11 @@ def to_out(doc: Document, role: str) -> DocumentOut:
         nb_versions=len(doc.versions), version=_version_out(latest, _courante(doc)), mon_role=role,
         cree_par_nom=doc.createur.nom_utilisateur if doc.createur else None,
         cree_le=doc.cree_le, modifie_le=doc.modifie_le,
+        categorie_id=doc.categorie_id, categorie_nom=doc.categorie.nom if doc.categorie else None,
+        type_document_id=doc.type_document_id, type_nom=doc.type_document.nom if doc.type_document else None,
+        confidentialite=doc.confidentialite or "INTERNE",
+        tags=sorted(lien.tag.nom for lien in doc.tag_liens), classement_source=doc.classement_source or "aucun",
+        corbeille_le=doc.corbeille_le,
     )
 
 
@@ -78,6 +83,8 @@ def versions_out(doc: Document) -> list[VersionOut]:
 def _query():
     return select(Document).options(
         joinedload(Document.dossier), joinedload(Document.createur),
+        joinedload(Document.categorie), joinedload(Document.type_document),
+        selectinload(Document.tag_liens).joinedload(DocumentTag.tag),
         selectinload(Document.versions).joinedload(DocumentVersion.auteur),
     )
 
@@ -139,6 +146,17 @@ def apply_document_filters(
                 if needle in (d.titre or "").lower()
                 or any(needle in (v.nom_fichier or "").lower() for v in d.versions)
             ]
+
+    if categorie_id is not None:
+        filtered = [d for d in filtered if getattr(d, "categorie_id", None) == categorie_id]
+    if type_id is not None:
+        filtered = [d for d in filtered if getattr(d, "type_document_id", None) == type_id]
+    if confidentialite:
+        filtered = [d for d in filtered if getattr(d, "confidentialite", None) == confidentialite.upper()]
+    if tag_ids:
+        # tous les tags demandés doivent être présents sur le fichier
+        wanted = set(tag_ids)
+        filtered = [d for d in filtered if wanted <= {lien.tag_id for lien in getattr(d, "tag_liens", [])}]
 
     if extension:
         ext = extension.strip().lower().lstrip('.')

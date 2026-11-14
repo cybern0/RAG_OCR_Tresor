@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_principal
-from app.core.permissions import MODIFIER, PARTAGER, Principal, exiger_acces
-from app.db.metier import DemandeAcces, DocumentPartage, Dossier
+from app.core.permissions import DOSSIER_GERER, MODIFIER, PARTAGER, Principal, exiger_acces
+from app.db.metier import DemandeAcces, DocumentPartage, Dossier, User
 from app.db.vecteur import Document
 from app.schemas.document import (
     AccessRequestDecisionIn,
@@ -180,7 +180,13 @@ def list_access_requests_route(
             crud.get_document(db, principal, subject_id, PARTAGER)
         elif subject_type == "dossier":
             exiger_acces(db, principal, subject_id, PARTAGER)
+    elif not principal.can(DOSSIER_GERER):
+        # sans sujet précis, la liste couvre tout le système : réservée à qui gère les dossiers
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Action non autorisée pour votre rôle.")
     rows = list_access_requests_db(db, subject_type=subject_type, subject_id=subject_id, status=status)
+    users = {u.id: u.nom_utilisateur for u in db.scalars(select(User).where(User.id.in_({r.user_id for r in rows})))} if rows else {}
+    dossiers = {d.id: d.nom for d in db.scalars(select(Dossier))} if rows else {}
+    documents = {d.id: d.titre for d in db.scalars(select(Document).where(Document.id.in_({r.sujet_id for r in rows if r.sujet_type == "document"})))} if rows else {}
     return [
         AccessRequest(
             id=row.id,
@@ -191,6 +197,8 @@ def list_access_requests_route(
             message=row.message or "",
             status=row.statut,
             created_at=row.cree_le,
+            subject_name=(documents if row.sujet_type == "document" else dossiers).get(row.sujet_id),
+            requester_name=users.get(row.user_id),
         )
         for row in rows
     ]
@@ -314,6 +322,7 @@ def create_comment(
         content=comment.contenu,
         created_at=comment.cree_le,
         parent_id=comment.parent_id,
+        author_name=principal.user.nom_utilisateur,
     )
 
 
@@ -321,6 +330,7 @@ def create_comment(
 def list_comments(document_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
     doc, _ = crud.get_document(db, principal, document_id, MODIFIER)
     comments = list_comments_db(db, subject_type="document", subject_id=doc.id)
+    names = {u.id: u.nom_utilisateur for u in db.scalars(select(User).where(User.id.in_({c.auteur_id for c in comments})))} if comments else {}
     return [
         Comment(
             entity_type=entry.sujet_type,
@@ -329,6 +339,7 @@ def list_comments(document_id: int, principal: Principal = Depends(get_principal
             content=entry.contenu,
             created_at=entry.cree_le,
             parent_id=entry.parent_id,
+            author_name=names.get(entry.auteur_id),
         )
         for entry in comments
     ]

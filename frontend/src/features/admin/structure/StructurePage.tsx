@@ -1,0 +1,106 @@
+// Directions et services : création et activation. Un service appartient à une direction.
+import { Plus } from 'lucide-react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
+import { errorMessage } from '../../../shared/api/client'
+import { exempleCode, exempleNomDirection, exempleNomService } from '../../../shared/lib/exemples'
+import Badge from '../../../shared/ui/Badge'
+import ExampleButton from '../../../shared/ui/ExampleButton'
+import Field from '../../../shared/ui/Field'
+import { ErrorBox, Loading } from '../../../shared/ui/Feedback'
+import Modal from '../../../shared/ui/Modal'
+import PageHeader from '../../../shared/ui/PageHeader'
+import { useToast } from '../../../shared/hooks/useToast'
+import { createDirection, createService, updateDirection, updateService } from '../api'
+import { adminKeys, useAdminMutation, useDirections, useServices } from '../queries'
+
+function DirectionModal({ onClose }: { onClose: () => void }) {
+  const toast = useToast()
+  const [code, setCode] = useState('')
+  const [nom, setNom] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const save = useAdminMutation(() => createDirection({ code, nom }), [adminKeys.directions])
+  async function submit(e: FormEvent) { e.preventDefault(); setError(null); try { await save.mutateAsync(undefined); toast.success('Direction créée.'); onClose() } catch (err) { setError(errorMessage(err)) } }
+  return (
+    <Modal title="Nouvelle direction" onClose={onClose}>
+      <form onSubmit={(e) => void submit(e)} className="space-y-4">
+        <div className="flex justify-end"><ExampleButton onFill={() => { setCode(exempleCode('DIR')); setNom(exempleNomDirection()) }} /></div>
+        <Field label="Code" hint="Court et unique (ex. DGT).">{(id) => <input id={id} className="input" required maxLength={20} value={code} onChange={(e) => setCode(e.target.value)} />}</Field>
+        <Field label="Nom">{(id) => <input id={id} className="input" required value={nom} onChange={(e) => setNom(e.target.value)} />}</Field>
+        <ErrorBox message={error} />
+        <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={onClose}>Annuler</button><button className="btn" disabled={save.isPending}>Créer</button></div>
+      </form>
+    </Modal>
+  )
+}
+
+function ServiceModal({ onClose }: { onClose: () => void }) {
+  const toast = useToast()
+  const directions = useDirections()
+  const [directionId, setDirectionId] = useState<number | ''>('')
+  const [code, setCode] = useState('')
+  const [nom, setNom] = useState('')
+  const [site, setSite] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const active = (directions.data ?? []).filter((d) => d.actif)
+  const save = useAdminMutation(() => createService({ direction_id: Number(directionId), code, nom, site: site || null }), [adminKeys.services])
+  async function submit(e: FormEvent) { e.preventDefault(); setError(null); try { await save.mutateAsync(undefined); toast.success('Service créé.'); onClose() } catch (err) { setError(errorMessage(err)) } }
+  return (
+    <Modal title="Nouveau service" onClose={onClose}>
+      <form onSubmit={(e) => void submit(e)} className="space-y-4">
+        <div className="flex justify-end"><ExampleButton onFill={() => { setDirectionId(active[0]?.id ?? ''); setCode(exempleCode('SRV')); setNom(exempleNomService()); setSite('Fianarantsoa') }} /></div>
+        <Field label="Direction">
+          {(id) => <select id={id} className="input" required value={directionId} onChange={(e) => setDirectionId(e.target.value ? Number(e.target.value) : '')}><option value="">— Choisir —</option>{active.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}</select>}
+        </Field>
+        <Field label="Code">{(id) => <input id={id} className="input" required maxLength={20} value={code} onChange={(e) => setCode(e.target.value)} />}</Field>
+        <Field label="Nom">{(id) => <input id={id} className="input" required value={nom} onChange={(e) => setNom(e.target.value)} />}</Field>
+        <Field label="Site (facultatif)">{(id) => <input id={id} className="input" value={site} onChange={(e) => setSite(e.target.value)} />}</Field>
+        <ErrorBox message={error} />
+        <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={onClose}>Annuler</button><button className="btn" disabled={save.isPending}>Créer</button></div>
+      </form>
+    </Modal>
+  )
+}
+
+export function Component() {
+  const toast = useToast()
+  const directions = useDirections()
+  const services = useServices()
+  const [modal, setModal] = useState<'direction' | 'service' | null>(null)
+  const toggleDirection = useAdminMutation((v: { id: number; actif: boolean }) => updateDirection(v.id, { actif: v.actif }), [adminKeys.directions, adminKeys.services])
+  const toggleService = useAdminMutation((v: { id: number; actif: boolean }) => updateService(v.id, { actif: v.actif }), [adminKeys.services])
+  const fail = (e: unknown) => toast.error(errorMessage(e))
+
+  return (
+    <>
+      <PageHeader title="Directions et services" description="L’organisation de la structure. Les agents appartiennent à un service ; un service peut recevoir un rôle sur un dossier." />
+      <ErrorBox message={directions.error ? errorMessage(directions.error) : services.error ? errorMessage(services.error) : null} />
+      <div className="grid gap-5 xl:grid-cols-2">
+        <section>
+          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-gold-400">Directions</h2><button className="btn-ghost" onClick={() => setModal('direction')}><Plus className="h-4 w-4" /> Direction</button></div>
+          {directions.isPending ? <Loading /> : (
+            <div className="card overflow-x-auto"><table className="w-full border-collapse"><thead><tr><th className="th">Code</th><th className="th">Nom</th><th className="th">État</th><th className="th" /></tr></thead><tbody>
+              {directions.data!.map((d) => (
+                <tr key={d.id} className="hover:bg-leaf-700/40"><td className="td font-mono text-xs">{d.code}</td><td className="td">{d.nom}</td><td className="td"><Badge tone={d.actif ? 'green' : 'gray'}>{d.actif ? 'Active' : 'Désactivée'}</Badge></td>
+                  <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleDirection.mutateAsync({ id: d.id, actif: !d.actif }).catch(fail)}>{d.actif ? 'Désactiver' : 'Réactiver'}</button></td></tr>
+              ))}
+            </tbody></table></div>
+          )}
+        </section>
+        <section>
+          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-gold-400">Services</h2><button className="btn-ghost" onClick={() => setModal('service')}><Plus className="h-4 w-4" /> Service</button></div>
+          {services.isPending ? <Loading /> : (
+            <div className="card overflow-x-auto"><table className="w-full border-collapse"><thead><tr><th className="th">Service</th><th className="th">Direction</th><th className="th">État</th><th className="th" /></tr></thead><tbody>
+              {services.data!.map((s) => (
+                <tr key={s.id} className="hover:bg-leaf-700/40"><td className="td">{s.nom}<br /><span className="font-mono text-xs text-cream-300">{s.code}{s.site ? ` · ${s.site}` : ''}</span></td><td className="td text-sm">{s.direction_nom}</td><td className="td"><Badge tone={s.actif ? 'green' : 'gray'}>{s.actif ? 'Actif' : 'Désactivé'}</Badge></td>
+                  <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleService.mutateAsync({ id: s.id, actif: !s.actif }).catch(fail)}>{s.actif ? 'Désactiver' : 'Réactiver'}</button></td></tr>
+              ))}
+            </tbody></table></div>
+          )}
+        </section>
+      </div>
+      {modal === 'direction' && <DirectionModal onClose={() => setModal(null)} />}
+      {modal === 'service' && <ServiceModal onClose={() => setModal(null)} />}
+    </>
+  )
+}

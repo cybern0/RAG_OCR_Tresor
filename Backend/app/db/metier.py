@@ -359,6 +359,8 @@ class DocumentTag(Base):
     tag_id: Mapped[int] = mapped_column(ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True)
     source: Mapped[str] = mapped_column(String(10), default="manuel", server_default="manuel")
 
+    tag: Mapped["Tag"] = relationship(lazy="joined")
+
 
 class RegleClassement(Base):
     __tablename__ = "regle_classement"

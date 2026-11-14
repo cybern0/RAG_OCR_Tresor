@@ -188,18 +188,36 @@ def reclasser_documents(db, document_ids: list[int]) -> tuple[int, list[int]]:
     return len(traites), traites
 
 
-def build_dashboard_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Construit les métriques de tableau de bord à partir d'une liste de lignes de vue stats."""
+def charger_noms(db) -> dict[str, dict[int, dict[str, Any]]]:
+    """Noms (et couleurs) des entités citées par les statistiques, pour que l'interface affiche des libellés et non des numéros."""
+    from sqlalchemy import select
+
+    from app.db.metier import Categorie, Direction, Dossier, Service, TypeDocument
+
+    def table(*columns):
+        return {row[0]: {"nom": row[1], "couleur": row[2] if len(row) > 2 else None} for row in db.execute(select(*columns)).all()}
+
+    return {
+        "categorie": table(Categorie.id, Categorie.nom, Categorie.couleur),
+        "type": table(TypeDocument.id, TypeDocument.nom),
+        "service": table(Service.id, Service.nom),
+        "direction": table(Direction.id, Direction.nom),
+        "dossier": table(Dossier.id, Dossier.nom),
+    }
+
+
+def build_dashboard_stats(rows: list[dict[str, Any]], noms: dict[str, dict[int, dict[str, Any]]] | None = None) -> dict[str, Any]:
+    """Construit les métriques de tableau de bord à partir d'une liste de lignes de vue stats.
+
+    `noms` (voir charger_noms) ajoute un libellé « nom » (et « couleur » pour les catégories) à chaque ligne groupée.
+    """
+    noms = noms or {}
     statut = {"pending": 0, "processing": 0, "ready": 0, "error": 0}
-    par_categorie: defaultdict[int, int] = defaultdict(int)
-    par_type: defaultdict[int, int] = defaultdict(int)
+    groupes: dict[str, defaultdict[int, int]] = {k: defaultdict(int) for k in ("categorie", "type", "service", "direction", "dossier")}
     par_confidentialite: defaultdict[str, int] = defaultdict(int)
     par_extension: defaultdict[str, int] = defaultdict(int)
-    par_service: defaultdict[int, int] = defaultdict(int)
-    par_direction: defaultdict[int, int] = defaultdict(int)
-    total_documents = 0
-    actifs = 0
-    corbeille = 0
+    total_documents = actifs = corbeille = sans_classement = 0
+    stockage = versions = 0
 
     for row in rows:
         total_documents += 1
@@ -211,49 +229,43 @@ def build_dashboard_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
         else:
             corbeille += 1
 
-        categorie = row.get("categorie_id")
-        if categorie is not None:
-            par_categorie[int(categorie)] += 1
+        stockage += int(row.get("taille_octets") or 0)
+        versions += int(row.get("nb_versions") or 1)
 
-        type_id = row.get("type_document_id")
-        if type_id is not None:
-            par_type[int(type_id)] += 1
+        for groupe, champ in (("categorie", "categorie_id"), ("type", "type_document_id"), ("service", "service_id"),
+                              ("direction", "direction_id"), ("dossier", "dossier_id")):
+            valeur = row.get(champ)
+            if valeur is not None:
+                groupes[groupe][int(valeur)] += 1
+        if row.get("categorie_id") is None and row.get("type_document_id") is None:
+            sans_classement += 1
 
-        confidentialite = str(row.get("confidentialite") or "INCONNU")
-        par_confidentialite[confidentialite] += 1
+        par_confidentialite[str(row.get("confidentialite") or "INCONNU")] += 1
+        par_extension[str(row.get("extension") or "inconnu").lower()] += 1
 
-        extension = str(row.get("extension") or "inconnu").lower()
-        par_extension[extension] += 1
-
-        service_id = row.get("service_id")
-        if service_id is not None:
-            par_service[int(service_id)] += 1
-
-        direction_id = row.get("direction_id")
-        if direction_id is not None:
-            par_direction[int(direction_id)] += 1
+    def lignes(groupe: str, champ: str) -> list[dict[str, Any]]:
+        out = []
+        for ident, total in sorted(groupes[groupe].items(), key=lambda item: (-item[1], item[0])):
+            info = noms.get(groupe, {}).get(ident, {})
+            ligne = {champ: ident, "total": total, "nom": info.get("nom")}
+            if groupe == "categorie":
+                ligne["couleur"] = info.get("couleur")
+            out.append(ligne)
+        return out
 
     return {
         "total_documents": total_documents,
         "actifs": actifs,
         "corbeille": corbeille,
+        "sans_classement": sans_classement,
+        "stockage_octets": stockage,
+        "nb_versions": versions,
         "statut": dict(sorted(statut.items())),
-        "par_categorie": [
-            {"categorie_id": key, "total": value}
-            for key, value in sorted(par_categorie.items(), key=lambda item: (-item[1], item[0]))
-        ],
-        "par_type": [
-            {"type_document_id": key, "total": value}
-            for key, value in sorted(par_type.items(), key=lambda item: (-item[1], item[0]))
-        ],
+        "par_categorie": lignes("categorie", "categorie_id"),
+        "par_type": lignes("type", "type_document_id"),
         "par_confidentialite": dict(sorted(par_confidentialite.items())),
         "par_extension": dict(sorted(par_extension.items())),
-        "par_service": [
-            {"service_id": key, "total": value}
-            for key, value in sorted(par_service.items(), key=lambda item: (-item[1], item[0]))
-        ],
-        "par_direction": [
-            {"direction_id": key, "total": value}
-            for key, value in sorted(par_direction.items(), key=lambda item: (-item[1], item[0]))
-        ],
+        "par_service": lignes("service", "service_id"),
+        "par_direction": lignes("direction", "direction_id"),
+        "par_dossier": lignes("dossier", "dossier_id"),
     }

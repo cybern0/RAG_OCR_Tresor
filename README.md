@@ -55,7 +55,9 @@ Le compte `admin` est créé verrouillé : voir l'en-tête de `04_seed_roles_per
 2. Ollama : `ollama pull qwen3:4b-instruct-2507-q4_K_M` et `ollama pull embeddinggemma:300m-qat-q4_0`.
 3. OCR (optionnel tant qu'on ne dépose pas de scans ni d'images) : `cd ocr_server && uv run server.py`.
 4. Backend : `cd Backend && uv sync && uv run python -m app.cli set-password admin && uv run uvicorn app.main:app --reload`.
-5. Frontend : `cd frontend && npm install && npm run dev` puis http://localhost:5173 (le proxy `/api` vise le port 8000).
+5. Frontend : `cd frontend && npm install && npm run dev` puis http://localhost:5173 (le proxy `/api` vise le port 8000 ; `VITE_PROXY_TARGET` pour un autre).
+   Toute l'API vit sous le préfixe `/api` (ex. `/api/auth/login`, `/api/health`) ; `/health` reste disponible pour la supervision.
+   En production : `npm run build`, puis le backend sert `frontend/dist` lui-même (une seule adresse, liens profonds compris).
 
 Connexion avec `admin` et le mot de passe choisi à l'étape 4. L'admin crée ensuite une direction, un service, des agents, puis les
 comptes utilisateurs (chaque utilisateur est lié à un agent, donc à un service), puis des **dossiers** (onglet « Dossiers et accès »)

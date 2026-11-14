@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip, get_db, get_principal, require
-from app.core.permissions import DOSSIER_GERER, PARTAGER, Principal, exiger_acces, roles_par_dossier
+from app.core.permissions import DOSSIER_GERER, PARTAGER, VOIR, Principal, exiger_acces, roles_par_dossier
 from app.db.vecteur import Document
 from app.schemas.dossier import AccesDossierOut, DossierIn, DossierOut, DossierUpdate, RoleIn
 from app.services.dossiers import crud
@@ -36,6 +36,13 @@ def _out(db: Session, principal: Principal, dossier) -> DossierOut:
 @router.get("", response_model=list[DossierOut])
 def list_dossiers(principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
     return crud.list_dossiers(db, principal)
+
+
+@router.get("/{dossier_id}", response_model=DossierOut)
+def get_dossier(dossier_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    """Un dossier (lien profond de l'interface) ; hors des accès : 404, l'existence n'est pas révélée."""
+    dossier, _ = exiger_acces(db, principal, dossier_id, VOIR)
+    return _out(db, principal, dossier)
 
 
 @router.post("", response_model=DossierOut, status_code=201)

@@ -147,6 +147,8 @@ class AccessRequest:
     message: str = ""
     status: str = "pending"
     created_at: datetime | None = None
+    subject_name: str | None = None  # titre du fichier ou nom du dossier demandé
+    requester_name: str | None = None  # nom d'utilisateur du demandeur
 
     def __post_init__(self) -> None:
         self.requested_role = normalize_access_role(self.requested_role)
@@ -163,6 +165,7 @@ class Comment:
     content: str
     created_at: datetime | None = None
     parent_id: int | None = None
+    author_name: str | None = None  # nom d'utilisateur de l'auteur, pour l'affichage
 
     def __post_init__(self) -> None:
         if not self.content or not self.content.strip():

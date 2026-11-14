@@ -7,7 +7,7 @@ protégées par le rôle de dossier.
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 Statut = Literal["pending", "processing", "ready", "error"]
 # comment l'aperçu d'une version est produit : direct dans le navigateur, ou pas disponible
@@ -45,6 +45,15 @@ class DocumentOut(BaseModel):
     cree_par_nom: str | None
     cree_le: datetime
     modifie_le: datetime
+    # classement documentaire
+    categorie_id: int | None = None
+    categorie_nom: str | None = None
+    type_document_id: int | None = None
+    type_nom: str | None = None
+    confidentialite: str = "INTERNE"
+    tags: list[str] = []
+    classement_source: str = "aucun"
+    corbeille_le: datetime | None = None
 
 
 class DocumentPageOut(BaseModel):
@@ -112,3 +121,22 @@ class CommentaireIn(BaseModel):
 
 class FavoriIn(BaseModel):
     entity_type: str = "document"
+
+
+Confidentialite = Literal["PUBLIC", "INTERNE", "CONFIDENTIEL"]
+
+
+class ClasserLotIn(BaseModel):
+    """Classement manuel d'un ou plusieurs fichiers : seuls les champs fournis sont modifiés."""
+
+    ids: list[int] = Field(min_length=1, max_length=200)
+    categorie_id: int | None = None
+    type_document_id: int | None = None
+    tags: list[str] | None = None
+    confidentialite: Confidentialite | None = None
+
+
+class ClasserLotOut(BaseModel):
+    ok: list[int]
+    not_found: list[int]
+    forbidden: list[int]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -27,7 +28,7 @@ from app.schemas.classement import (
     TypeDocumentOut,
     TypeDocumentUpdate,
 )
-from app.services.classement import build_dashboard_stats
+from app.services.classement import build_dashboard_stats, charger_noms
 from app.services.classement.moteur import evaluer_regles
 from app.api.deps import get_principal
 
@@ -52,6 +53,24 @@ def _rule_to_dict(rule: RegleClassement) -> dict[str, Any]:
         "confidentialite": rule.confidentialite,
         "criteres": rule.critere or {},
     }
+
+
+class ReferentielOut(BaseModel):
+    categories: list[CategorieOut]
+    types: list[TypeDocumentOut]
+    tags: list[TagOut]
+    confidentialites: list[str]
+
+
+@router.get("/referentiel", response_model=ReferentielOut)
+def referentiel(db: Session = Depends(get_db), _: Principal = Depends(get_principal)):
+    """Catégories et types actifs, étiquettes : de quoi classer ou filtrer un fichier, sans droit d'administration du classement."""
+    return ReferentielOut(
+        categories=db.query(Categorie).filter(Categorie.actif.is_(True)).order_by(Categorie.ordre.asc(), Categorie.nom.asc()).all(),
+        types=db.query(TypeDocument).filter(TypeDocument.actif.is_(True)).order_by(TypeDocument.nom.asc()).all(),
+        tags=db.query(Tag).order_by(Tag.nom.asc()).all(),
+        confidentialites=["PUBLIC", "INTERNE", "CONFIDENTIEL"],
+    )
 
 
 @router.get("/categories", response_model=list[CategorieOut])
@@ -272,10 +291,10 @@ def stats_dashboard(
 
     rows = db.execute(
         text(
-            "SELECT document_id, categorie_id, type_document_id, confidentialite, statut, extension, service_id, direction_id, corbeille_le FROM rag_sys.vue_document_stats"
+            "SELECT document_id, dossier_id, categorie_id, type_document_id, confidentialite, statut, extension, service_id, direction_id, corbeille_le, taille_octets, nb_versions FROM rag_sys.vue_document_stats"
         )
     ).mappings().all()
-    return build_dashboard_stats([dict(item) for item in rows])
+    return build_dashboard_stats([dict(item) for item in rows], charger_noms(db))
 
 
 @router.post("/reclasser")

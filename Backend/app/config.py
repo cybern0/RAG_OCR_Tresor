@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     token_ttl_minutes: int = 480
     cors_origins: str = "http://localhost:5173"
 
+    # Interface web (SPA) : l'API vit sous ce préfixe, ce qui libère tous les autres chemins pour le routage côté navigateur.
+    api_prefix: str = "/api"
+    # Dossier du build du frontend (npm run build) : s'il existe, l'API le sert elle-même avec repli sur index.html.
+    frontend_dist: Path = BASE_DIR.parent / "frontend" / "dist"
+
     # RAG
     chunk_size: int = 1000
     chunk_overlap: int = 150

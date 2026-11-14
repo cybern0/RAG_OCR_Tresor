@@ -23,6 +23,9 @@ class DummyResult:
     def scalar_one_or_none(self):
         return 1
 
+    def all(self):  # requêtes de libellés (charger_noms)
+        return []
+
 
 class DummySession:
     bind = object()
@@ -62,6 +65,25 @@ def test_build_dashboard_stats_agregates_documents():
     assert stats["par_extension"]["pdf"] == 2
     assert stats["actifs"] == 2
     assert stats["corbeille"] == 1
+    assert stats["sans_classement"] == 0
+    assert stats["par_categorie"][0]["nom"] is None  # sans table de libellés
+
+
+def test_build_dashboard_stats_adds_names_and_storage():
+    rows = [
+        {"document_id": 1, "dossier_id": 9, "categorie_id": 5, "type_document_id": None, "confidentialite": "INTERNE", "statut": "ready",
+         "extension": "pdf", "service_id": 7, "direction_id": 3, "corbeille_le": None, "taille_octets": 1000, "nb_versions": 2},
+        {"document_id": 2, "dossier_id": 9, "categorie_id": None, "type_document_id": None, "confidentialite": "PUBLIC", "statut": "ready",
+         "extension": "txt", "service_id": None, "direction_id": None, "corbeille_le": None, "taille_octets": 500, "nb_versions": 1},
+    ]
+    noms = {"categorie": {5: {"nom": "Finance", "couleur": "#d9a92b"}}, "dossier": {9: {"nom": "Budget 2026", "couleur": None}}}
+
+    stats = build_dashboard_stats(rows, noms)
+
+    assert stats["par_categorie"] == [{"categorie_id": 5, "total": 1, "nom": "Finance", "couleur": "#d9a92b"}]
+    assert stats["par_dossier"][0]["nom"] == "Budget 2026" and stats["par_dossier"][0]["total"] == 2
+    assert stats["stockage_octets"] == 1500 and stats["nb_versions"] == 3
+    assert stats["sans_classement"] == 1
 
 
 def test_stats_dashboard_uses_sqlalchemy_text_statements():

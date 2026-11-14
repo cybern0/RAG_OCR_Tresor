@@ -47,7 +47,7 @@ jamais de HTML ni de SVG ; `nosniff` et CSP `sandbox` partout ; téléchargement
 Fichier absent du disque : 410.
 
 ## Flux d'ingestion
-1. Le frontend envoie le fichier (api/documents.ts) vers `POST /documents` (dossier choisi) ou `POST /documents/{id}/versions`.
+1. Le frontend envoie le fichier (features/documents/api.ts) vers `POST /documents` (dossier choisi) ou `POST /documents/{id}/versions`.
 2. Le backend contrôle le rôle de dossier, enregistre le fichier sous un nom généré, crée la version avec le statut `pending` (services/documents/crud.py).
 3. Le worker (workers/ingestion_worker.py, un seul thread) exécute services/ingestion/pipeline.py **pour cette version** :
    parsing LiteParse (OCR seulement si une page n'a pas de texte natif, ou pour les images si la case l'impose), découpage, embeddings Ollama, écriture dans pgvector
@@ -97,6 +97,8 @@ Schéma : `database/01` à `05` (voir `docs/migration_05.md`). `05_dossiers_vers
 
 ## Interface
 Thème : fonds vert végétal, texte blanc cassé, composants (boutons, bordures, badges, éléments actifs) jaune doré ;
-définis une seule fois dans `frontend/src/index.css`.
-Pages : « Dossiers et fichiers » (dossiers accessibles, fichiers, versions, aperçu, téléchargement), « Chatbot » (historique, options personnelles, sources avec version et date),
-« Administration » (dossiers et accès, utilisateurs, agents, services, audit). Chaque formulaire a un bouton « Remplir avec exemple » (fausses données, champs vides avant le clic, sans drapeau de désactivation).
+définis une seule fois dans `frontend/src/styles/index.css`.
+Application monopage (React Router, TanStack Query) : une route par écran, liens profonds et boutons précédent/suivant du navigateur (voir `frontend/README.md` pour la table des routes).
+L'API vit sous `/api` ; le backend sert aussi `frontend/dist` (repli sur `index.html`) quand il existe.
+Pages : « Dossiers et fichiers » (dossiers, fichiers avec recherche, filtres, tri, pagination, corbeille, fiche avec aperçu, versions, classement, commentaires), « Assistant » (historique dans l'URL, options personnelles, sources avec version et date),
+« Administration » (tableau de bord, dossiers et accès, demandes d'accès, utilisateurs, agents, directions et services, classement, audit). Chaque formulaire a un bouton « Remplir avec exemple » (fausses données, champs vides avant le clic, sans drapeau de désactivation).
