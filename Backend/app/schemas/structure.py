@@ -48,6 +48,27 @@ class ServiceOut(BaseModel):
     direction_nom: str
 
 
+class DivisionIn(BaseModel):
+    service_id: int
+    nom: str = Field(min_length=1, max_length=180)
+    code: str | None = Field(default=None, min_length=1, max_length=30)
+
+
+class DivisionUpdate(BaseModel):
+    nom: str | None = Field(default=None, min_length=1, max_length=180)
+    code: str | None = Field(default=None, min_length=1, max_length=30)
+    actif: bool | None = None
+
+
+class DivisionOut(BaseModel):
+    id: int
+    service_id: int
+    code: str | None
+    nom: str
+    actif: bool
+    service_nom: str | None = None
+
+
 class AgentIn(BaseModel):
     matricule: str = Field(min_length=1, max_length=50)
     nom: str = Field(min_length=1, max_length=100)
@@ -55,6 +76,8 @@ class AgentIn(BaseModel):
     fonction: str | None = Field(default=None, max_length=150)
     email: EmailStr | None = None
     service_id: int
+    division_id: int | None = None
+    titre: str | None = Field(default=None, max_length=30)
 
 
 class AgentUpdate(BaseModel):
@@ -63,6 +86,8 @@ class AgentUpdate(BaseModel):
     fonction: str | None = Field(default=None, max_length=150)
     email: EmailStr | None = None
     service_id: int | None = None
+    division_id: int | None = None
+    titre: str | None = Field(default=None, max_length=30)
     actif: bool | None = None
 
 
@@ -74,7 +99,10 @@ class AgentOut(BaseModel):
     fonction: str | None
     email: str | None
     service_id: int | None
+    division_id: int | None
+    titre: str | None
     service_nom: str | None
+    division_nom: str | None = None
     actif: bool
     nom_utilisateur: str | None  # compte lié, s'il existe
 

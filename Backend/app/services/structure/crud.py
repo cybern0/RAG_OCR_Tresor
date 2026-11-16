@@ -1,4 +1,4 @@
-"""Logique de la structure : directions, services, agents.
+"""Logique de la structure : directions, services, divisions, agents.
 Pas de suppression physique (les documents et comptes en dépendent) : on désactive avec `actif = false`."""
 
 from fastapi import HTTPException, status
@@ -6,9 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.db.metier import Agent, Direction, Service, User
+from app.db.metier import Agent, Direction, Division, Service, User
 from app.schemas.structure import (
-    AgentIn, AgentOut, AgentUpdate, DirectionIn, DirectionUpdate, ServiceIn, ServiceOut, ServiceUpdate,
+    AgentIn, AgentOut, AgentUpdate, DirectionIn, DirectionUpdate, DivisionIn, DivisionOut, DivisionUpdate,
+    ServiceIn, ServiceOut, ServiceUpdate,
 )
 from app.services.audit import log_action
 
@@ -110,18 +111,78 @@ def update_service(db: Session, actor_id: int, service_id: int, data: ServiceUpd
 
 # --- Agents --------------------------------------------------------------------------------------------------
 
+def to_division_out(d: Division) -> DivisionOut:
+    return DivisionOut(
+        id=d.id,
+        service_id=d.service_id,
+        service_nom=d.service.nom if d.service else None,
+        code=d.code,
+        nom=d.nom,
+        actif=d.actif,
+    )
+
+
+def list_divisions(db: Session) -> list[Division]:
+    return list(db.scalars(select(Division).options(joinedload(Division.service)).order_by(Division.nom)))
+
+
+def _get_division(db: Session, division_id: int) -> Division:
+    obj = db.scalars(select(Division).options(joinedload(Division.service)).where(Division.id == division_id)).one_or_none()
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
+    return obj
+
+
+def create_division(db: Session, actor_id: int, data: DivisionIn, ip: str | None) -> Division:
+    service = db.get(Service, data.service_id)
+    if service is None or not service.actif:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Service introuvable ou inactif.")
+    obj = Division(service_id=data.service_id, nom=data.nom.strip(), code=(data.code or data.nom).strip()[:30])
+    db.add(obj)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "Cette division existe déjà.") from None
+    log_action(db, actor_id, "structure.division.creer", "division", obj.id, {"nom": obj.nom}, ip)
+    db.commit()
+    return _get_division(db, obj.id)
+
+
+def update_division(db: Session, actor_id: int, division_id: int, data: DivisionUpdate, ip: str | None) -> Division:
+    obj = _get_division(db, division_id)
+    changes = {}
+    if data.nom is not None:
+        value = data.nom.strip()
+        if not value:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Le nom de la division ne peut pas être vide.")
+        obj.nom = value
+        changes["nom"] = value
+    if data.code is not None:
+        obj.code = data.code.strip()[:30] or None
+        changes["code"] = obj.code
+    if data.actif is not None and data.actif != obj.actif:
+        obj.actif = data.actif
+        changes["actif"] = data.actif
+    if changes:
+        log_action(db, actor_id, "structure.division.modifier", "division", obj.id, changes, ip)
+        db.commit()
+    return _get_division(db, obj.id)
+
+
 def to_agent_out(a: Agent, username: str | None) -> AgentOut:
     return AgentOut(
         id=a.id, matricule=a.matricule, nom=a.nom, prenom=a.prenom, fonction=a.fonction, email=a.email,
-        service_id=a.service_id, service_nom=a.service.nom if a.service else None, actif=a.actif,
-        nom_utilisateur=username,
+        service_id=a.service_id, division_id=a.division_id, titre=a.titre,
+        service_nom=a.service.nom if a.service else None, division_nom=a.division.nom if a.division else None,
+        actif=a.actif, nom_utilisateur=username,
     )
 
 
 def list_agents(db: Session) -> list[AgentOut]:
     rows = db.execute(
         select(Agent, User.nom_utilisateur)
-        .options(joinedload(Agent.service))
+        .options(joinedload(Agent.service), joinedload(Agent.division))
         .outerjoin(User, User.agent_id == Agent.id)
         .order_by(Agent.nom, Agent.prenom)
     ).unique()
@@ -130,7 +191,7 @@ def list_agents(db: Session) -> list[AgentOut]:
 
 def _agent_out(db: Session, agent_id: int) -> AgentOut:
     row = db.execute(
-        select(Agent, User.nom_utilisateur).options(joinedload(Agent.service))
+        select(Agent, User.nom_utilisateur).options(joinedload(Agent.service), joinedload(Agent.division))
         .outerjoin(User, User.agent_id == Agent.id).where(Agent.id == agent_id)
     ).unique().one_or_none()
     if row is None:
@@ -142,9 +203,20 @@ def create_agent(db: Session, actor_id: int, data: AgentIn, ip: str | None) -> A
     service = db.get(Service, data.service_id)
     if service is None or not service.actif:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Service introuvable ou inactif.")
+    division = None
+    if data.division_id is not None:
+        division = db.get(Division, data.division_id)
+        if division is None or not division.actif:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Division introuvable ou inactive.")
+        if division.service_id != data.service_id:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "La division n'appartient pas à ce service.")
+    titre = (data.titre or "").strip() or None
+    if titre is not None and titre.upper() not in {"CHEF_SERVICE", "CHEF_DIVISION"}:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Titre invalide. Valeurs autorisées : CHEF_SERVICE, CHEF_DIVISION.")
     obj = Agent(
         matricule=data.matricule.strip(), nom=data.nom.strip(), prenom=data.prenom.strip(),
         fonction=data.fonction, email=data.email, service_id=data.service_id,
+        division_id=data.division_id, titre=titre,
     )
     db.add(obj)
     try:
@@ -166,7 +238,18 @@ def update_agent(db: Session, actor_id: int, agent_id: int, data: AgentUpdate, i
         service = db.get(Service, values["service_id"])
         if service is None or not service.actif:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Service introuvable ou inactif.")
-    # nom, prénom, service et actif ne peuvent pas être vidés ; fonction et email, si
+    if values.get("division_id") is not None:
+        division = db.get(Division, values["division_id"])
+        if division is None or not division.actif:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Division introuvable ou inactive.")
+        service_id = values.get("service_id", obj.service_id)
+        if division.service_id != service_id:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "La division n'appartient pas au service choisi.")
+    if values.get("titre") is not None:
+        titre = values["titre"].strip() or None
+        if titre is not None and titre.upper() not in {"CHEF_SERVICE", "CHEF_DIVISION"}:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Titre invalide. Valeurs autorisées : CHEF_SERVICE, CHEF_DIVISION.")
+        values["titre"] = titre
     values = {k: v for k, v in values.items() if v is not None or k in ("fonction", "email")}
     changes = _apply(obj, values)
     if changes:

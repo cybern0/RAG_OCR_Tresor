@@ -17,7 +17,7 @@ Hors de ses dossiers, on ne voit rien : 404 (l'existence du dossier n'est pas r�
 interdite par le rôle renvoie 403. La matrice ci-dessous est la seule source de vérité des droits de dossier.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -29,6 +29,47 @@ from app.db.metier import Dossier, DossierMembre, DossierService, Permission, Us
 ROLE_ADMIN = "ADMIN"
 ROLE_UTILISATEUR = "UTILISATEUR"
 ROLES = (ROLE_ADMIN, ROLE_UTILISATEUR)
+
+NIVEAU_ROOT = "ROOT"
+NIVEAU_SERVICE = "SERVICE"
+NIVEAU_DIVISION = "DIVISION"
+NIVEAU_AGENT = "AGENT"
+
+
+@dataclass(frozen=True)
+class ContexteAcces:
+    """Contexte de sécurité hiérarchique pour un compte utilisateur."""
+
+    niveau: str = NIVEAU_AGENT
+    direction_id: int | None = None
+    service_id: int | None = None
+    division_id: int | None = None
+    user_id: int | None = None
+    roles_division: set[int] = field(default_factory=set)
+
+    @property
+    def est_admin_racine(self) -> bool:
+        return self.niveau == NIVEAU_ROOT
+
+    @property
+    def est_admin_service(self) -> bool:
+        return self.niveau in {NIVEAU_ROOT, NIVEAU_SERVICE}
+
+    @property
+    def est_admin_division(self) -> bool:
+        return self.niveau in {NIVEAU_ROOT, NIVEAU_SERVICE, NIVEAU_DIVISION}
+
+
+def niveau_compte(agent, user) -> str:
+    """Calcule le niveau fonctionnel du compte, en fonction du titre de l'agent."""
+    if user is None or agent is None:
+        return NIVEAU_AGENT
+    titre = (agent.titre or "").upper()
+    if titre == "CHEF_SERVICE":
+        return NIVEAU_SERVICE
+    if titre == "CHEF_DIVISION":
+        return NIVEAU_DIVISION
+    return NIVEAU_AGENT
 
 # Codes de permissions globales (identiques à database/04 et 05)
 DOCUMENT_LISTER = "document.lister"

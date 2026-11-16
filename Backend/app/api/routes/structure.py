@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import client_ip, get_db, require
 from app.core.permissions import STRUCTURE_GERER, Principal
 from app.schemas.structure import (
-    AgentIn, AgentOut, AgentUpdate, DirectionIn, DirectionOut, DirectionUpdate, ServiceIn, ServiceOut, ServiceUpdate,
+    AgentIn, AgentOut, AgentUpdate, DirectionIn, DirectionOut, DirectionUpdate, DivisionIn, DivisionOut, DivisionUpdate,
+    ServiceIn, ServiceOut, ServiceUpdate,
 )
 from app.services.structure import crud
 
@@ -49,6 +50,31 @@ def update_service(
     actor: Principal = Depends(_admin), db: Session = Depends(get_db),
 ):
     return crud.to_service_out(crud.update_service(db, actor.user.id, service_id, data, client_ip(request)))
+
+
+@router.get("/divisions", response_model=list[DivisionOut])
+def list_divisions(_: Principal = Depends(_admin), db: Session = Depends(get_db)):
+    return [crud.to_division_out(d) for d in crud.list_divisions(db)]
+
+
+@router.post("/divisions", response_model=DivisionOut, status_code=201)
+def create_division(
+    data: DivisionIn, request: Request, actor: Principal = Depends(_admin), db: Session = Depends(get_db),
+):
+    return crud.to_division_out(crud.create_division(db, actor.user.id, data, client_ip(request)))
+
+
+@router.patch("/divisions/{division_id}", response_model=DivisionOut)
+def update_division(
+    division_id: int, data: DivisionUpdate, request: Request,
+    actor: Principal = Depends(_admin), db: Session = Depends(get_db),
+):
+    return crud.to_division_out(crud.update_division(db, actor.user.id, division_id, data, client_ip(request)))
+
+
+@router.get("/postes", response_model=dict)
+def list_postes(_: Principal = Depends(_admin), db: Session = Depends(get_db)):
+    return {"chefs_service": [], "chefs_division": []}
 
 
 @router.get("/agents", response_model=list[AgentOut])
