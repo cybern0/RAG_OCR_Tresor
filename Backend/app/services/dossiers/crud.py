@@ -11,12 +11,12 @@ Chaque changement est inscrit au journal d'audit.
 """
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.permissions import Principal, roles_par_dossier
-from app.db.metier import Dossier, DossierMembre, DossierService, Service, User
+from app.db.metier import Dossier, Service, User
 from app.db.vecteur import Document
 from app.schemas.dossier import (
     AccesDossierOut, DossierIn, DossierOut, DossierUpdate, MembreOut, ServiceAccesOut,
@@ -111,15 +111,31 @@ def delete_dossier(db: Session, actor: Principal, dossier_id: int, ip: str | Non
 
 # --- Membres et rôles -------------------------------------------------------------------------------------------------
 
+def _legacy_table_exists(db: Session, table_name: str) -> bool:
+    return table_name in inspect(db.get_bind()).get_table_names()
+
+
 def list_acces(db: Session, dossier_id: int) -> AccesDossierOut:
     _get(db, dossier_id)
-    membres = db.scalars(
-        select(DossierMembre).options(joinedload(DossierMembre.user).joinedload(User.agent))
-        .where(DossierMembre.dossier_id == dossier_id)
-    ).unique()
-    services = db.scalars(
-        select(DossierService).options(joinedload(DossierService.service)).where(DossierService.dossier_id == dossier_id)
-    )
+
+    membres = []
+    services = []
+
+    if _legacy_table_exists(db, "dossier_membre"):
+        from app.db.metier import DossierMembre
+
+        membres = db.scalars(
+            select(DossierMembre).options(joinedload(DossierMembre.user).joinedload(User.agent))
+            .where(DossierMembre.dossier_id == dossier_id)
+        ).unique()
+
+    if _legacy_table_exists(db, "dossier_service"):
+        from app.db.metier import DossierService
+
+        services = db.scalars(
+            select(DossierService).options(joinedload(DossierService.service)).where(DossierService.dossier_id == dossier_id)
+        )
+
     return AccesDossierOut(
         membres=sorted(
             (
@@ -142,6 +158,11 @@ def list_acces(db: Session, dossier_id: int) -> AccesDossierOut:
 
 
 def set_membre(db: Session, actor: Principal, dossier_id: int, user_id: int, role: str, ip: str | None) -> None:
+    if not _legacy_table_exists(db, "dossier_membre"):
+        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Le modèle de dossier plat n'est plus utilisé dans cette base.")
+
+    from app.db.metier import DossierMembre
+
     d = _get(db, dossier_id)
     user = db.get(User, user_id)
     if user is None:
@@ -165,6 +186,11 @@ def set_membre(db: Session, actor: Principal, dossier_id: int, user_id: int, rol
 
 
 def remove_membre(db: Session, actor: Principal, dossier_id: int, user_id: int, ip: str | None) -> None:
+    if not _legacy_table_exists(db, "dossier_membre"):
+        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Le modèle de dossier plat n'est plus utilisé dans cette base.")
+
+    from app.db.metier import DossierMembre
+
     d = _get(db, dossier_id)
     existing = db.get(DossierMembre, (dossier_id, user_id))
     if existing is None:
@@ -175,6 +201,11 @@ def remove_membre(db: Session, actor: Principal, dossier_id: int, user_id: int, 
 
 
 def set_service(db: Session, actor: Principal, dossier_id: int, service_id: int, role: str, ip: str | None) -> None:
+    if not _legacy_table_exists(db, "dossier_service"):
+        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Le modèle de dossier plat n'est plus utilisé dans cette base.")
+
+    from app.db.metier import DossierService
+
     d = _get(db, dossier_id)
     service = db.get(Service, service_id)
     if service is None:
@@ -194,6 +225,11 @@ def set_service(db: Session, actor: Principal, dossier_id: int, service_id: int,
 
 
 def remove_service(db: Session, actor: Principal, dossier_id: int, service_id: int, ip: str | None) -> None:
+    if not _legacy_table_exists(db, "dossier_service"):
+        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Le modèle de dossier plat n'est plus utilisé dans cette base.")
+
+    from app.db.metier import DossierService
+
     d = _get(db, dossier_id)
     existing = db.get(DossierService, (dossier_id, service_id))
     if existing is None:

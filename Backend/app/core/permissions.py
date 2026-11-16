@@ -21,10 +21,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
-from app.db.metier import Dossier, DossierMembre, DossierService, Permission, User, role_permission
+from app.db.metier import Dossier, Permission, User, role_permission
 
 ROLE_ADMIN = "ADMIN"
 ROLE_UTILISATEUR = "UTILISATEUR"
@@ -164,18 +164,38 @@ def load_permissions(db: Session, user: User) -> frozenset[str]:
 
 # --- Rôles effectifs ---------------------------------------------------------------------------------------------------
 
+def _table_exists(db: Session, table_name: str) -> bool:
+    """Retourne True si une table legacy existe encore dans la base courante.
+
+    La GED hiérarchique remplace le modèle plat. On garde un garde-fou de compatibilité pour
+    éviter les erreurs sur les bases héritées qui n'ont pas encore les tables de l'ancien modèle.
+    """
+    return table_name in inspect(db.get_bind()).get_table_names()
+
+
 def roles_par_dossier(db: Session, principal: Principal) -> dict[int, str]:
     """Rôle effectif de l'utilisateur dans chaque dossier auquel il a accès (archivés compris).
-    L'ADMIN a le rôle GESTIONNAIRE_DE_CONTENU partout."""
+    L'ADMIN a le rôle GESTIONNAIRE_DE_CONTENU partout.
+
+    Les tables legacy `dossier_membre` et `dossier_service` sont retirées du chemin principal du
+    nouveau modèle, mais cet accès reste protégé pour rester compatible avec les anciennes bases.
+    """
     if principal.is_admin:
         return {i: GESTIONNAIRE for i in db.scalars(select(Dossier.id))}
+
     roles: dict[int, str] = {}
-    for dossier_id, role in db.execute(
-        select(DossierMembre.dossier_id, DossierMembre.role).where(DossierMembre.user_id == principal.user.id)
-    ):
-        roles[dossier_id] = plus_haut(roles.get(dossier_id), role)
+    if _table_exists(db, "dossier_membre"):
+        from app.db.metier import DossierMembre
+
+        for dossier_id, role in db.execute(
+            select(DossierMembre.dossier_id, DossierMembre.role).where(DossierMembre.user_id == principal.user.id)
+        ):
+            roles[dossier_id] = plus_haut(roles.get(dossier_id), role)
+
     service_id = principal.service_actif_id
-    if service_id is not None:
+    if service_id is not None and _table_exists(db, "dossier_service"):
+        from app.db.metier import DossierService
+
         for dossier_id, role in db.execute(
             select(DossierService.dossier_id, DossierService.role).where(DossierService.service_id == service_id)
         ):
