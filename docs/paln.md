@@ -252,3 +252,29 @@ cd ../frontend && npm install && npm run dev
 | Division désactivée | Lecture conservée, écritures refusées (409) |
 | Superviseurs et dépôt | Un administrateur supérieur est en lecture seule sur une autre division |
 | Nom d'un sous-dossier | Visible de toute la division ; ne pas y mettre de nom confidentiel |
+
+---
+
+## 10. Suivi d'intégration
+
+### État global
+
+- [x] Schéma et règles de périmètre alignés sur le nouveau modèle hiérarchique.
+- [x] Permissions, accès fichiers et validation des rôles d'unité mises en cohérence.
+- [x] Formulaires de création de compte et rôles de division adaptés au modèle actuel.
+- [x] Script de préparation des fichiers de démonstration ajouté pour l'aperçu et le téléchargement.
+- [x] Résolution sécurisée des chemins relatifs pour les aperçus de versions.
+- [x] Documentation de plan de migration mise à jour avec le suivi d'intégration.
+
+### Vérifications à garder en place
+
+1. `cd Backend && uv run pytest tests/test_api.py -k "apercu or validation_des_depots"`
+2. `cd Backend && uv run pytest tests/test_hierarchie.py`
+3. `cd frontend && npm run build`
+4. Contrôle manuel de la création de compte, des rôles de division et du parcours de démonstration.
+
+### Points de vigilance
+
+- Les chemins de fichiers stockés doivent rester confinés dans le dossier d'upload.
+- Les comptes créés sans agent doivent rester interdits pour les utilisateurs standards.
+- Les rôles de division doivent être attribués au moment de la création et conservés séparément du rôle global.

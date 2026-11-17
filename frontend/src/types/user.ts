@@ -11,6 +11,12 @@ export interface AgentBrief {
   service_nom: string | null
 }
 
+export interface RoleDivisionBrief {
+  id: number
+  code: string
+  libelle: string
+}
+
 export interface UserOut {
   id: number
   nom_utilisateur: string
@@ -19,6 +25,7 @@ export interface UserOut {
   derniere_connexion: string | null
   cree_le: string
   agent: AgentBrief | null
+  roles_division?: RoleDivisionBrief[]
 }
 
 /** Utilisateur connecté, avec ses permissions et son service. */
@@ -33,6 +40,7 @@ export interface UserCreate {
   mot_de_passe: string
   role: Role
   agent_id: number | null
+  role_ids?: number[]
 }
 
 export interface UserUpdate {
@@ -41,6 +49,7 @@ export interface UserUpdate {
   retirer_agent?: boolean
   actif?: boolean
   mot_de_passe?: string
+  role_ids?: number[]
 }
 
 /** Les boutons sont masqués selon les permissions ; le vrai contrôle est fait par le backend. */

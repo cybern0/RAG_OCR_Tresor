@@ -26,6 +26,9 @@ export interface Agent {
   email: string | null
   service_id: number | null
   service_nom: string | null
+  division_id: number | null
+  division_nom: string | null
+  titre: 'CHEF_SERVICE' | 'CHEF_DIVISION' | null
   actif: boolean
   nom_utilisateur: string | null
 }
