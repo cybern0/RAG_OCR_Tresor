@@ -3,12 +3,12 @@
 Pour un fichier, le rôle effectif est calculé à chaque requête :
 
   * chef de division (sa division) ou chef de service (toutes les divisions de son service, même rôle étendu) :
-      GERANT   -> tout : contenu, versions, rôles des fichiers, classement, corbeille (sans déverrouillage)
+      GERANT   -> tout : contenu, versions, rôles des fichiers, classement, corbeille
   * membre de la division du fichier :
       AUTEUR   a déposé le fichier                   -> voir, modifier, versions, corbeille
       LECTEUR  un rôle commun avec le fichier, ou une exception ponctuelle valide -> lecture, commentaires
       sinon    403 (« Demander l'accès »)
-  * autre division : super administrateur, en lecture seule, seulement si l'unité est déverrouillée (423 sinon).
+  * autre division : super administrateur, en lecture seule.
     Si la division n'a plus de chef, le super administrateur assure l'intérim (le chef de service reste gérant).
   * tout le reste : 404 (l'existence n'est pas révélée).
 
@@ -19,18 +19,16 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import ColumnElement, and_, exists, false, or_, select
+from sqlalchemy import ColumnElement, and_, exists, false, or_, select, true
 from sqlalchemy.orm import Session
 
 from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, NIVEAU_SERVICE, TITRE_CHEF_DIVISION, TITRE_CHEF_SERVICE, Principal
 from app.db.metier import (
     AccesException,
     Agent,
-    Deverrouillage,
     Division,
     Dossier,
     DocumentRole,
-    SecretUnite,
 )
 from app.db.vecteur import Document
 
@@ -99,7 +97,7 @@ def est_membre(principal: Principal, division_id: int) -> bool:
 
 
 def est_superieur(principal: Principal, division: Division) -> bool:
-    """Administrateur hiérarchiquement supérieur à la division (lecture avec déverrouillage) : le super administrateur."""
+    """Administrateur hiérarchiquement supérieur à la division (lecture seule) : le super administrateur."""
     return principal.niveau == NIVEAU_ROOT
 
 
@@ -116,7 +114,7 @@ def est_chef_nominal(db: Session, principal: Principal, division_id: int) -> boo
 
 def peut_gerer_division(db: Session, principal: Principal, division: Division) -> bool:
     """Gérant d'une division : le chef de division, ou le chef de service (divisions de son service) ;
-    à défaut le super administrateur (il assure l'intérim, avec déverrouillage)."""
+    à défaut le super administrateur (il assure l'intérim)."""
     if est_chef_nominal(db, principal, division.id):
         return True
     if chef_division_actif(db, division.id) is not None:
@@ -138,49 +136,15 @@ def divisions_gerees(db: Session, principal: Principal) -> list[Division]:
     return []
 
 
-# --- Déverrouillage ---------------------------------------------------------------------------------------------------
-
-def divisions_deverrouillees(db: Session, principal: Principal) -> set[int]:
-    """Divisions que le compte a actuellement déverrouillées ET sur lesquelles il est encore supérieur (droit recalculé)."""
-    if principal.niveau != NIVEAU_ROOT:
-        return set()
-    return set(
-        db.scalars(
-            select(SecretUnite.division_id)
-            .join(Deverrouillage, Deverrouillage.secret_unite_id == SecretUnite.id)
-            .where(
-                Deverrouillage.user_id == principal.user.id,
-                SecretUnite.admin_user_id == principal.user.id,
-                SecretUnite.division_id.is_not(None),
-                Deverrouillage.actif.is_(True),
-                Deverrouillage.valide_jusqua > _maintenant(),
-            )
-        ).all()
-    )
-
-
-def exiger_deverrouillage(db: Session, principal: Principal, division: Division) -> None:
-    if division.id in divisions_deverrouillees(db, principal):
-        return
-    raise HTTPException(
-        status.HTTP_423_LOCKED,
-        detail={
-            "code": "UNITE_VERROUILLEE",
-            "message": f"La division « {division.nom} » est protégée : saisissez votre mot de passe de dossier.",
-            "unite": {"type": "division", "id": division.id, "nom": division.nom, "service_id": division.service_id},
-        },
-    )
-
+# --- Gestion d'une division -------------------------------------------------------------------------------------------
 
 def exiger_gestion_division(db: Session, principal: Principal, division_id: int) -> Division:
-    """Autorise la gestion du contenu d'une division (rôles, classement, demandes). 404 / 403 / 423."""
+    """Autorise la gestion du contenu d'une division (rôles, classement, demandes). 404 / 403."""
     division = _division(db, division_id)
     if not (est_membre(principal, division_id) or est_chef_nominal(db, principal, division_id) or est_superieur(principal, division)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
     if not peut_gerer_division(db, principal, division):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul le chef (de division ou de service) peut faire cette action.")
-    if not est_chef_nominal(db, principal, division_id):
-        exiger_deverrouillage(db, principal, division)
     return division
 
 
@@ -230,7 +194,7 @@ def acces_refuse(document_id: int) -> HTTPException:
 
 
 def role_sur_document(db: Session, principal: Principal, document: Document) -> str | None:
-    """Rôle effectif sans lever d'exception sur le verrouillage (None = aucun accès). Pour les usages internes."""
+    """Rôle effectif du compte sur un fichier (None = aucun accès). Pour les usages internes."""
     division = db.get(Division, document.division_id)
     if division is None:
         return None
@@ -242,13 +206,13 @@ def role_sur_document(db: Session, principal: Principal, document: Document) -> 
         if _a_un_role_commun(db, principal, document.id) or _exception_valide(db, principal.user.id, document.id):
             return LECTEUR
         return None
-    if est_superieur(principal, division) and division.id in divisions_deverrouillees(db, principal):
+    if est_superieur(principal, division):
         return GERANT if peut_gerer_division(db, principal, division) else SUPERIEUR
     return None
 
 
 def exiger_acces_document(db: Session, principal: Principal, document: Document | None, action: str) -> tuple[Document, str]:
-    """Renvoie (fichier, rôle effectif) si l'action est permise, sinon 404 / 403 / 423 / 409."""
+    """Renvoie (fichier, rôle effectif) si l'action est permise, sinon 404 / 403 / 409."""
     if document is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
     division = db.get(Division, document.division_id)
@@ -257,8 +221,6 @@ def exiger_acces_document(db: Session, principal: Principal, document: Document 
     membre = est_membre(principal, division.id) or est_chef_nominal(db, principal, division.id)
     if not membre and not est_superieur(principal, division):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
-    if not membre:
-        exiger_deverrouillage(db, principal, division)
     role = role_sur_document(db, principal, document)
     if role is None:
         raise acces_refuse(document.id)
@@ -274,7 +236,7 @@ def exiger_acces_document(db: Session, principal: Principal, document: Document 
 
 def condition_acces_fichiers(db: Session, principal: Principal) -> ColumnElement[bool]:
     """Condition SQL « ce compte peut LIRE ce fichier » : sert aux listes, à la recherche vectorielle et au chat.
-    Reprend exactement role_sur_document (fichiers de sa division selon son rôle ; autres divisions seulement si déverrouillées)."""
+    Reprend exactement role_sur_document (fichiers de sa division selon son rôle ; le super administrateur lit tout, en lecture)."""
     clauses: list[ColumnElement[bool]] = []
     if principal.niveau == NIVEAU_SERVICE and principal.service_id is not None:
         clauses.append(
@@ -302,9 +264,8 @@ def condition_acces_fichiers(db: Session, principal: Principal) -> ColumnElement
                 )
             )
             clauses.append(and_(Document.division_id == division_id, or_(*sous)))
-    externes = divisions_deverrouillees(db, principal)
-    if externes:
-        clauses.append(Document.division_id.in_(externes))
+    if principal.niveau == NIVEAU_ROOT:
+        clauses.append(true())  # le super administrateur consulte toutes les divisions (lecture seule)
     return or_(*clauses) if clauses else false()
 
 
@@ -318,7 +279,7 @@ def ids_documents_accessibles(db: Session, principal: Principal, ids: list[int])
 # --- Dossiers ---------------------------------------------------------------------------------------------------------
 
 def exiger_acces_dossier(db: Session, principal: Principal, dossier_id: int | None, action: str) -> Dossier:
-    """404 hors périmètre, 423 unité à déverrouiller, 403 action non permise, 409 archivé / division désactivée."""
+    """404 hors périmètre, 403 action non permise, 409 archivé / division désactivée."""
     dossier = db.get(Dossier, dossier_id) if dossier_id is not None else None
     if dossier is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dossier introuvable.")
@@ -327,7 +288,6 @@ def exiger_acces_dossier(db: Session, principal: Principal, dossier_id: int | No
     if not membre and not est_superieur(principal, division):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dossier introuvable.")
     if not membre:
-        exiger_deverrouillage(db, principal, division)
         if action != DOSSIER_VOIR:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Un administrateur supérieur consulte sans modifier.")
         return dossier
@@ -347,7 +307,6 @@ def exiger_acces_division(db: Session, principal: Principal, division_id: int, *
     if not membre and not est_superieur(principal, division):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
     if not membre:
-        exiger_deverrouillage(db, principal, division)
         if ecriture:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Un administrateur supérieur consulte sans modifier.")
     elif ecriture:

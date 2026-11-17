@@ -1,4 +1,4 @@
-// Rôles métier d'une division : créer, renommer, désactiver, supprimer. Le serveur contrôle le périmètre (404 / 403 / 423).
+// Rôles métier d'une division : créer, renommer, désactiver, supprimer. Le serveur contrôle le périmètre (404 / 403).
 import { FolderOpen, Shield } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router'

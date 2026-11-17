@@ -34,12 +34,6 @@ UNION ALL
 SELECT 'sous_dossier_hors_de_la_division_du_parent', count(*)
 FROM dossier f JOIN dossier p ON p.id = f.parent_id WHERE p.division_id <> f.division_id
 UNION ALL
-SELECT 'secret_de_division_sans_droit', count(*)
-FROM secret_unite s
-JOIN _user u ON u.id = s.admin_user_id
-JOIN _role r ON r.id = u.role_id
-WHERE r.code <> 'ADMIN'
-UNION ALL
 SELECT 'historique_chaine_alteree', CASE WHEN (SELECT ok FROM verifier_historique()) THEN 0 ELSE 1 END
 UNION ALL
 SELECT 'vecteurs_non_normalises', count(*) FROM chunk WHERE abs(vector_norm(embedding) - 1) > 0.001;

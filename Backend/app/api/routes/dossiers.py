@@ -1,4 +1,4 @@
-"""Routes des dossiers et sous-dossiers d'une division. Accès : voir core/acces.py (404 / 423 / 403 / 409)."""
+"""Routes des dossiers et sous-dossiers d'une division. Accès : voir core/acces.py (404 / 403 / 409)."""
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session

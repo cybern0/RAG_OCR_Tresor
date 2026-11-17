@@ -39,7 +39,6 @@ export interface Me extends UserOut {
   division_nom: string | null
   titre: string | null
   niveau: 'ROOT' | 'SERVICE' | 'DIVISION' | 'AGENT'
-  unites_protegees?: boolean  // mots de passe de dossier : super administrateur seulement
 }
 
 export interface UserCreate {

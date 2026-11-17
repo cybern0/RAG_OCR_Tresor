@@ -4,7 +4,7 @@
 - modification : titre et cases « tableaux / images » (la réindexation de la version courante suit un changement de case) ;
 - rôles du fichier : réservés au gérant de la division ; suppression et purge selon la matrice de core/acces.py.
 
-Droits : rôle effectif sur le fichier (core/acces.py) ; hors périmètre : 404 ; division à déverrouiller : 423 ; rôle insuffisant : 403 ;
+Droits : rôle effectif sur le fichier (core/acces.py) ; hors périmètre : 404 ; rôle insuffisant : 403 ;
 dossier archivé ou division désactivée : 409. Toute modification est tracée dans l'historique (hash chaîné).
 """
 
@@ -115,7 +115,7 @@ def _query():
 # --- Accès -----------------------------------------------------------------------------------------------------------
 
 def get_document(db: Session, principal: Principal, document_id: int, action: str) -> tuple[Document, str]:
-    """Le fichier et le rôle effectif ; 404 hors périmètre, 403 sans rôle, 423 division à déverrouiller."""
+    """Le fichier et le rôle effectif ; 404 hors périmètre, 403 sans rôle."""
     doc = db.scalars(_query().where(Document.id == document_id)).unique().one_or_none()
     return exiger_acces_document(db, principal, doc, action)
 
@@ -254,7 +254,7 @@ def list_documents(
 ) -> list[DocumentOut] | dict:
     """Fichiers que le compte peut LIRE (condition SQL unique, la même que pour la recherche et le chat)."""
     if dossier_id is not None:
-        exiger_acces_dossier(db, principal, dossier_id, DOSSIER_VOIR)  # 404 / 423
+        exiger_acces_dossier(db, principal, dossier_id, DOSSIER_VOIR)  # 404
 
     doc_filter = [condition_acces_fichiers(db, principal)]
     if dossier_id is not None:

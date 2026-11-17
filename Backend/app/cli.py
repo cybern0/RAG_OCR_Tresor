@@ -2,13 +2,10 @@
 
   uv run python -m app.cli creer-admin [--nom-utilisateur admin] [--direction-code DIRECTION --direction-nom "Direction générale"]
   uv run python -m app.cli set-password <nom_utilisateur>
-  uv run python -m app.cli reinitialiser-secret <nom_utilisateur> --type division|service --unite-id N
 
 `creer-admin` crée la direction (si elle n'existe pas) et le compte du super administrateur (rôle ADMIN). Ce compte n'a PAS d'agent
 ni de titre : le niveau racine vient du rôle global, pas d'un poste, de sorte qu'il n'occupe aucun poste de chef. Le mot de passe est saisi
 (jamais écrit dans le code ni affiché) ; en automatisation, il peut venir de la variable d'environnement ADMIN_PASSWORD.
-`reinitialiser-secret` est la procédure de secours d'un super administrateur qui a perdu un mot de passe de dossier (personne n'est
-au-dessus de lui pour le réinitialiser) ; l'opération est tracée dans l'historique.
 """
 
 import argparse
@@ -19,7 +16,7 @@ import sys
 from sqlalchemy import select
 
 from app.core.security import PASSWORD_MIN_LENGTH, hash_password
-from app.db.metier import Direction, Division, Role, SecretUnite, Service, SessionLocal, User
+from app.db.metier import Direction, Division, Role, Service, SessionLocal, User
 from app.services.audit import log_action
 from app.services.historique import ecrire_historique
 
@@ -80,38 +77,6 @@ def set_password(username: str) -> int:
         return 0
 
 
-def reinitialiser_secret(username: str, unite_id: int) -> int:
-    """Procédure de secours : réinitialise le mot de passe de dossier d'UNE division (les dossiers de service n'existent pas)."""
-    with SessionLocal() as db:
-        user = db.scalar(select(User).where(User.nom_utilisateur == username.strip().lower()))
-        if user is None or user.role.code != "ADMIN":
-            print("Compte introuvable ou ce n'est pas un super administrateur.", file=sys.stderr)
-            return 1
-        unite = db.get(Division, unite_id)
-        if unite is None:
-            print("Division introuvable.", file=sys.stderr)
-            return 1
-        password = _saisir_mot_de_passe("Nouveau mot de passe de dossier")
-        if password is None:
-            return 1
-        secret = db.scalar(
-            select(SecretUnite).where(SecretUnite.division_id == unite_id, SecretUnite.admin_user_id == user.id)
-        )
-        if secret is None:
-            secret = SecretUnite(
-                division_id=unite.id, admin_user_id=user.id, secret_hash=hash_password(password),
-            )
-            db.add(secret)
-        else:
-            secret.secret_hash = hash_password(password)
-        ecrire_historique(db, acteur=None, cible_type="unite", cible_id=unite.id, action="secret_reinitialise",
-                          motif="Procédure de secours (CLI)", service_id=unite.service_id,
-                          division_id=unite.id, concerne_user_id=user.id)
-        db.commit()
-        print(f"Mot de passe de dossier défini pour « {user.nom_utilisateur} » sur la division « {unite.nom} ».")
-        return 0
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="commande", required=True)
@@ -121,14 +86,9 @@ def main() -> int:
     sa.add_argument("--direction-nom", default="Direction")
     sp = sub.add_parser("set-password", help="définir le mot de passe d'un compte")
     sp.add_argument("nom_utilisateur")
-    sr = sub.add_parser("reinitialiser-secret", help="secours : redéfinir le mot de passe de dossier d'une division")
-    sr.add_argument("nom_utilisateur")
-    sr.add_argument("--division-id", type=int, required=True)
     args = parser.parse_args()
     if args.commande == "creer-admin":
         return creer_admin(args.nom_utilisateur, args.direction_code, args.direction_nom)
-    if args.commande == "reinitialiser-secret":
-        return reinitialiser_secret(args.nom_utilisateur, args.division_id)
     return set_password(args.nom_utilisateur)
 
 

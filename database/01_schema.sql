@@ -394,32 +394,7 @@ CREATE TABLE acces_exception (
 );
 CREATE INDEX idx_exception_user_doc ON acces_exception (user_id, document_id) WHERE active;
 
--- 8. Mots de passe de dossier (divisions) et déverrouillages ---------------------------------------------------------------------
-
--- Les dossiers protégés existent au niveau des DIVISIONS seulement (aucun dossier ni mot de passe de service) :
--- un secret par couple (division, super administrateur). Les chefs (division ou service) n'en ont pas :
--- le mot de passe de dossier appartient au seul super administrateur, qui le gère pour toutes les divisions.
-CREATE TABLE secret_unite (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    division_id BIGINT NOT NULL REFERENCES division(id) ON DELETE CASCADE,
-    admin_user_id BIGINT NOT NULL REFERENCES _user(id) ON DELETE CASCADE,
-    secret_hash TEXT NOT NULL,
-    modifie_par BIGINT REFERENCES _user(id) ON DELETE SET NULL,
-    modifie_le TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE UNIQUE INDEX uq_secret_division ON secret_unite (division_id, admin_user_id);
-
-CREATE TABLE deverrouillage (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    secret_unite_id BIGINT NOT NULL REFERENCES secret_unite(id) ON DELETE CASCADE,
-    user_id BIGINT NOT NULL REFERENCES _user(id) ON DELETE CASCADE,
-    valide_jusqua TIMESTAMPTZ NOT NULL,
-    cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    actif BOOLEAN NOT NULL DEFAULT TRUE
-);
-CREATE INDEX idx_deverrouillage_user ON deverrouillage (user_id) WHERE actif;
-
--- 9. Historique de traçabilité : en ajout seul, chaîné par hash (calculé par la base) --------------------------------------------
+-- 8. Historique de traçabilité : en ajout seul, chaîné par hash (calculé par la base) --------------------------------------------
 -- Pas de clé étrangère : c'est un registre immuable (supprimer un compte ou une division ne doit ni modifier ni bloquer l'historique).
 
 CREATE TABLE historique_modification (
@@ -506,7 +481,7 @@ LANGUAGE sql STABLE SET search_path = rag_sys, public AS $$
            (SELECT min(rang) FROM mauvais)
 $$;
 
--- 10. Notifications ------------------------------------------------------------------------------------------------------------
+-- 9. Notifications ------------------------------------------------------------------------------------------------------------
 
 CREATE TABLE notification (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -520,7 +495,7 @@ CREATE TABLE notification (
 );
 CREATE INDEX idx_notification_destinataire ON notification (destinataire_user_id, lu, cree_le DESC);
 
--- 11. Vue des statistiques documentaires : une ligne = un fichier avec sa dernière version -------------------------------------
+-- 10. Vue des statistiques documentaires : une ligne = un fichier avec sa dernière version -------------------------------------
 
 CREATE VIEW vue_document_stats AS
 SELECT

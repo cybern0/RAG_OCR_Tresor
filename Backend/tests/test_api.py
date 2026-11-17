@@ -32,7 +32,6 @@ from app.main import app
 from .conftest import FakeEmbeddings
 
 PWD = "mot-de-passe-de-test-1"
-SECRET = "dossier-de-test-1"
 ADMIN = "admin_test"
 ANSWER = "Le délai est de 30 jours [1]."
 STANDALONE = "délai de paiement des factures"
@@ -124,14 +123,6 @@ def mk_dossier(client, h, nom, **extra):
     r = client.post("/dossiers", json={"nom": nom, **extra}, headers=h)
     assert r.status_code == 201, r.text
     return r.json()
-
-
-def secret_et_deverrouillage(client, h, type_unite, unite_id):
-    """Définit le mot de passe de dossier puis déverrouille l'unité (super administrateur)."""
-    r = client.put("/securite/secrets", json={"type": type_unite, "unite_id": unite_id, "nouveau_mot_de_passe": SECRET}, headers=h)
-    assert r.status_code in (204, 400), r.text
-    r = client.post("/securite/deverrouiller", json={"type": type_unite, "unite_id": unite_id, "mot_de_passe": SECRET}, headers=h)
-    assert r.status_code == 200, r.text
 
 
 @pytest.fixture(scope="module")
@@ -231,10 +222,9 @@ def test_connexion_et_me(client, world):
     assert me["division_id"] == world["a"]["division"]["id"] and [r["code"] for r in me["roles_division"]] == ["COMPTA"]
     # un agent n'administre rien : ni comptes, ni structure
     assert "utilisateur.creer" not in me["permissions"] and "structure.gerer" not in me["permissions"]
-    assert "chat.utiliser" in me["permissions"] and me["unites_protegees"] is False and me["divisions_gerees"] == []
+    assert "chat.utiliser" in me["permissions"] and me["divisions_gerees"] == []
     chef = client.get("/auth/me", headers=world["cd1"]["h"]).json()
     assert chef["niveau"] == "DIVISION" and "utilisateur.creer" in chef["permissions"] and [d["id"] for d in chef["divisions_gerees"]] == [world["div"]["v1"]["id"]]
-    assert client.get("/auth/me", headers=world["admin"]).json()["unites_protegees"] is True
     assert client.get("/auth/me", headers=world["admin"]).json()["niveau"] == "ROOT"
     assert client.get("/auth/me").status_code == 401
     assert client.get("/auth/me", headers={"Authorization": "Bearer faux.jeton"}).status_code == 401
@@ -493,12 +483,8 @@ def test_chat_limite_aux_fichiers_lisibles(client, world):
     assert "30 jours" in answer_text(ev)
     # l'agent d'une autre division n'a aucun accès
     assert not any(s["document_id"] == doc["id"] for s in sources_of(ask(client, b, f"Quel est le code {secret} du coffre ?")))
-    # le super administrateur ne lit rien sans déverrouiller la division : l'accès au chat est refusé tant qu'aucune n'est ouverte
-    assert client.post("/chat", headers=adm, json={"question": "x"}).status_code == 403
-    secret_et_deverrouillage(client, adm, "division", world["div"]["v1"]["id"])
+    # le super administrateur consulte toutes les divisions : les sources lui sont visibles
     assert any(s["document_id"] == doc["id"] for s in sources_of(ask(client, adm, f"Quel est le code {secret} du coffre ?")))
-    client.post("/securite/verrouiller", headers=adm, json={"type": "division", "unite_id": world["div"]["v1"]["id"]})
-    assert client.post("/chat", headers=adm, json={"question": "x"}).status_code == 403
     # un agent qui n'a aucun fichier lisible : refus net (mix : rôle PUBLIC, aucun fichier déposé ni classé PUBLIC)
     assert client.post("/chat", headers=world["mix"]["h"], json={"question": "x"}).status_code == 403
     assert client.post("/chat", json={"question": "x"}).status_code == 401
@@ -628,7 +614,7 @@ def test_audit_trace_les_actions(client, world):
     actions = {r["action"] for r in rows}
     assert {"connexion.reussie", "connexion.echec", "utilisateur.creer", "document.creer", "document.corbeille",
             "document.supprimer_definitivement", "document.version_ajouter", "document.version_supprimer", "dossier.creer",
-            "structure.agent.creer", "securite.deverrouillage"} <= actions
+            "structure.agent.creer"} <= actions
     assert all("mot_de_passe" not in str(r["detail"]) or r["detail"].get("mot_de_passe") == "réinitialisé" for r in rows)
 
 

@@ -28,11 +28,6 @@ export const router = createBrowserRouter([
                 element: <RequireIntermediateAdmin />,
                 children: [{ index: true, lazy: () => import('../features/historique/HistoriquePage') }],
               },
-              {
-                path: 'securite',
-                element: <RequireIntermediateAdmin />,
-                children: [{ index: true, lazy: () => import('../features/securite/MotsDePassePage') }],
-              },
               { path: 'profil', lazy: () => import('../features/auth/ProfilePage') },
               guarded(['document.lister'], [
                 { path: 'dossiers', lazy: () => import('../features/dossiers/DossiersPage') },

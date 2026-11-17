@@ -1,5 +1,5 @@
 // Types des dossiers d'une division. Un dossier n'a ni rôle ni mot de passe propre : l'accès aux fichiers se règle par rôle
-// de division (voir features/roles) ; le serveur reste la seule autorité (404 / 403 / 423).
+// de division (voir features/roles) ; le serveur reste la seule autorité (404 / 403).
 export interface CheminItem { id: number; nom: string }
 export interface Dossier {
   id: number; division_id: number; division_nom: string; parent_id: number | null; nom: string; description: string | null

@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.acces import divisions_gerees
-from app.core.permissions import NIVEAU_ROOT, ROLE_ADMIN, ROLE_UTILISATEUR, Principal, niveau_compte
+from app.core.permissions import ROLE_ADMIN, ROLE_UTILISATEUR, Principal, niveau_compte
 from app.core.portee import exiger_gestion_compte, filtre_comptes_visibles, gere_agent, voit_agent
 from app.core.security import hash_password, login_throttle, verify_password
 from app.db.metier import Agent, Role, RoleDivision, User, UserRoleDivision
@@ -19,7 +19,6 @@ from app.schemas.user import AgentBrief, DivisionBrief, MeOut, ProfileUpdate, Ro
 from app.services import roles_division
 from app.services.audit import log_action
 from app.services.historique import ecrire_historique
-from app.services.structure.crud import desactiver_deverrouillages_de
 
 
 def to_user_out(user: User, roles: list[RoleDivisionBrief] | None = None) -> UserOut:
@@ -75,7 +74,6 @@ def to_me_out(principal: Principal, db: Session) -> MeOut:
         division_nom=agent.division.nom if agent and agent.division else None,
         titre=agent.titre if agent else None,
         divisions_gerees=[DivisionBrief(id=d.id, nom=d.nom) for d in gerees],
-        unites_protegees=principal.niveau == NIVEAU_ROOT,
     )
 
 
@@ -233,8 +231,6 @@ def update_user(db: Session, actor: Principal, user_id: int, data: UserUpdate, i
         log_action(db, actor.user.id, "utilisateur.modifier", "utilisateur", user.id, changes, ip)
         if "actif" in changes:
             action = "compte_active" if changes["actif"] else "compte_desactive"
-            if not changes["actif"]:
-                desactiver_deverrouillages_de(db, user.id)
             ecrire_historique(
                 db, acteur=actor.user, cible_type="utilisateur", cible_id=user.id, action=action,
                 service_id=agent.service_id if agent else None, division_id=agent.division_id if agent else None, concerne_user_id=user.id,

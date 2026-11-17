@@ -1,7 +1,7 @@
 """Recherche des chunks les plus proches dans pgvector, filtrée par les FICHIERS que le compte peut lire.
 
 Isolation : un seul index partagé ; chaque requête est limitée par la condition SQL core.acces.condition_acces_fichiers (rôles
-de la division, auteur, exceptions valides, divisions déverrouillées), recalculée à chaque requête. C'est le point de sécurité
+de la division, auteur, exceptions valides ; le super administrateur lit tout), recalculée à chaque requête. C'est le point de sécurité
 principal du RAG : sans condition, aucun résultat. Les fichiers en corbeille et les dossiers archivés ne sont jamais interrogés.
 
 Similarité : produit scalaire via l'opérateur <#> (qui renvoie le produit scalaire NÉGATIF, donc ORDER BY croissant),

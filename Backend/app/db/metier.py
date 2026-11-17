@@ -266,28 +266,6 @@ class AccesException(Base):
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class SecretUnite(Base):
-    __tablename__ = "secret_unite"
-
-    id: Mapped[int] = _pk()
-    division_id: Mapped[int] = mapped_column(ForeignKey("division.id", ondelete="CASCADE"))  # les dossiers de service n'existent pas
-    admin_user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
-    secret_hash: Mapped[str] = mapped_column(Text)
-    modifie_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
-    modifie_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-
-class Deverrouillage(Base):
-    __tablename__ = "deverrouillage"
-
-    id: Mapped[int] = _pk()
-    secret_unite_id: Mapped[int] = mapped_column(ForeignKey("secret_unite.id", ondelete="CASCADE"))
-    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
-    valide_jusqua: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    actif: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
-
-
 class HistoriqueModification(Base):
     """Registre en ajout seul : rang et hash sont posés par la base (déclencheur), jamais par le code."""
 

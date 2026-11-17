@@ -1,7 +1,6 @@
-// Message d'erreur d'accès : 423 → ouvrir la page des mots de passe ; 403 sur un fichier → formulaire « Demander l'accès » ;
-// autre erreur → message simple. Le serveur décide ; l'interface ne fait que guider.
+// Message d'erreur d'accès : 403 sur un fichier → formulaire « Demander l'accès » ; autre erreur → message simple.
+// Le serveur décide ; l'interface ne fait que guider.
 import { useState } from 'react'
-import { Link } from 'react-router'
 import { ApiError, errorMessage } from '../../shared/api/client'
 import { useToast } from '../../shared/hooks/useToast'
 import { ErrorBox } from '../../shared/ui/Feedback'
@@ -12,9 +11,6 @@ export default function ErreurAcces({ error, documentId }: { error: unknown; doc
   const [motif, setMotif] = useState('')
   const [heures, setHeures] = useState(24)
   const [envoye, setEnvoye] = useState(false)
-  if (error instanceof ApiError && error.status === 423) {
-    return <div className="card space-y-2 p-4"><p className="text-sm">{error.message}</p><Link className="btn inline-flex" to="/securite">Déverrouiller avec mon mot de passe de dossier</Link></div>
-  }
   if (error instanceof ApiError && error.status === 403 && documentId !== undefined) {
     return (
       <div className="card space-y-2 p-4">

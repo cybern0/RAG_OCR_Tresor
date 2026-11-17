@@ -18,7 +18,7 @@ def lister(
     vue: Literal["mes", "a_traiter"] = "mes", statut: Literal["en_attente", "acceptee", "refusee", "annulee"] | None = None,
     principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
 ):
-    """mes : mes propres demandes ; a_traiter : demandes des divisions dont je suis gérant (chef, ou intérimaire déverrouillé)."""
+    """mes : mes propres demandes ; a_traiter : demandes des divisions dont je suis gérant (chef de division ou de service, intérim compris)."""
     return svc.lister(db, principal, vue, statut)
 
 

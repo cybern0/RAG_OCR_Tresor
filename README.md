@@ -94,13 +94,12 @@ Quatre niveaux de gestion (voir `docs/retour_chef_service.md`) :
 
 - **ADMIN — super administrateur (niveau ROOT)** : gère la structure, **tous les comptes** (y compris les
   chefs), assure **l'intérim des divisions vacantes**, consulte l'audit et l'historique complet,
-  voit le tableau de bord par service. Il est le seul à détenir des **mots de passe de dossier** :
-  après déverrouillage (423 → saisie du secret), il consulte en lecture seule toute unité, et il gère
+  voit le tableau de bord par service. Il consulte en lecture seule toute unité, et il gère
   directement les divisions sans chef. Il ne peut pas être membre d'une division.
 - **Chef de service (titre d'agent `CHEF_SERVICE`, niveau SERVICE)** : le **même rôle que le chef de division**,
   étendu à **toutes les divisions de son service** — gérant des fichiers, dossiers, classement, demandes et
-  comptes des agents sans titre —, y compris l'intérim local des divisions vacantes (sans déverrouillage).
-  Il appartient à son service **sans division propre** et n'a **aucun mot de passe de dossier**.
+  comptes des agents sans titre —, y compris l'intérim local des divisions vacantes.
+  Il appartient à son service **sans division propre**.
 - **Chef de division (titre d'agent `CHEF_DIVISION`, niveau DIVISION)** : gérant de sa division — crée ses
   dossiers et sous-dossiers, définit le dictionnaire des rôles, classe les fichiers, traite les demandes
   d'accès et les exceptions ponctuelles, crée les comptes des agents de sa division. Lecture et écriture

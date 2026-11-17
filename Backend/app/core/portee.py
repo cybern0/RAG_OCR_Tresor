@@ -3,7 +3,7 @@
 Lecture  : ROOT tout ; chef de service les comptes de son service ; chef de division ceux de sa division.
 Gestion  : ROOT tout ; chef de service ou chef de division (ou intérimaire) -> les agents SANS titre de leurs divisions.
            Les titres (chefs) et les super administrateurs ne se gèrent que par un super administrateur.
-Gérer un compte relève de l'identité, pas du contenu : aucun déverrouillage n'est demandé (contrairement aux rôles et fichiers).
+Gérer un compte relève de l'identité, pas du contenu.
 """
 
 from fastapi import HTTPException, status

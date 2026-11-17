@@ -11,7 +11,6 @@ DELETE FROM document WHERE division_id IN (SELECT id FROM _d_div);   -- versions
 DELETE FROM commentaire WHERE auteur_id IN (SELECT id FROM _d_user);
 DELETE FROM dossier WHERE division_id IN (SELECT id FROM _d_div);    -- une seule instruction : parents et enfants ensemble
 DELETE FROM demande_acces WHERE division_id IN (SELECT id FROM _d_div) OR demandeur_user_id IN (SELECT id FROM _d_user);
-DELETE FROM secret_unite WHERE admin_user_id IN (SELECT id FROM _d_user);   -- déverrouillages en cascade
 DELETE FROM role_division WHERE division_id IN (SELECT id FROM _d_div);    -- liens user_role_division en cascade
 DELETE FROM _user WHERE id IN (SELECT id FROM _d_user);    -- conversations, notifications, préférences en cascade
 DELETE FROM agent WHERE matricule LIKE 'DEMO-%';

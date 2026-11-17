@@ -47,7 +47,7 @@ export function setUnauthorizedHandler(handler: () => void): void {
 
 function detailToMessage(detail: unknown, fallback: string): string {
   if (typeof detail === 'string') return detail
-  // Erreurs métier structurées du serveur : { code, message, ... } (423 verrou de division, 409 secret non défini…).
+  // Erreurs métier structurées du serveur : { code, message, ... } (403 accès fichier refusé, 409 conflits…).
   if (detail && typeof detail === 'object' && 'message' in detail && typeof (detail as { message: unknown }).message === 'string') {
     return (detail as { message: string }).message
   }

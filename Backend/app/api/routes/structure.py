@@ -80,7 +80,7 @@ def list_postes(_: Principal = Depends(_admin), db: Session = Depends(get_db)):
 
 @router.get("/arbre", response_model=list[ServiceArbreOut])
 def arbre(principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
-    """Organisation visible par le compte connecté (ses divisions, chefs, état du verrouillage)."""
+    """Organisation visible par le compte connecté (ses divisions et leurs chefs)."""
     return crud.arbre(db, principal)
 
 

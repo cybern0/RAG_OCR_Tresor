@@ -1,6 +1,6 @@
 """Dictionnaire de rôles métier d'une division et attribution aux agents.
 
-Défini par le chef de division (ou son intérimaire, avec déverrouillage), référencé PAR IDENTIFIANT : renommer un rôle ne casse aucun accès.
+Défini par le chef de division (ou son intérimaire), référencé PAR IDENTIFIANT : renommer un rôle ne casse aucun accès.
 Un rôle inactif n'est plus attribuable ni demandable ; les attributions existantes restent valables.
 """
 

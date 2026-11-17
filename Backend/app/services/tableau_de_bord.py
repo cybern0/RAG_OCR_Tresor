@@ -2,7 +2,7 @@
 
 ROOT : toute l'organisation, par service ; SERVICE : les divisions du service du chef de service ;
 DIVISION : sa division, par rôle ; AGENT : ce qui le concerne.
-Les chiffres sont des agrégats : un super administrateur voit des nombres de fichiers, jamais leur contenu (il faut déverrouiller).
+Les chiffres sont des agrégats : un super administrateur voit des nombres de fichiers, jamais leur contenu.
 """
 
 from datetime import datetime, timezone

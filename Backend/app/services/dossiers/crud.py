@@ -2,7 +2,7 @@
 
 Libres : tout agent de la division en crée, sans nouveau login ; ils héritent de la division. Un dossier n'a PAS de rôle : il est visible de
 tous les agents de la division ; ce sont les fichiers qu'il contient qui portent des rôles (le nombre de fichiers masqués est indiqué).
-Renommer, déplacer, archiver, supprimer : le créateur ou le chef de division. Un administrateur supérieur consulte (division déverrouillée).
+Renommer, déplacer, archiver, supprimer : le créateur ou le chef de division. Un administrateur supérieur consulte (lecture seule).
 """
 
 from fastapi import HTTPException, status

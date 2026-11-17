@@ -13,9 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.acces import (
-    divisions_deverrouillees,
     divisions_gerees,
-    est_chef_nominal,
     est_membre,
     exiger_gestion_division,
     role_sur_document,
@@ -69,9 +67,8 @@ def _out(db: Session, principal: Principal, d: DemandeAcces, gerees: set[int]) -
 
 
 def _divisions_traitables(db: Session, principal: Principal) -> set[int]:
-    """Divisions dont on peut traiter les demandes : gérant, et division déverrouillée si l'on n'en est pas le chef."""
-    debloquees = divisions_deverrouillees(db, principal)
-    return {d.id for d in divisions_gerees(db, principal) if est_chef_nominal(db, principal, d.id) or d.id in debloquees}
+    """Divisions dont on peut traiter les demandes : celles dont on est le gérant (chef de division ou de service, intérim compris)."""
+    return {d.id for d in divisions_gerees(db, principal)}
 
 
 def creer(db: Session, principal: Principal, data: DemandeIn, ip: str | None) -> DemandeOut:
@@ -140,7 +137,7 @@ def decider(db: Session, principal: Principal, demande_id: int, accepter: bool, 
     demande = db.get(DemandeAcces, demande_id)
     if demande is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Demande introuvable.")
-    division = exiger_gestion_division(db, principal, demande.division_id)  # 404 / 403 / 423
+    division = exiger_gestion_division(db, principal, demande.division_id)  # 404 / 403
     if demande.statut != "en_attente":
         raise HTTPException(status.HTTP_409_CONFLICT, "Cette demande a déjà été traitée.")
     demandeur = db.get(User, demande.demandeur_user_id)

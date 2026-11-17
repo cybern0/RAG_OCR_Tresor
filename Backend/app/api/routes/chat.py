@@ -1,7 +1,7 @@
 """Route de chat : reçoit la question et renvoie la réponse en streaming (SSE), avec les sources citées.
 
-- La recherche est limitée aux fichiers que l'utilisateur peut lire (rôles de sa division, ses dépôts, accès ponctuels,
-  divisions déverrouillées pour un administrateur supérieur) : core/acces.py.
+- La recherche est limitée aux fichiers que l'utilisateur peut lire (rôles de sa division, ses dépôts, accès ponctuels ;
+  le super administrateur consulte tout, en lecture) : core/acces.py.
 - Mémoire dans une session : obligatoire. L'historique de la conversation est relu en base à chaque question, donc il
   se retrouve après une déconnexion/reconnexion.
 - Deux options personnelles (GET/PUT /chat/preferences) : mémoire entre sessions, et « dernière version seulement ».

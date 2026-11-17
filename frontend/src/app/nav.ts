@@ -1,6 +1,6 @@
 // Navigation principale : une entrée par page, avec les permissions qui l'ouvrent. La même table sert à la barre latérale,
 // aux gardes de routes et à la page d'accueil par défaut.
-import { BarChart3, Building2, FolderOpen, Home, KeyRound, History, Shield, MessageSquare, Users, UserSquare } from 'lucide-react'
+import { BarChart3, Building2, FolderOpen, Home, History, Shield, MessageSquare, Users, UserSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface NavItem { to: string; label: string; icon: LucideIcon; any: string[]; end?: boolean }
@@ -13,7 +13,6 @@ export const MAIN_NAV: NavItem[] = [
 
 export const INTERMEDIATE_NAV: NavItem[] = [
   { to: '/historique', label: 'Historique', icon: History, any: ['document.lister'] },
-  { to: '/securite', label: 'Mots de passe de dossier', icon: KeyRound, any: ['document.lister'] },
 ]
 
 export const ADMIN_NAV: NavItem[] = [
@@ -30,9 +29,6 @@ export const isIntermediateAdmin = (user: { niveau?: string | null; role?: strin
   if (!user) return false
   return user.niveau === 'ROOT' || user.niveau === 'SERVICE' || user.niveau === 'DIVISION' || user.role === 'ADMIN'
 }
-
-/** Les mots de passe de dossier ne concernent que le super administrateur (les dossiers protégés sont des divisions). */
-export const voitMotsDePasse = (user: { unites_protegees?: boolean } | null): boolean => !!user?.unites_protegees
 
 /** Première page accessible au compte (page d'accueil). */
 export function homePath(can: (p: string) => boolean): string | null {

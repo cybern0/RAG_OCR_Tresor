@@ -62,7 +62,6 @@ class MeOut(UserOut):
     division_nom: str | None = None
     titre: str | None = None
     divisions_gerees: list[DivisionBrief] = []  # divisions dont il est gérant (la sienne, ou intérim)
-    unites_protegees: bool = False  # a des mots de passe de dossier à gérer (super administrateur)
 
 
 class TokenOut(BaseModel):

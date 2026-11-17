@@ -144,8 +144,6 @@ class UniteArbreOut(BaseModel):
     chef: ChefOut | None
     nb_agents: int
     acces: Literal["membre", "gerant", "superieur"]
-    deverrouillee: bool = False  # pertinent pour acces = superieur
-    secret_defini: bool = False
 
 
 class ServiceArbreOut(BaseModel):

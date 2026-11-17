@@ -12,7 +12,6 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.acces import divisions_deverrouillees
 from app.core.permissions import (
     NIVEAU_ROOT,
     NIVEAU_SERVICE,
@@ -22,11 +21,9 @@ from app.core.permissions import (
 )
 from app.db.metier import (
     Agent,
-    Deverrouillage,
     Direction,
     Division,
     RoleDivision,
-    SecretUnite,
     Service,
     User,
     UserRoleDivision,
@@ -565,8 +562,6 @@ def arbre(db: Session, principal: Principal) -> list[ServiceArbreOut]:
     from sqlalchemy import func
 
     effectifs = dict(db.execute(select(Agent.division_id, func.count()).where(Agent.actif.is_(True)).group_by(Agent.division_id)).all())
-    deverrouillees = divisions_deverrouillees(db, principal)
-    avec_secret = set(db.scalars(select(SecretUnite.division_id).where(SecretUnite.admin_user_id == principal.user.id, SecretUnite.division_id.is_not(None))))
     if principal.niveau == NIVEAU_ROOT:
         services = db.scalars(select(Service).order_by(Service.nom)).all()
     elif principal.service_id is not None:
@@ -590,15 +585,8 @@ def arbre(db: Session, principal: Principal) -> list[ServiceArbreOut]:
                 UniteArbreOut(
                     id=d.id, code=d.code, nom=d.nom, actif=d.actif, chef=_chef_out(cd.get(d.id)),
                     nb_agents=effectifs.get(d.id, 0), acces=acces,
-                    deverrouillee=d.id in deverrouillees, secret_defini=d.id in avec_secret,
                 )
             )
         if unites:
             resultat.append(ServiceArbreOut(id=s.id, code=s.code, nom=s.nom, actif=s.actif, divisions=unites))
     return resultat
-
-
-def desactiver_deverrouillages_de(db: Session, user_id: int) -> None:
-    from sqlalchemy import update
-
-    db.execute(update(Deverrouillage).where(Deverrouillage.user_id == user_id, Deverrouillage.actif.is_(True)).values(actif=False))

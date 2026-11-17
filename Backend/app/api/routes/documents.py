@@ -1,7 +1,7 @@
 """Routes des fichiers (documents) rangés dans les dossiers d'une division, et de leurs versions.
 
 Les droits se vérifient dans services/documents avec le rôle effectif (core/acces.py) : GERANT, AUTEUR, LECTEUR, SUPERIEUR.
-Hors périmètre : 404 ; division à déverrouiller : 423 ; sans rôle sur le fichier : 403 (« Demander l'accès »).
+Hors périmètre : 404 ; sans rôle sur le fichier : 403 (« Demander l'accès »).
 Ajouter une version AJOUTE : l'ancienne reste indexée, téléchargeable et interrogeable.
 """
 
