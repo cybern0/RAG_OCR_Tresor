@@ -7,8 +7,8 @@ Pour un fichier, le rôle effectif est calculé à chaque requête :
       AUTEUR   a déposé le fichier                   -> voir, modifier, versions, corbeille
       LECTEUR  un rôle commun avec le fichier, ou une exception ponctuelle valide -> lecture, commentaires
       sinon    403 (« Demander l'accès »)
-  * autre division : administrateur SUPÉRIEUR (chef de service pour son service, super administrateur partout), en lecture seule,
-    seulement si l'unité est déverrouillée (423 sinon). Si la division n'a plus de chef, l'intérimaire est GERANT (mais déverrouille).
+  * autre division : super administrateur, en lecture seule, seulement si l'unité est déverrouillée (423 sinon).
+    Si la division n'a plus de chef, le super administrateur est GERANT (mais déverrouille).
   * tout le reste : 404 (l'existence n'est pas révélée).
 
 Dossiers et sous-dossiers : visibles de tous les agents de la division (ils n'ont pas de rôle).
@@ -21,14 +21,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import ColumnElement, and_, exists, false, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.permissions import (
-    NIVEAU_DIVISION,
-    NIVEAU_ROOT,
-    NIVEAU_SERVICE,
-    TITRE_CHEF_DIVISION,
-    TITRE_CHEF_SERVICE,
-    Principal,
-)
+from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, TITRE_CHEF_DIVISION, Principal
 from app.db.metier import (
     AccesException,
     Agent,
@@ -87,12 +80,6 @@ def chef_division_actif(db: Session, division_id: int) -> Agent | None:
     ).first()
 
 
-def chef_service_actif(db: Session, service_id: int) -> Agent | None:
-    return db.scalars(
-        select(Agent).where(Agent.service_id == service_id, Agent.titre == TITRE_CHEF_SERVICE, Agent.actif.is_(True))
-    ).first()
-
-
 def _division(db: Session, division_id: int) -> Division:
     division = db.get(Division, division_id)
     if division is None:
@@ -105,10 +92,8 @@ def est_membre(principal: Principal, division_id: int) -> bool:
 
 
 def est_superieur(principal: Principal, division: Division) -> bool:
-    """Administrateur hiérarchiquement supérieur à la division (lecture avec déverrouillage)."""
-    if principal.niveau == NIVEAU_ROOT:
-        return True
-    return principal.niveau == NIVEAU_SERVICE and principal.service_id == division.service_id
+    """Administrateur hiérarchiquement supérieur à la division (lecture avec déverrouillage) : le super administrateur."""
+    return principal.niveau == NIVEAU_ROOT
 
 
 def est_chef_nominal(principal: Principal, division_id: int) -> bool:
@@ -116,14 +101,12 @@ def est_chef_nominal(principal: Principal, division_id: int) -> bool:
 
 
 def peut_gerer_division(db: Session, principal: Principal, division: Division) -> bool:
-    """Gérant d'une division : son chef ; à défaut le chef de service ; à défaut (service sans chef non plus) le super administrateur."""
+    """Gérant d'une division : son chef ; à défaut le super administrateur (il assure l'intérim, avec déverrouillage)."""
     if est_chef_nominal(principal, division.id):
         return True
     if chef_division_actif(db, division.id) is not None:
         return False
-    if principal.niveau == NIVEAU_SERVICE and principal.service_id == division.service_id:
-        return True
-    return principal.niveau == NIVEAU_ROOT and chef_service_actif(db, division.service_id) is None
+    return principal.niveau == NIVEAU_ROOT
 
 
 def divisions_gerees(db: Session, principal: Principal) -> list[Division]:
@@ -131,20 +114,17 @@ def divisions_gerees(db: Session, principal: Principal) -> list[Division]:
     if principal.niveau == NIVEAU_DIVISION and principal.division_id is not None:
         division = db.get(Division, principal.division_id)
         return [division] if division else []
-    if principal.niveau == NIVEAU_SERVICE:
-        candidates = db.scalars(select(Division).where(Division.service_id == principal.service_id)).all()
-    elif principal.niveau == NIVEAU_ROOT:
+    if principal.niveau == NIVEAU_ROOT:
         candidates = db.scalars(select(Division)).all()
-    else:
-        return []
-    return [d for d in candidates if peut_gerer_division(db, principal, d)]
+        return [d for d in candidates if peut_gerer_division(db, principal, d)]
+    return []
 
 
 # --- Déverrouillage ---------------------------------------------------------------------------------------------------
 
 def divisions_deverrouillees(db: Session, principal: Principal) -> set[int]:
     """Divisions que le compte a actuellement déverrouillées ET sur lesquelles il est encore supérieur (droit recalculé)."""
-    if principal.niveau not in (NIVEAU_ROOT, NIVEAU_SERVICE):
+    if principal.niveau != NIVEAU_ROOT:
         return set()
     rows = db.execute(
         select(SecretUnite.division_id, SecretUnite.service_id)
@@ -160,10 +140,7 @@ def divisions_deverrouillees(db: Session, principal: Principal) -> set[int]:
     services = {s for _, s in rows if s is not None}
     if not divisions and not services:
         return set()
-    query = select(Division.id).where(or_(Division.id.in_(divisions), Division.service_id.in_(services)))
-    if principal.niveau == NIVEAU_SERVICE:
-        query = query.where(Division.service_id == principal.service_id)
-    return set(db.scalars(query))
+    return set(db.scalars(select(Division.id).where(or_(Division.id.in_(divisions), Division.service_id.in_(services)))))
 
 
 def exiger_deverrouillage(db: Session, principal: Principal, division: Division) -> None:

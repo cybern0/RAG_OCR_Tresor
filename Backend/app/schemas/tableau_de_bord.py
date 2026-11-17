@@ -1,4 +1,4 @@
-"""Schémas du tableau de bord : un contenu par niveau (super administrateur, chef de service, chef de division, agent)."""
+"""Schémas du tableau de bord : un contenu par niveau (super administrateur, chef de division, agent)."""
 
 from datetime import datetime
 from typing import Literal
@@ -52,7 +52,7 @@ class AccesPonctuelBrief(BaseModel):
 
 
 class TableauDeBordOut(BaseModel):
-    niveau: Literal["ROOT", "SERVICE", "DIVISION", "AGENT"]
+    niveau: Literal["ROOT", "DIVISION", "AGENT"]
     titre: str
     sous_titre: str | None = None
     indicateurs: list[Indicateur]

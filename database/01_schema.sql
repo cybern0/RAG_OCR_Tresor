@@ -5,7 +5,7 @@
 -- puis 02_donnees_reference.sql, puis 03_verification.sql (facultatif), puis seed.sql (démonstration, facultatif).
 --
 -- Garanties portées par la BASE (et pas seulement par l'API) :
---   * un seul chef de service actif par service, un seul chef de division actif par division (index uniques partiels) ;
+--   * un seul chef de division actif par division (index unique partiel) ;
 --   * un agent est toujours d'un service ET d'une division de ce service (clé étrangère composite) ;
 --   * un dossier, un sous-dossier, un fichier et les rôles d'un fichier restent dans UNE division (clés étrangères composites) ;
 --   * l'historique de traçabilité est en ajout seul, chaîné par hash calculé par la base (déclencheurs).
@@ -55,7 +55,8 @@ CREATE TABLE division (
 CREATE INDEX idx_division_service ON division (service_id);
 
 -- Un agent appartient à UN service et à UNE division (de ce service). Le titre vaut rôle d'administration :
--- CHEF_SERVICE (sans division), CHEF_DIVISION (avec division) ou vide.
+-- CHEF_DIVISION (avec division) ou vide. Il n'y a plus de chef de service : l'administration des comptes,
+-- l'intérim des divisions vacantes et la supervision des unités relèvent du super administrateur (rôle global ADMIN).
 CREATE TABLE agent (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     matricule VARCHAR(50) NOT NULL UNIQUE,
@@ -65,17 +66,15 @@ CREATE TABLE agent (
     email VARCHAR(180),
     service_id BIGINT NOT NULL REFERENCES _service(id),
     division_id BIGINT,
-    titre VARCHAR(30) CHECK (titre IN ('CHEF_SERVICE', 'CHEF_DIVISION')),
+    titre VARCHAR(30) CHECK (titre IN ('CHEF_DIVISION')),
     actif BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT fk_agent_division_service FOREIGN KEY (division_id, service_id) REFERENCES division (id, service_id),
     CONSTRAINT ck_agent_titre_division CHECK (
         titre IS NULL
         OR (titre = 'CHEF_DIVISION' AND division_id IS NOT NULL)
-        OR (titre = 'CHEF_SERVICE' AND division_id IS NULL)
     )
 );
 CREATE INDEX idx_agent_service_division ON agent (service_id, division_id);
-CREATE UNIQUE INDEX uq_chef_service ON agent (service_id) WHERE titre = 'CHEF_SERVICE' AND actif;
 CREATE UNIQUE INDEX uq_chef_division ON agent (division_id) WHERE titre = 'CHEF_DIVISION' AND actif;
 
 -- 2. Comptes, rôles globaux, permissions ------------------------------------------------------------------------------
@@ -392,7 +391,7 @@ CREATE INDEX idx_exception_user_doc ON acces_exception (user_id, document_id) WH
 
 -- 8. Mots de passe de dossier (unités) et déverrouillages -----------------------------------------------------------------------
 
--- Un secret par couple (unité, administrateur supérieur). Le chef de division n'en a pas : sa division ne contient pas de dossier protégé.
+-- Un secret par couple (unité, super administrateur). Le chef de division n'en a pas : sa division ne contient pas de dossier protégé.
 CREATE TABLE secret_unite (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     service_id BIGINT REFERENCES _service(id) ON DELETE CASCADE,

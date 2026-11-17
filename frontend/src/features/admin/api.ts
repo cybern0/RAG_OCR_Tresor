@@ -46,5 +46,5 @@ export const updateRule = (id: number, d: Partial<RuleInput>) => api<RuleItem>(`
 export const deleteRule = (id: number) => api<unknown>(`/classement/regles/${id}`, { method: 'DELETE' })
 export const simulate = (d: { nom_fichier?: string; extension?: string; texte?: string }) => api<SimulationResult>('/classement/simuler', { method: 'POST', json: d })
 
-export const transfererChef = (type: 'service' | 'division', unitId: number, agentId: number | null, motif?: string) =>
-  api<unknown>(`/structure/${type === 'service' ? 'services' : 'divisions'}/${unitId}/chef`, { method: 'PUT', json: { agent_id: agentId, motif } })
+export const transfererChef = (unitId: number, agentId: number | null, motif?: string) =>
+  api<unknown>(`/structure/divisions/${unitId}/chef`, { method: 'PUT', json: { agent_id: agentId, motif } })

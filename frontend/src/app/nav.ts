@@ -28,7 +28,7 @@ export const allowed = (item: NavItem, can: (p: string) => boolean) => item.any.
 
 export const isIntermediateAdmin = (user: { niveau?: string | null; role?: string | null } | null): boolean => {
   if (!user) return false
-  return user.niveau === 'ROOT' || user.niveau === 'SERVICE' || user.niveau === 'DIVISION' || user.role === 'ADMIN'
+  return user.niveau === 'ROOT' || user.niveau === 'DIVISION' || user.role === 'ADMIN'
 }
 
 /** Première page accessible au compte (page d'accueil). */

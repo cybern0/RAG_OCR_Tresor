@@ -41,7 +41,7 @@ class UserOut(BaseModel):
     id: int
     nom_utilisateur: str
     role: RoleCode
-    niveau: Literal["ROOT", "SERVICE", "DIVISION", "AGENT"] = "AGENT"
+    niveau: Literal["ROOT", "DIVISION", "AGENT"] = "AGENT"
     actif: bool
     derniere_connexion: datetime | None
     cree_le: datetime
@@ -62,7 +62,7 @@ class MeOut(UserOut):
     division_nom: str | None = None
     titre: str | None = None
     divisions_gerees: list[DivisionBrief] = []  # divisions dont il est gérant (la sienne, ou intérim)
-    unites_protegees: bool = False  # a des mots de passe de dossier à gérer (super administrateur, chef de service)
+    unites_protegees: bool = False  # a des mots de passe de dossier à gérer (super administrateur)
 
 
 class TokenOut(BaseModel):

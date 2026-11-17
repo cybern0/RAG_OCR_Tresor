@@ -4,8 +4,9 @@ Deux sources, évaluées à CHAQUE requête (aucun cache : un retrait de droit o
 
 1. Le rôle GLOBAL du compte (tables _role, permission, role_permission) : ADMIN (super administrateur) ou UTILISATEUR.
 2. Le NIVEAU, déduit du TITRE de l'agent (une seule source de vérité) :
-   ROOT (rôle ADMIN) > SERVICE (CHEF_SERVICE) > DIVISION (CHEF_DIVISION) > AGENT.
-   Les niveaux SERVICE et DIVISION ajoutent les permissions utilisateur.* : leur PÉRIMÈTRE est appliqué par core/portee.py.
+   ROOT (rôle ADMIN) > DIVISION (CHEF_DIVISION) > AGENT.
+   Il n'y a plus de chef de service : tout échelon au-dessus de la division est le super administrateur (ROOT).
+   Le niveau DIVISION ajoute les permissions utilisateur.* ; son PÉRIMÈTRE est appliqué par core/portee.py.
 
 La règle d'accès aux dossiers et aux fichiers est dans core/acces.py.
 """
@@ -22,13 +23,11 @@ ROLE_UTILISATEUR = "UTILISATEUR"
 ROLES = (ROLE_ADMIN, ROLE_UTILISATEUR)
 
 NIVEAU_ROOT = "ROOT"
-NIVEAU_SERVICE = "SERVICE"
 NIVEAU_DIVISION = "DIVISION"
 NIVEAU_AGENT = "AGENT"
 
-TITRE_CHEF_SERVICE = "CHEF_SERVICE"
 TITRE_CHEF_DIVISION = "CHEF_DIVISION"
-TITRES = (TITRE_CHEF_SERVICE, TITRE_CHEF_DIVISION)
+TITRES = (TITRE_CHEF_DIVISION,)
 
 DOCUMENT_LISTER = "document.lister"
 CHAT_UTILISER = "chat.utiliser"
@@ -43,7 +42,6 @@ AUDIT_CONSULTER = "audit.consulter"
 _GESTION_COMPTES = frozenset({UTILISATEUR_LISTER, UTILISATEUR_CREER, UTILISATEUR_MODIFIER})
 PERMISSIONS_DU_NIVEAU: dict[str, frozenset[str]] = {
     NIVEAU_ROOT: frozenset(),  # tout vient déjà du rôle ADMIN
-    NIVEAU_SERVICE: _GESTION_COMPTES,
     NIVEAU_DIVISION: _GESTION_COMPTES,
     NIVEAU_AGENT: frozenset(),
 }
@@ -53,11 +51,8 @@ def niveau_compte(user: User) -> str:
     if user.role.code == ROLE_ADMIN:
         return NIVEAU_ROOT
     agent = user.agent
-    if agent is not None:
-        if agent.titre == TITRE_CHEF_SERVICE:
-            return NIVEAU_SERVICE
-        if agent.titre == TITRE_CHEF_DIVISION:
-            return NIVEAU_DIVISION
+    if agent is not None and agent.titre == TITRE_CHEF_DIVISION:
+        return NIVEAU_DIVISION
     return NIVEAU_AGENT
 
 

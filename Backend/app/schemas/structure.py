@@ -78,7 +78,7 @@ class AgentIn(BaseModel):
     email: EmailStr | None = None
     service_id: int
     division_id: int | None = None
-    titre: Literal["CHEF_SERVICE", "CHEF_DIVISION"] | None = None
+    titre: Literal["CHEF_DIVISION"] | None = None
 
 
 class AgentUpdate(BaseModel):
@@ -88,7 +88,7 @@ class AgentUpdate(BaseModel):
     email: EmailStr | None = None
     service_id: int | None = None
     division_id: int | None = None
-    titre: Literal["CHEF_SERVICE", "CHEF_DIVISION"] | None = None  # null explicite = retirer le titre
+    titre: Literal["CHEF_DIVISION"] | None = None  # null explicite = retirer le titre
     actif: bool | None = None
 
 
@@ -113,12 +113,6 @@ class ChefOut(BaseModel):
     nom_complet: str
 
 
-class PosteServiceOut(BaseModel):
-    service_id: int
-    service_nom: str
-    chef: ChefOut | None
-
-
 class PosteDivisionOut(BaseModel):
     division_id: int
     division_nom: str
@@ -127,7 +121,6 @@ class PosteDivisionOut(BaseModel):
 
 
 class PostesOut(BaseModel):
-    services: list[PosteServiceOut]
     divisions: list[PosteDivisionOut]
 
 
@@ -153,7 +146,6 @@ class ServiceArbreOut(BaseModel):
     code: str
     nom: str
     actif: bool
-    chef: ChefOut | None
     divisions: list[UniteArbreOut]
 
 

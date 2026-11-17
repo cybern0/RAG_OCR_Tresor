@@ -1,8 +1,7 @@
 """Logique de gestion des comptes.
 
 Règles :
-- le périmètre (qui voit, qui gère quel compte) est dans core/portee.py : super administrateur tout, chef de service les chefs de
-  division de son service, chef de division les agents de sa division ;
+- le périmètre (qui voit, qui gère quel compte) est dans core/portee.py : super administrateur tout, chef de division les agents de sa division ;
 - un UTILISATEUR est lié à un agent actif (son service et sa division en découlent) ; un agent n'a qu'un seul compte ;
 - on ne change jamais un rôle au point de laisser le système sans super administrateur actif.
 """
@@ -12,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.acces import divisions_gerees
-from app.core.permissions import NIVEAU_ROOT, NIVEAU_SERVICE, ROLE_ADMIN, ROLE_UTILISATEUR, Principal, niveau_compte
+from app.core.permissions import NIVEAU_ROOT, ROLE_ADMIN, ROLE_UTILISATEUR, Principal, niveau_compte
 from app.core.portee import exiger_gestion_compte, filtre_comptes_visibles, gere_agent, voit_agent
 from app.core.security import hash_password, login_throttle, verify_password
 from app.db.metier import Agent, Role, RoleDivision, User, UserRoleDivision
@@ -76,7 +75,7 @@ def to_me_out(principal: Principal, db: Session) -> MeOut:
         division_nom=agent.division.nom if agent and agent.division else None,
         titre=agent.titre if agent else None,
         divisions_gerees=[DivisionBrief(id=d.id, nom=d.nom) for d in gerees],
-        unites_protegees=principal.niveau in (NIVEAU_ROOT, NIVEAU_SERVICE),
+        unites_protegees=principal.niveau == NIVEAU_ROOT,
     )
 
 
@@ -87,7 +86,7 @@ def _query():
 
 
 def list_users(db: Session, principal: Principal) -> list[User]:
-    """Comptes du périmètre : tous (super administrateur), son service (chef de service), sa division (chef de division)."""
+    """Comptes du périmètre : tous (super administrateur), sa division (chef de division)."""
     stmt = _query().outerjoin(Agent, Agent.id == User.agent_id)
     perimetre = filtre_comptes_visibles(principal)
     if perimetre is not None:

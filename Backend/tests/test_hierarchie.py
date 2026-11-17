@@ -1,6 +1,8 @@
-"""Règles de la GED hiérarchique : chefs uniques et transfert de poste, accès aux fichiers (404 / 403 / 423), classement par rôle au dépôt,
-demandes d'accès et exceptions, mots de passe de dossier, historique chaîné, périmètres de gestion, notifications, tableaux de bord.
+"""Règles de la GED hiérarchique : chef de division unique et transfert de poste, intérim du super administrateur,
+accès aux fichiers (404 / 403 / 423), classement par rôle au dépôt, demandes d'accès et exceptions,
+mots de passe de dossier, historique chaîné, périmètres de gestion, notifications, tableaux de bord.
 
+Il n'y a plus de chef de service : toutes ses responsabilités appartiennent au super administrateur.
 Même base de test et mêmes fixtures que test_api.py (monde : 1 direction, 2 services, 3 divisions, chefs, agents, rôles)."""
 
 import os
@@ -36,12 +38,11 @@ def test_un_seul_chef_par_poste_garanti_et_transfert_atomique(client, world):
     h, tag = world["admin"], world["tag"]
     v2, s1 = world["div"]["v2"]["id"], world["svc"]["s1"]["id"]
     c1 = mk_agent(client, h, "c1", tag, s1, v2, "CHEF_DIVISION")
-    # un second chef de division, ou de service, est refusé avec un message qui oriente vers le transfert
+    # un second chef de division est refusé avec un message qui oriente vers le transfert ; le titre CHEF_SERVICE n'existe plus
     r = client.post("/structure/agents", headers=h, json={"matricule": f"X2{tag}", "nom": "N", "prenom": "P", "service_id": s1, "division_id": v2, "titre": "CHEF_DIVISION"})
     assert r.status_code == 409 and "transfert" in r.json()["detail"]
-    assert client.post("/structure/agents", headers=h, json={"matricule": f"X3{tag}", "nom": "N", "prenom": "P", "service_id": s1, "titre": "CHEF_SERVICE"}).status_code == 409
-    # règles de cohérence : chef de service sans division, chef de division avec division
-    assert client.post("/structure/agents", headers=h, json={"matricule": f"X4{tag}", "nom": "N", "prenom": "P", "service_id": world["svc"]["s2"]["id"], "division_id": world["div"]["v3"]["id"], "titre": "CHEF_SERVICE"}).status_code == 422
+    assert client.post("/structure/agents", headers=h, json={"matricule": f"X3{tag}", "nom": "N", "prenom": "P", "service_id": s1, "titre": "CHEF_SERVICE"}).status_code == 422
+    # règles de cohérence : un chef de division doit avoir une division ; la division doit être du service de l'agent
     assert client.post("/structure/agents", headers=h, json={"matricule": f"X5{tag}", "nom": "N", "prenom": "P", "service_id": s1, "titre": "CHEF_DIVISION"}).status_code == 422
     # la division doit être du service de l'agent ; un agent sans titre doit avoir une division
     assert client.post("/structure/agents", headers=h, json={"matricule": f"X6{tag}", "nom": "N", "prenom": "P", "service_id": s1, "division_id": world["div"]["v3"]["id"]}).status_code == 422
@@ -79,17 +80,17 @@ def test_un_seul_chef_par_poste_garanti_et_transfert_atomique(client, world):
     assert next(d for d in client.get("/structure/postes", headers=h).json()["divisions"] if d["division_id"] == v2)["chef"] is None
 
 
-def test_interim_du_chef_de_service_sur_une_division_vacante(client, world):
-    cs1, v2, tag = world["cs1"]["h"], world["div"]["v2"]["id"], world["tag"]
-    # v2 n'a plus de chef : le chef de service gère, mais doit déverrouiller la division
-    r = client.post(f"/divisions/{v2}/roles", headers=cs1, json={"code": "INTERIM", "libelle": "Intérim"})
+def test_interim_du_super_administrateur_sur_une_division_vacante(client, world):
+    adm, v2, tag = world["admin"], world["div"]["v2"]["id"], world["tag"]
+    # v2 n'a plus de chef : le super administrateur gère, mais doit déverrouiller la division
+    r = client.post(f"/divisions/{v2}/roles", headers=adm, json={"code": "INTERIM", "libelle": "Intérim"})
     assert r.status_code == 423 and r.json()["detail"]["code"] == "UNITE_VERROUILLEE"
-    secret_et_deverrouillage(client, cs1, "division", v2)
-    r = client.post(f"/divisions/{v2}/roles", headers=cs1, json={"code": "INTERIM", "libelle": "Intérim"})
+    secret_et_deverrouillage(client, adm, "division", v2)
+    r = client.post(f"/divisions/{v2}/roles", headers=adm, json={"code": "INTERIM", "libelle": "Intérim"})
     assert r.status_code == 201
-    assert any(d["id"] == v2 for d in client.get("/auth/me", headers=cs1).json()["divisions_gerees"])
-    # une division avec un chef n'est pas gérée par le chef de service
-    assert client.post(f"/divisions/{world['div']['v1']['id']}/roles", headers=cs1, json={"code": "NON", "libelle": "Non"}).status_code == 403
+    assert any(d["id"] == v2 for d in client.get("/auth/me", headers=adm).json()["divisions_gerees"])
+    # une division avec un chef n'est pas gérée par le super administrateur
+    assert client.post(f"/divisions/{world['div']['v1']['id']}/roles", headers=adm, json={"code": "NON", "libelle": "Non"}).status_code == 403
     # ni par le chef d'une autre division
     assert client.post(f"/divisions/{v2}/roles", headers=world["cd1"]["h"], json={"code": "NON", "libelle": "Non"}).status_code == 404
 
@@ -97,7 +98,7 @@ def test_interim_du_chef_de_service_sur_une_division_vacante(client, world):
 # --- règle d'accès aux fichiers ---------------------------------------------------------------------------------------------
 
 def test_404_403_423_selon_la_position_de_l_appelant(client, world):
-    a, lect, mix, b, cd1, cs1, adm = (world[k]["h"] if k != "admin" else world[k] for k in ("a", "lect", "mix", "b", "cd1", "cs1", "admin"))
+    a, lect, mix, b, cd1, adm = (world[k]["h"] if k != "admin" else world[k] for k in ("a", "lect", "mix", "b", "cd1", "admin"))
     f = fichier(client, a, world["A"]["id"], f"Compte rendu comptable {world['tag']}.", titre="Compte rendu")
     fid = f["id"]
     assert f["mon_role"] == "AUTEUR" and [r["code"] for r in f["roles"]] == ["COMPTA"] and f["a_classer"] is False
@@ -114,29 +115,28 @@ def test_404_403_423_selon_la_position_de_l_appelant(client, world):
     dossiers = {d["id"]: d for d in client.get("/dossiers", headers=mix).json()}
     assert world["A"]["id"] in dossiers and dossiers[world["A"]["id"]]["nb_fichiers_masques"] >= 1
     assert client.get(f"/dossiers/{world['A']['id']}", headers=b).status_code == 404
-    # administrateur supérieur : verrouillé (423), puis lecture seule une fois déverrouillé
-    for h in (cs1, adm):
-        r = client.get(f"/documents/{fid}", headers=h)
-        assert r.status_code == 423 and r.json()["detail"]["unite"]["id"] == world["div"]["v1"]["id"]
-        assert client.get(f"/dossiers/{world['A']['id']}", headers=h).status_code == 423
-    secret_et_deverrouillage(client, cs1, "division", world["div"]["v1"]["id"])
-    sup = client.get(f"/documents/{fid}", headers=cs1).json()
+    # super administrateur : verrouillé (423), puis lecture seule une fois déverrouillé
+    r = client.get(f"/documents/{fid}", headers=adm)
+    assert r.status_code == 423 and r.json()["detail"]["unite"]["id"] == world["div"]["v1"]["id"]
+    assert client.get(f"/dossiers/{world['A']['id']}", headers=adm).status_code == 423
+    secret_et_deverrouillage(client, adm, "division", world["div"]["v1"]["id"])
+    sup = client.get(f"/documents/{fid}", headers=adm).json()
     assert sup["mon_role"] == "SUPERIEUR" and "commenter" not in sup["droits"] and "modifier" not in sup["droits"]
-    assert client.get(f"/documents/{fid}/versions/1/telecharger", headers=cs1).status_code == 200
-    assert client.patch(f"/documents/{fid}", headers=cs1, data={"titre": "x"}).status_code == 403
-    assert client.post(f"/documents/{fid}/commentaires", headers=cs1, json={"contenu": "bonjour"}).status_code == 403
-    assert client.post("/dossiers", headers=cs1, json={"nom": "Interdit", "division_id": world["div"]["v1"]["id"]}).status_code == 403
-    assert upload(client, cs1, world["A"]["id"], "x" + world["tag"]).status_code == 403          # lecture seule : pas de dépôt
+    assert client.get(f"/documents/{fid}/versions/1/telecharger", headers=adm).status_code == 200
+    assert client.patch(f"/documents/{fid}", headers=adm, data={"titre": "x"}).status_code == 403
+    assert client.post(f"/documents/{fid}/commentaires", headers=adm, json={"contenu": "bonjour"}).status_code == 403
+    assert client.post("/dossiers", headers=adm, json={"nom": "Interdit", "division_id": world["div"]["v1"]["id"]}).status_code == 403
+    assert upload(client, adm, world["A"]["id"], "x" + world["tag"]).status_code == 403          # lecture seule : pas de dépôt
     assert client.post(f"/documents/{fid}/commentaires", headers=lect, json={"contenu": "ok"}).status_code == 201
     # le déverrouillage expire : valide_jusqua dans le passé => 423 de nouveau
     with SessionLocal() as db:
         db.execute(update(Deverrouillage).values(valide_jusqua=datetime.now(timezone.utc) - timedelta(minutes=1)))
         db.commit()
-    assert client.get(f"/documents/{fid}", headers=cs1).status_code == 423
+    assert client.get(f"/documents/{fid}", headers=adm).status_code == 423
 
 
 def test_mots_de_passe_de_dossier(client, world):
-    cs1, cd1, adm, tag = world["cs1"]["h"], world["cd1"]["h"], world["admin"], world["tag"]
+    cd1, adm, tag = world["cd1"]["h"], world["admin"], world["tag"]
     v1, s1 = world["div"]["v1"]["id"], world["svc"]["s1"]["id"]
     # mauvais mot de passe : 403 (jamais 401, l'interface ne doit pas se déconnecter), puis blocage après 5 échecs
     unite = {"type": "division", "unite_id": world["div"]["v3"]["id"]}
@@ -148,46 +148,37 @@ def test_mots_de_passe_de_dossier(client, world):
 
     login_throttle._failures.clear()
     assert client.post("/securite/deverrouiller", headers=adm, json={**unite, "mot_de_passe": SECRET}).status_code == 200
-    # le chef de division n'a pas de mot de passe de dossier pour sa propre division ; un agent non plus
-    assert client.post("/securite/deverrouiller", headers=cd1, json={"type": "division", "unite_id": v1, "mot_de_passe": SECRET}).status_code == 409
-    assert client.post("/securite/deverrouiller", headers=world["a"]["h"], json={"type": "division", "unite_id": v1, "mot_de_passe": SECRET}).status_code == 409
-    assert client.post("/securite/deverrouiller", headers=world["a"]["h"], json={"type": "division", "unite_id": world["div"]["v3"]["id"], "mot_de_passe": SECRET}).status_code == 404
-    # un chef de service n'a pas de mot de passe sur un service, ni sur une division d'un autre service
-    assert client.post("/securite/deverrouiller", headers=cs1, json={"type": "service", "unite_id": s1, "mot_de_passe": SECRET}).status_code == 404
-    assert client.post("/securite/deverrouiller", headers=cs1, json={"type": "division", "unite_id": world["div"]["v3"]["id"], "mot_de_passe": SECRET}).status_code == 404
-    # définition sans secret existant, puis changement : l'ancien est exigé
-    assert client.post("/securite/deverrouiller", headers=cs1, json={"type": "division", "unite_id": v1, "mot_de_passe": SECRET}).status_code in (200, 409)
-    r = client.put("/securite/secrets", headers=cs1, json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "nouveau-dossier-2"})
+    # les mots de passe de dossier sont réservés au super administrateur : un chef de division ou un agent reçoit 403
+    assert client.post("/securite/deverrouiller", headers=cd1, json={"type": "division", "unite_id": v1, "mot_de_passe": SECRET}).status_code == 403
+    assert client.post("/securite/deverrouiller", headers=world["a"]["h"], json={"type": "division", "unite_id": v1, "mot_de_passe": SECRET}).status_code == 403
+    assert client.post("/securite/deverrouiller", headers=world["a"]["h"], json={"type": "division", "unite_id": world["div"]["v3"]["id"], "mot_de_passe": SECRET}).status_code == 403
+    # seuls les super administrateurs ont des mots de passe de dossier : un chef de division ou un agent reçoit 403
+    assert client.put("/securite/secrets", headers=cd1, json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "tentative-chef-1"}).status_code == 403
+    assert client.put("/securite/secrets", headers=world["a"]["h"], json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "tentative-agent-1"}).status_code == 403
+    # définition par le super administrateur, puis changement : l'ancien est exigé
+    assert client.post("/securite/deverrouiller", headers=adm, json={"type": "division", "unite_id": v1, "mot_de_passe": SECRET}).status_code in (200, 409)
+    r = client.put("/securite/secrets", headers=adm, json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "nouveau-dossier-2"})
     assert r.status_code == 400                                   # l'ancien mot de passe manque : refusé
-    assert client.put("/securite/secrets", headers=cs1, json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "nouveau-dossier-2", "ancien_mot_de_passe": SECRET}).status_code == 204
-    assert client.post("/securite/deverrouiller", headers=cs1, json={"type": "division", "unite_id": v1, "mot_de_passe": SECRET}).status_code == 403
-    assert client.post("/securite/deverrouiller", headers=cs1, json={"type": "division", "unite_id": v1, "mot_de_passe": "nouveau-dossier-2"}).status_code == 200
+    assert client.put("/securite/secrets", headers=adm, json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "nouveau-dossier-2", "ancien_mot_de_passe": SECRET}).status_code == 204
+    assert client.post("/securite/deverrouiller", headers=adm, json={"type": "division", "unite_id": v1, "mot_de_passe": SECRET}).status_code == 403
+    assert client.post("/securite/deverrouiller", headers=adm, json={"type": "division", "unite_id": v1, "mot_de_passe": "nouveau-dossier-2"}).status_code == 200
     # mot de passe trop court refusé
-    assert client.put("/securite/secrets", headers=cs1, json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "court"}).status_code == 422
+    assert client.put("/securite/secrets", headers=adm, json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "court"}).status_code == 422
 
-    # réinitialisation hiérarchique : le super administrateur redéfinit le secret du chef de service, sans l'ancien ; il est notifié, déverrouillages fermés
-    cible = world["cs1"]["user"]["id"]
-    d = client.get("/securite/delegations", headers=adm).json()
-    assert next(x for x in d if x["division_id"] == v1)["titulaire_user_id"] == cible
-    assert client.put("/securite/secrets", headers=adm, json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "reinit-par-root-3", "utilisateur_cible_id": cible}).status_code == 204
-    assert client.get(f"/documents", headers=cs1, params={"dossier_id": world["A"]["id"]}).status_code == 423      # déverrouillage fermé
-    assert client.post("/securite/deverrouiller", headers=cs1, json={"type": "division", "unite_id": v1, "mot_de_passe": "nouveau-dossier-2"}).status_code == 403
-    assert client.post("/securite/deverrouiller", headers=cs1, json={"type": "division", "unite_id": v1, "mot_de_passe": "reinit-par-root-3"}).status_code == 200
-    assert any(n["type_evenement"] == "secret_reinitialise" for n in client.get("/notifications", headers=cs1).json()["items"])
-    # un chef de service ne réinitialise ni le secret d'un super administrateur, ni celui d'un pair ; un agent n'en a pas le droit
-    me_adm = client.get("/auth/me", headers=adm).json()["id"]
-    assert client.put("/securite/secrets", headers=cs1, json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "tentative-root-1", "utilisateur_cible_id": me_adm}).status_code == 403
-    assert client.put("/securite/secrets", headers=world["cd1"]["h"], json={"type": "division", "unite_id": v1, "nouveau_mot_de_passe": "tentative-chef-1", "utilisateur_cible_id": cible}).status_code == 403
-    # secrets listés : le chef de service voit les divisions de son service seulement
-    unites = client.get("/securite/unites", headers=cs1).json()
-    assert {u["id"] for u in unites} == {d["id"] for d in client.get("/structure/divisions", headers=adm).json() if d["service_id"] == s1}
-    assert client.get("/securite/unites", headers=world["a"]["h"]).json() == []
+    # l'ancien endpoint des délégations (secrets des chefs de service) n'existe plus ; plus de réinitialisation hiérarchique
+    assert client.get("/securite/delegations", headers=adm).status_code == 404
+    # la page des secrets est réservée au super administrateur ; le super administrateur voit toutes les unités
+    assert client.get("/securite/unites", headers=world["a"]["h"]).status_code == 403
+    assert client.get("/securite/unites", headers=cd1).status_code == 403
+    unites = client.get("/securite/unites", headers=adm).json()
+    assert {s1, v1, world["div"]["v3"]["id"]} <= {u["id"] for u in unites}
     # un super administrateur ouvre un service : toutes ses divisions deviennent lisibles
     client.put("/securite/secrets", headers=adm, json={"type": "service", "unite_id": s1, "nouveau_mot_de_passe": SECRET})
     assert client.post("/securite/deverrouiller", headers=adm, json={"type": "service", "unite_id": s1, "mot_de_passe": SECRET}).status_code == 200
     assert client.get("/dossiers", headers=adm, params={"division_id": v1}).status_code == 200
-    assert client.get("/dossiers", headers=adm, params={"division_id": world["div"]["v3"]["id"]}).status_code == 200  # v3 : déverrouillée plus haut
+    assert client.get("/dossiers", headers=adm, params={"division_id": world["div"]["v3"]["id"]}).status_code == 200
     client.post("/securite/verrouiller", headers=adm, json={"type": "service", "unite_id": s1})
+    client.post("/securite/verrouiller", headers=adm, json={"type": "division", "unite_id": v1})
     client.post("/securite/verrouiller", headers=adm, json={"type": "division", "unite_id": world["div"]["v3"]["id"]})
     assert client.get("/dossiers", headers=adm, params={"division_id": v1}).status_code == 423
 
@@ -389,7 +380,7 @@ def test_dictionnaire_de_roles_par_division(client, world):
 # --- périmètre des comptes ------------------------------------------------------------------------------------------------------------------
 
 def test_perimetre_de_creation_et_de_gestion_des_comptes(client, world):
-    adm, cd1, cs1, cd3, tag = world["admin"], world["cd1"]["h"], world["cs1"]["h"], world["cd3"]["h"], world["tag"]
+    adm, cd1, cd3, tag = world["admin"], world["cd1"]["h"], world["cd3"]["h"], world["tag"]
     s1, v1, v2, s2, v3 = world["svc"]["s1"]["id"], world["div"]["v1"]["id"], world["div"]["v2"]["id"], world["svc"]["s2"]["id"], world["div"]["v3"]["id"]
     p1 = mk_agent(client, adm, "p1", tag, s1, v1)
     p2 = mk_agent(client, adm, "p2", tag, s1, v2)
@@ -399,23 +390,21 @@ def test_perimetre_de_creation_et_de_gestion_des_comptes(client, world):
         return client.post("/users", headers=h, json={"nom_utilisateur": f"{nom}_{tag}", "mot_de_passe": PWD, "role": "UTILISATEUR", "agent_id": agent["id"]})
     # agents disponibles : chacun voit ce qu'il peut doter d'un compte
     assert [a["id"] for a in client.get("/users/agents-disponibles", headers=cd1).json()] == [p1["id"]]
-    assert p3["id"] not in [a["id"] for a in client.get("/users/agents-disponibles", headers=cs1).json()]
     # le chef de division crée les comptes des agents de sa division, pas les autres
     assert creer(cd1, p3, "x3").status_code == 404
     assert creer(cd1, p2, "x2").status_code == 404
     r = creer(cd1, p1, "n1")
     assert r.status_code == 201 and r.json()["niveau"] == "AGENT"
-    # division vacante (v2) : le chef de service assure l'intérim ; nomination d'un chef : ce compte relève du chef de service
-    assert creer(cs1, p2, "n2").status_code == 201
+    # division vacante (v2) : le super administrateur assure l'intérim et crée ces comptes ; après nomination, il reste le seul à tout gérer
+    assert creer(adm, p2, "n2").status_code == 201
     assert client.put(f"/structure/divisions/{v2}/chef", headers=adm, json={"agent_id": ch["id"]}).status_code == 200
-    assert creer(cs1, ch, "nch").json()["niveau"] == "DIVISION"
+    assert creer(adm, ch, "nch").json()["niveau"] == "DIVISION"
     p2b = mk_agent(client, adm, "p2b", tag, s1, v2)
-    assert creer(cs1, p2b, "n2b").status_code == 403           # v2 a un chef : le chef de service ne crée plus ses agents
+    assert creer(cd1, p2b, "n2b").status_code == 404           # v2 n'est pas la division de cd1
     assert creer(cd3, p3, "n3").status_code == 201
     # listes cloisonnées
     noms = lambda h: {u["nom_utilisateur"] for u in client.get("/users", headers=h).json()}  # noqa: E731
     assert f"n1_{tag}" in noms(cd1) and f"n3_{tag}" not in noms(cd1) and f"n2_{tag}" not in noms(cd1)
-    assert f"n2_{tag}" in noms(cs1) and f"n1_{tag}" in noms(cs1) and f"n3_{tag}" not in noms(cs1)
     assert {f"n1_{tag}", f"n3_{tag}", f"n2_{tag}"} <= noms(adm)
     u_n3 = next(u for u in client.get("/users", headers=adm).json() if u["nom_utilisateur"] == f"n3_{tag}")
     assert client.get(f"/users/{u_n3['id']}", headers=cd1).status_code == 404
@@ -424,10 +413,11 @@ def test_perimetre_de_creation_et_de_gestion_des_comptes(client, world):
     assert client.patch(f"/users/{u_n1['id']}", headers=cd1, json={"actif": False}).status_code == 200
     assert client.patch(f"/users/{u_n1['id']}", headers=cd1, json={"actif": True, "mot_de_passe": "nouveau-mdp-123"}).status_code == 200
     assert client.patch(f"/users/{u_n3['id']}", headers=cd1, json={"actif": False}).status_code == 404
-    assert client.patch(f"/users/{world['cs1']['user']['id']}", headers=cs1, json={"actif": False}).status_code in (403, 409)
     assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=cd1, json={"actif": False}).status_code in (403, 409)   # pas soi-même
-    assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=cs1, json={"mot_de_passe": "mdp-du-chef-123"}).status_code == 200
-    assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=cs1, json={"role": "ADMIN"}).status_code == 403
+    assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=cd3, json={"mot_de_passe": "tentative-hors-perimetre-1"}).status_code == 404
+    # le super administrateur gère tous les comptes, y compris les chefs de division
+    assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=adm, json={"mot_de_passe": "mdp-du-chef-123"}).status_code == 200
+    assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=cd3, json={"role": "ADMIN"}).status_code == 404
     client.patch(f"/users/{world['cd1']['user']['id']}", headers=adm, json={"mot_de_passe": PWD})
     world["cd1"]["h"] = auth(client, world["cd1"]["name"])
     # mutation : changer de division retire les rôles de l'ancienne ; un agent désactivé perd l'accès
@@ -443,15 +433,14 @@ def test_perimetre_de_creation_et_de_gestion_des_comptes(client, world):
 # --- historique chaîné, périmètre, notifications, tableaux de bord ----------------------------------------------------------------------
 
 def test_historique_en_ajout_seul_et_chaine_verifiable(client, world):
-    adm, cd1, cs1, a, cd3 = world["admin"], world["cd1"]["h"], world["cs1"]["h"], world["a"]["h"], world["cd3"]["h"]
+    adm, cd1, a, cd3 = world["admin"], world["cd1"]["h"], world["a"]["h"], world["cd3"]["h"]
     v1 = world["div"]["v1"]["id"]
     v = client.get("/historique/verification", headers=adm).json()
     assert v["ok"] is True and v["total"] > 10
     assert client.get("/historique/verification", headers=a).status_code == 403
-    # périmètres : le chef de division ne voit que sa division, le chef de service son service, l'agent ce qui le concerne
+    # périmètres : le chef de division ne voit que sa division, l'agent ce qui le concerne
     only = lambda h: {e["division_id"] for e in client.get("/historique", headers=h, params={"limit": 200}).json()["items"]}  # noqa: E731
     assert only(cd1) == {v1}
-    assert only(cs1) <= {d["id"] for d in client.get("/structure/divisions", headers=adm).json() if d["service_id"] == world["svc"]["s1"]["id"]} | {None}
     mine = client.get("/historique", headers=a, params={"limit": 200}).json()["items"]
     assert mine and all(e["acteur_user_id"] == world["a"]["user"]["id"] or e["concerne_user_id"] == world["a"]["user"]["id"] for e in mine)
     assert len(client.get("/historique", headers=adm, params={"limit": 200}).json()["items"]) > len(mine)
@@ -501,8 +490,6 @@ def test_tableaux_de_bord_par_niveau(client, world):
     root = client.get("/tableau-de-bord", headers=world["admin"]).json()
     assert root["niveau"] == "ROOT" and root["repartition"]["titre"] == "Par service" and len(root["repartition"]["lignes"]) >= 2
     assert any("super administrateur" in a for a in root["alertes"])                 # un seul super administrateur actif en test
-    svc = client.get("/tableau-de-bord", headers=world["cs1"]["h"]).json()
-    assert svc["niveau"] == "SERVICE" and {l["libelle"] for l in svc["repartition"]["lignes"]} == {d["nom"] for d in client.get("/structure/divisions", headers=world["admin"]).json() if d["service_id"] == world["svc"]["s1"]["id"]}
     div = client.get("/tableau-de-bord", headers=world["cd1"]["h"]).json()
     assert div["niveau"] == "DIVISION" and {l["libelle"] for l in div["repartition"]["lignes"]} >= {"Compta", "Audit", "Public"}
     ag = client.get("/tableau-de-bord", headers=world["a"]["h"]).json()
@@ -513,9 +500,10 @@ def test_tableaux_de_bord_par_niveau(client, world):
 
 
 def test_arbre_de_structure_visible_selon_le_niveau(client, world):
-    adm, cs1, a = world["admin"], world["cs1"]["h"], world["a"]["h"]
-    assert len(client.get("/structure/arbre", headers=adm).json()) >= 2
-    arbre_cs = client.get("/structure/arbre", headers=cs1).json()
-    assert [s["id"] for s in arbre_cs] == [world["svc"]["s1"]["id"]] and all(d["acces"] == "superieur" for d in arbre_cs[0]["divisions"])
+    adm, cd1, a = world["admin"], world["cd1"]["h"], world["a"]["h"]
+    arbre_adm = client.get("/structure/arbre", headers=adm).json()
+    assert len(arbre_adm) >= 2 and all(d["acces"] == "superieur" for s in arbre_adm for d in s["divisions"])
+    # le chef de division et l'agent ne voient que leur division dans leur service
     arbre_a = client.get("/structure/arbre", headers=a).json()
     assert len(arbre_a) == 1 and [d["id"] for d in arbre_a[0]["divisions"]] == [world["div"]["v1"]["id"]] and arbre_a[0]["divisions"][0]["acces"] == "membre"
+    assert [d["id"] for d in client.get("/structure/arbre", headers=cd1).json()[0]["divisions"]] == [world["div"]["v1"]["id"]]

@@ -74,28 +74,21 @@ def update_division(
 
 @router.get("/postes", response_model=PostesOut)
 def list_postes(_: Principal = Depends(_admin), db: Session = Depends(get_db)):
-    """Qui occupe quel poste : l'interface désactive la case « chef » d'une unité déjà pourvue."""
+    """Qui occupe quel poste : l'interface désactive la case « chef » d'une division déjà pourvue."""
     return crud.postes(db)
 
 
 @router.get("/arbre", response_model=list[ServiceArbreOut])
 def arbre(principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
-    """Organisation visible par le compte connecté (ses services et divisions, chefs, état du verrouillage)."""
+    """Organisation visible par le compte connecté (ses divisions, chefs, état du verrouillage)."""
     return crud.arbre(db, principal)
-
-
-@router.put("/services/{service_id}/chef", response_model=PostesOut)
-def transferer_chef_service(
-    service_id: int, data: TransfertChefIn, request: Request, actor: Principal = Depends(_admin), db: Session = Depends(get_db),
-):
-    return crud.transferer_chef(db, actor.user, type_unite="service", unite_id=service_id, agent_id=data.agent_id, motif=data.motif, ip=client_ip(request))
 
 
 @router.put("/divisions/{division_id}/chef", response_model=PostesOut)
 def transferer_chef_division(
     division_id: int, data: TransfertChefIn, request: Request, actor: Principal = Depends(_admin), db: Session = Depends(get_db),
 ):
-    return crud.transferer_chef(db, actor.user, type_unite="division", unite_id=division_id, agent_id=data.agent_id, motif=data.motif, ip=client_ip(request))
+    return crud.transferer_chef(db, actor.user, division_id=division_id, agent_id=data.agent_id, motif=data.motif, ip=client_ip(request))
 
 
 @router.get("/agents", response_model=list[AgentOut])

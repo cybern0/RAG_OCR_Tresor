@@ -50,8 +50,8 @@ export function Component() {
   const toast = useToast()
   const agents = useAgents()
   const [open, setOpen] = useState(false)
-  const poste = (type: 'service' | 'division', unitId: number, agentId: number | null, ok: string) =>
-    void transfererChef(type, unitId, agentId).then(() => { toast.success(ok); return agents.refetch() }).catch((e) => toast.error(errorMessage(e)))
+  const poste = (unitId: number, agentId: number | null, ok: string) =>
+    void transfererChef(unitId, agentId).then(() => { toast.success(ok); return agents.refetch() }).catch((e) => toast.error(errorMessage(e)))
   const toggle = useAdminMutation((v: { id: number; actif: boolean }) => updateAgent(v.id, { actif: v.actif }), [adminKeys.agents])
   return (
     <>
@@ -67,10 +67,10 @@ export function Component() {
                 <td className="td font-mono text-xs">{a.matricule}</td>
                 <td className="td">{a.nom} {a.prenom}<br /><span className="text-xs text-cream-300">{a.fonction ?? ''}{a.email ? ` · ${a.email}` : ''}</span></td>
                 <td className="td text-sm">{a.service_nom ?? '—'}{a.division_nom ? <><br /><span className="text-xs text-cream-300">{a.division_nom}</span></> : null}</td>
-                <td className="td text-sm">{a.titre === 'CHEF_SERVICE' ? <Badge tone="gold">Chef de service</Badge> : a.titre === 'CHEF_DIVISION' ? <Badge tone="gold">Chef de division</Badge> : '—'}</td>
+                <td className="td text-sm">{a.titre === 'CHEF_DIVISION' ? <Badge tone="gold">Chef de division</Badge> : '—'}</td>
                 <td className="td text-sm">{a.nom_utilisateur ?? '—'}</td>
                 <td className="td"><Badge tone={a.actif ? 'green' : 'gray'}>{a.actif ? 'Actif' : 'Désactivé'}</Badge></td>
-                <td className="td text-right">{a.actif && a.service_id !== null && (a.titre ? <button className="btn-ghost" onClick={() => poste(a.division_id ? 'division' : 'service', (a.division_id ?? a.service_id)!, null, 'Poste rendu vacant.')}>Retirer le poste</button> : <button className="btn-ghost" onClick={() => poste(a.division_id ? 'division' : 'service', (a.division_id ?? a.service_id)!, a.id, a.division_id ? 'Nommé chef de division (le titulaire précédent est remplacé).' : 'Nommé chef de service (le titulaire précédent est remplacé).')}>{a.division_id ? 'Nommer chef de division' : 'Nommer chef de service'}</button>)}<button className="btn-ghost" onClick={() => void toggle.mutateAsync({ id: a.id, actif: !a.actif }).catch((e) => toast.error(errorMessage(e)))}>{a.actif ? 'Désactiver' : 'Réactiver'}</button></td>
+                <td className="td text-right">{a.actif && a.division_id !== null && (a.titre ? <button className="btn-ghost" onClick={() => poste(a.division_id!, null, 'Poste rendu vacant.')}>Retirer le poste</button> : <button className="btn-ghost" onClick={() => poste(a.division_id!, a.id, 'Nommé chef de division (le titulaire précédent est remplacé).')}>Nommer chef de division</button>)}<button className="btn-ghost" onClick={() => void toggle.mutateAsync({ id: a.id, actif: !a.actif }).catch((e) => toast.error(errorMessage(e)))}>{a.actif ? 'Désactiver' : 'Réactiver'}</button></td>
               </tr>
             ))}
           </tbody>

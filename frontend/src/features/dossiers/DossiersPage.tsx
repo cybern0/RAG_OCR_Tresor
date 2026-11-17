@@ -13,7 +13,7 @@ import { useDossiers, queryError } from './queries'
 
 export function Component() {
   const { user } = useAuth()
-  const canChooseDivision = user?.niveau === 'ROOT' || user?.niveau === 'SERVICE'
+  const canChooseDivision = user?.niveau === 'ROOT'
   const divisions = useQuery({ queryKey: ['divisions'], queryFn: listDivisions, enabled: canChooseDivision })
   const [choix, setChoix] = useState<number | null>(user?.division_id ?? null)
   const divisionId = canChooseDivision ? (choix ?? divisions.data?.[0]?.id ?? null) : user?.division_id ?? null

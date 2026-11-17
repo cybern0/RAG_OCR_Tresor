@@ -1,8 +1,9 @@
 # RAG_OCR_Tresor
 
-Assistant RAG 100 % local en français, sur CPU, organisé comme un espace de partage de fichiers :
-des **dossiers** (créés par l'admin, avec des rôles par utilisateur ou par service), des **fichiers versionnés** (OCR inclus,
-aperçu et téléchargement) et un **chatbot** qui ne répond qu'à partir des dossiers auxquels on a accès.
+Assistant RAG 100 % local en français, sur CPU, organisé en **GED hiérarchique** :
+Direction → Service → Division → agents. Des **divisions** possèdent des **dossiers et sous-dossiers**,
+des **fichiers versionnés** (OCR inclus, aperçu et téléchargement), des **rôles de division** pour le
+classement et l'accès, et un **chatbot** qui ne répond qu'à partir des fichiers auxquels on a accès.
 
 ## Arborescence
 
@@ -10,15 +11,17 @@ aperçu et téléchargement) et un **chatbot** qui ne répond qu'à partir des d
 RAG_OCR_Tresor/
 ├── Backend/        API FastAPI (Python, uv)
 ├── frontend/       Interface React + TypeScript (Vite)
-├── database/       Scripts SQL, à exécuter dans l'ordre 01 à 05 (+ retour arrière et vérification de 05)
+├── database/       Scripts SQL, à exécuter dans l'ordre 01, 02 (+ contrôles et démonstration facultatifs)
 ├── ocr_server/     Serveur PaddleOCR, séparé du backend
-├── docs/           Architecture, historique des renommages et plans d'implémentation
+├── docs/           Architecture, refontes, plans d'implémentation et historique des renommages
 └── .env.example
 ```
 
 ### Documentation complémentaire
 
+- [docs/refonte_super_admin.md](docs/refonte_super_admin.md) : **refonte 11/2026** — suppression du chef de service, responsabilités regroupées sur le super administrateur.
 - [docs/architecture.md](docs/architecture.md) : architecture applicative et règles de sécurité.
+- [docs/paln.md](docs/paln.md) : plan de la GED hiérarchique (le poste « chef de service » décrit dans ce plan est supprimé par la refonte).
 - [docs/renommages.md](docs/renommages.md) : historique des renommages de fichiers et modules.
 - [docs/plan_ged_implementation.md](docs/plan_ged_implementation.md) : plan historique de la GED (classement, statistiques, corbeille ; les fonctions de partage y sont abandonnées).
 
@@ -34,26 +37,21 @@ PostgreSQL avec l'extension pgvector doit être installé. Créer la base puis e
 
 ```
 psql -U postgres -c "CREATE DATABASE rag;"
-psql -U postgres -d rag -f database/01_schema_metier.sql
-psql -U postgres -d rag -f database/02_schema_documents_vecteurs.sql
-psql -U postgres -d rag -f database/03_index.sql
-psql -U postgres -d rag -f database/04_seed_roles_permissions.sql
-psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/05_dossiers_versions.sql
-psql -U postgres -d rag -f database/05_verification.sql
-psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/06_classement_stats.sql
-psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/08_commentaires.sql
+psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/01_schema.sql
+psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/02_donnees_reference.sql
+psql -U postgres -d rag -f database/03_verification.sql
+psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/seed.sql   # facultatif : données de démonstration DEMO
 ```
 
-Le script `05` sert aussi bien à une installation neuve qu'à la **migration d'une base déjà remplie** (un dossier est créé pour chaque
-service et ouvert à ce service ; les documents existants deviennent la version 1). Il tourne en une seule transaction, est répétable,
-et a son retour arrière `database/05_retour_arriere.sql`. Pas à pas : `docs/migration_05.md`.
+`01` crée tout le schéma en une seule transaction (base NEUVE uniquement) ; `02` insère les rôles globaux
+et les permissions ; `03` contrôle les invariants (`verification_invariants`, chaque ligne attendue à 0).
 
-`06` ajoute le classement (catégories, types, étiquettes, règles) et la vue des statistiques ; `08` la table des commentaires.
-Base qui avait déjà reçu les anciens `07_partage.sql` / `08_collaboration.sql` : exécuter une fois `database/09_nettoyage_partage.sql`
-(retire les tables du partage par fichier, des liens, des demandes d'accès, des favoris et des notifications).
+**Base existante antérieure à la refonte** (installation avec des chefs de service) : exécuter une fois
+`database/10_suppression_chef_service.sql` — les agents titrés `CHEF_SERVICE` redeviennent agents simples,
+leurs secrets et déverrouillages sont retirés, les contraintes et index obsolètes sont nettoyés. Puis le
+super administrateur réaffecte ces agents à une division. Détails : `docs/refonte_super_admin.md`.
 
 Pour contrôler que les embeddings sont bien normalisés : `psql -U postgres -d rag -f database/verif_vecteurs_normalises.sql` (attendu : 0 non normalisé).
-Le compte `admin` est créé verrouillé : voir l'en-tête de `04_seed_roles_permissions.sql`.
 
 ## Démarrer
 
@@ -65,29 +63,42 @@ Le compte `admin` est créé verrouillé : voir l'en-tête de `04_seed_roles_per
    Toute l'API vit sous le préfixe `/api` (ex. `/api/auth/login`, `/api/health`) ; `/health` reste disponible pour la supervision.
    En production : `npm run build`, puis le backend sert `frontend/dist` lui-même (une seule adresse, liens profonds compris).
 
-Connexion avec `admin` et le mot de passe choisi à l'étape 4. L'admin crée ensuite une direction, un service, des agents, puis les
-comptes utilisateurs (chaque utilisateur est lié à un agent, donc à un service), puis des **dossiers** (onglet « Dossiers et accès »)
-et leur donne des rôles : à des utilisateurs, ou à des services entiers.
+Connexion avec `admin` et le mot de passe choisi à l'étape 4. Le super administrateur crée ensuite la
+structure (direction, services, divisions, agents), les **comptes** (chaque compte est lié à un agent,
+donc à une division) et nomme des **chefs de division** (transfert de poste dans l'onglet Agents).
 
 L'aperçu des fichiers Word, PowerPoint, Excel et OpenDocument demande LibreOffice sur la machine du backend (conversion en PDF) ;
 sans lui, l'aperçu de ces types répond par un message clair et le téléchargement reste possible.
 
 Chaque formulaire de l'interface a un bouton « Remplir avec exemple » qui le remplit de fausses informations (champs vides tant qu'on ne clique pas).
 
-## Rôles
+## Rôles et niveaux
 
-- **ADMIN** : crée les dossiers et attribue les rôles ; gère utilisateurs, agents, services ; consulte l'audit ; peut tout faire dans tous les dossiers (aperçu, téléchargement, chat compris).
-- **UTILISATEUR** : n'a aucun droit propre sur les fichiers ; tout dépend de ses rôles de dossier.
+Trois niveaux de gestion, **sans chef de service** (tout échelon au-dessus de la division est le super
+administrateur — voir `docs/refonte_super_admin.md`) :
 
-Rôles de dossier (donnés à un utilisateur ou à un service entier ; le plus élevé s'applique) :
+- **ADMIN — super administrateur (niveau ROOT)** : gère la structure, **tous les comptes** (y compris les
+  chefs de division), assure **l'intérim des divisions vacantes**, consulte l'audit et l'historique complet,
+  voit le tableau de bord par service. Il est le seul à détenir des **mots de passe de dossier** :
+  après déverrouillage (423 → saisie du secret), il consulte en lecture seule toute unité, et il gère
+  directement les divisions sans chef. Il ne peut pas être membre d'une division.
+- **Chef de division (titre d'agent `CHEF_DIVISION`, niveau DIVISION)** : gérant de sa division — crée ses
+  dossiers et sous-dossiers, définit le dictionnaire des rôles, classe les fichiers, traite les demandes
+  d'accès et les exceptions ponctuelles, crée les comptes des agents de sa division. Lecture et écriture
+  de tous les fichiers de sa division.
+- **Agent (niveau AGENT)** : dépose des fichiers dans les dossiers de sa division (il en devient AUTEUR),
+  voit les fichiers qui partagent un **rôle de division** avec lui, commente, demande un accès ponctuel
+  (`demande_acces`). Hors de sa division : 404 ; rôle insuffisant : 403 ; unité verrouillée : 423.
 
-| | LECTEUR | CONTRIBUTEUR | GESTIONNAIRE_DE_CONTENU |
-|---|---|---|---|
-| Voir la liste, l'historique des versions | oui | oui | oui |
-| Aperçu, téléchargement (toute version) | oui | oui | oui |
-| Interroger le chatbot sur le dossier | oui | oui | oui |
-| Ajouter un fichier, une nouvelle version | non | oui | oui |
-| Modifier le titre et les cases tableaux/images | non | oui | oui |
-| Supprimer un fichier ou une version | non | non | oui |
+Rôles effectifs sur un fichier (recalculés à chaque requête, matrice `MATRICE` de `core/acces.py`) :
 
-Hors de ses dossiers : 404 ; rôle insuffisant : 403. Détails dans `docs/architecture.md`.
+| | LECTEUR | AUTEUR | GERANT (chef de division) | SUPERIEUR (super admin, déverrouillé) |
+|---|---|---|---|---|
+| Voir, aperçu, téléchargement, chat, commenter | oui | oui | oui | oui |
+| Ajouter un fichier / une version, modifier titre et cases | non | oui | oui | non |
+| Corbeille, restauration | non | oui | oui | non |
+| Purge définitive, rôles du fichier | non | non | oui | non |
+
+Dossiers et sous-dossiers : visibles de tous les agents de la division (ils n'ont pas de rôle) ;
+renommer/déplacer : créateur ou gérant. La traçabilité complète est dans `historique_modification`
+(en ajout seul, chaîné par hash, vérifiable via `/api/historique/verification`).

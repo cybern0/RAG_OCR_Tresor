@@ -20,8 +20,6 @@ INSERT INTO agent (matricule, nom, prenom, fonction, service_id, division_id, ti
 SELECT v.mat, v.nom, v.prenom, v.fonction, s.id, dv.id, v.titre
 FROM (VALUES
   ('DEMO-001', 'Demo', 'Admin',   'Super administrateur', NULL,         NULL,          NULL),
-  ('DEMO-010', 'Demo', 'ChefA',   'Chef de service',      'DEMO-SRV-A', NULL,          'CHEF_SERVICE'),
-  ('DEMO-011', 'Demo', 'ChefB',   'Chef de service',      'DEMO-SRV-B', NULL,          'CHEF_SERVICE'),
   ('DEMO-020', 'Demo', 'ChefA1',  'Chef de division',     'DEMO-SRV-A', 'DEMO-DIV-A1', 'CHEF_DIVISION'),
   ('DEMO-021', 'Demo', 'ChefA2',  'Chef de division',     'DEMO-SRV-A', 'DEMO-DIV-A2', 'CHEF_DIVISION'),
   ('DEMO-022', 'Demo', 'ChefB1',  'Chef de division',     'DEMO-SRV-B', 'DEMO-DIV-B1', 'CHEF_DIVISION'),

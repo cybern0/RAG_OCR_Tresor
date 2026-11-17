@@ -21,6 +21,7 @@ from app.api.routes import (
     chat,
     classement,
     commentaires,
+    demandes,
     documents,
     dossiers,
     health,
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
         securite,
         historique,
         notifications,
+        demandes,
         tableau_de_bord,
     ):
         api.include_router(module.router, prefix=prefix)

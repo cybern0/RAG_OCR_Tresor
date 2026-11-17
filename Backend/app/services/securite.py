@@ -1,9 +1,9 @@
-"""Mots de passe de dossier (unités) : définition, réinitialisation hiérarchique, déverrouillage temporaire.
+"""Mots de passe de dossier (unités) : définition, déverrouillage temporaire.
 
-Un secret = un couple (unité, administrateur supérieur). Une division en a un pour le chef de son service et pour chaque super administrateur ;
-un service en a un pour chaque super administrateur. Le chef de division n'en a pas : sa division ne contient pas de dossier protégé.
-C'est une ré-authentification (verrou applicatif), pas un chiffrement : le supérieur direct peut réinitialiser le secret de son subordonné,
-mais l'opération est tracée, notifiée, et ferme ses déverrouillages.
+Un secret = un couple (unité, super administrateur). Une division et un service en ont un pour chaque super administrateur ;
+le chef de division n'en a pas : sa division ne contient pas de dossier protégé. Il n'y a plus de chef de service :
+plus de réinitialisation hiérarchique (aucun échelon supérieur au super administrateur), le mot de passe de dossier
+est strictement personnel. C'est une ré-authentification (verrou applicatif), pas un chiffrement.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -13,14 +13,13 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.core.acces import chef_service_actif, est_chef_nominal, est_membre
-from app.core.permissions import NIVEAU_ROOT, NIVEAU_SERVICE, Principal
+from app.core.acces import est_chef_nominal, est_membre
+from app.core.permissions import NIVEAU_ROOT, Principal
 from app.core.security import hash_password, login_throttle, verify_password
 from app.db.metier import Deverrouillage, Division, SecretUnite, Service, User
-from app.schemas.securite import DelegationOut, DeverrouillageOut, SecretIn, UniteSecretOut
+from app.schemas.securite import DeverrouillageOut, SecretIn, UniteSecretOut
 from app.services.audit import log_action
 from app.services.historique import ecrire_historique
-from app.services.notifications import notifier, users_de_agent
 
 
 def _maintenant() -> datetime:
@@ -45,13 +44,8 @@ def _perimetre(unite: Service | Division) -> dict:
 
 
 def _eligible(db: Session, user: User, unite: Service | Division) -> bool:
-    """Un compte a-t-il un mot de passe de dossier sur cette unité ? Super administrateur partout ; chef de service sur les divisions de son service."""
-    if user.role.code == "ADMIN":
-        return True
-    agent = user.agent
-    if isinstance(unite, Division) and agent is not None and agent.actif and agent.titre == "CHEF_SERVICE":
-        return agent.service_id == unite.service_id
-    return False
+    """Un compte a-t-il un mot de passe de dossier sur cette unité ? Seuls les super administrateurs en ont (sur toutes les unités)."""
+    return user.role.code == "ADMIN"
 
 
 def _secret(db: Session, type_unite: str, unite_id: int, user_id: int) -> SecretUnite | None:
@@ -64,15 +58,11 @@ def _fermer_deverrouillages(db: Session, secret_id: int) -> None:
 
 
 def lister_unites(db: Session, principal: Principal) -> list[UniteSecretOut]:
-    """Unités sur lesquelles le compte peut (ou doit) avoir un mot de passe de dossier."""
-    if principal.niveau == NIVEAU_ROOT:
-        services = db.scalars(select(Service).order_by(Service.nom)).all()
-        divisions = db.scalars(select(Division).order_by(Division.nom)).all()
-    elif principal.niveau == NIVEAU_SERVICE:
-        services = []
-        divisions = db.scalars(select(Division).where(Division.service_id == principal.service_id).order_by(Division.nom)).all()
-    else:
+    """Unités sur lesquelles le compte peut (ou doit) avoir un mot de passe de dossier : toutes, pour le super administrateur."""
+    if principal.niveau != NIVEAU_ROOT:
         return []
+    services = db.scalars(select(Service).order_by(Service.nom)).all()
+    divisions = db.scalars(select(Division).order_by(Division.nom)).all()
     noms_service = {s.id: s.nom for s in db.scalars(select(Service))}
     secrets = {(s.service_id, s.division_id): s for s in db.scalars(select(SecretUnite).where(SecretUnite.admin_user_id == principal.user.id))}
     now = _maintenant()
@@ -104,38 +94,15 @@ def lister_unites(db: Session, principal: Principal) -> list[UniteSecretOut]:
     return sortie
 
 
-def lister_delegations(db: Session, principal: Principal) -> list[DelegationOut]:
-    """Super administrateur : secrets des chefs de service sur les divisions de leur service (pour les réinitialiser)."""
-    if principal.niveau != NIVEAU_ROOT:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Réservé au super administrateur.")
-    sortie = []
-    noms_service = {s.id: s.nom for s in db.scalars(select(Service))}
-    for d in db.scalars(select(Division).order_by(Division.nom)):
-        chef = chef_service_actif(db, d.service_id)
-        compte = db.scalars(select(User).where(User.agent_id == chef.id)).first() if chef else None
-        defini = compte is not None and _secret(db, "division", d.id, compte.id) is not None
-        sortie.append(DelegationOut(
-            division_id=d.id, division_nom=d.nom, service_nom=noms_service.get(d.service_id, ""),
-            titulaire_user_id=compte.id if compte else None, titulaire_nom=f"{chef.prenom} {chef.nom}" if chef and compte else None,
-            secret_defini=defini,
-        ))
-    return sortie
-
-
 def definir_secret(db: Session, actor: Principal, data: SecretIn, ip: str | None) -> None:
+    """Définit ou change SON mot de passe de dossier ; l'ancien est exigé pour changer, et l'opération ferme les déverrouillages."""
     unite = _unite(db, data.type, data.unite_id)
-    cible_id = data.utilisateur_cible_id or actor.user.id
-    cible = db.get(User, cible_id)
-    if cible is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Utilisateur introuvable.")
+    cible = actor.user
     if not _eligible(db, cible, unite):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cette unité n'a pas de mot de passe de dossier pour ce compte.")
-    reinit = cible.id != actor.user.id
-    if reinit and not (actor.niveau == NIVEAU_ROOT and cible.role.code != "ADMIN"):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul un supérieur hiérarchique réinitialise le mot de passe de dossier d'un subordonné.")
     existant = _secret(db, data.type, data.unite_id, cible.id)
-    if existant is not None and not reinit:
-        cle = f"secret|{actor.user.id}|{data.type}{data.unite_id}"
+    if existant is not None:
+        cle = f"secret|{cible.id}|{data.type}{data.unite_id}"
         if login_throttle.is_blocked(cle):
             raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de tentatives. Réessayer dans quelques minutes.")
         if not verify_password(data.ancien_mot_de_passe or "", existant.secret_hash):
@@ -154,16 +121,13 @@ def definir_secret(db: Session, actor: Principal, data: SecretIn, ip: str | None
         action = "secret_defini"
     else:
         existant.secret_hash, existant.modifie_par, existant.modifie_le = nouveau_hash, actor.user.id, _maintenant()
-        action = "secret_reinitialise" if reinit else "secret_modifie"
+        action = "secret_modifie"
     db.flush()
     _fermer_deverrouillages(db, existant.id)
     ecrire_historique(
         db, acteur=actor.user, cible_type="unite", cible_id=unite.id, action=action,
         apres={"unite": data.type, "nom": unite.nom}, concerne_user_id=cible.id, **_perimetre(unite),
     )
-    if reinit:
-        notifier(db, [cible.id], "secret_reinitialise", f"Votre mot de passe de dossier « {unite.nom} » a été réinitialisé par un supérieur.",
-                 reference_type="unite", reference_id=unite.id)
     db.commit()
 
 

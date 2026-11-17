@@ -2,8 +2,9 @@
 --   psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/02_donnees_reference.sql
 --
 -- Rôles GLOBAUX : ADMIN (super administrateur, niveau ROOT) et UTILISATEUR (tout autre compte).
--- Le niveau SERVICE / DIVISION se déduit du TITRE de l'agent (CHEF_SERVICE / CHEF_DIVISION) : il ajoute, en code, les permissions
--- utilisateur.* limitées à son périmètre (voir Backend/app/core/permissions.py). Il n'y a donc qu'une seule source de vérité : le titre.
+-- Le niveau DIVISION se déduit du TITRE de l'agent (CHEF_DIVISION) : il ajoute, en code, les permissions
+-- utilisateur.* limitées à sa division (voir Backend/app/core/permissions.py). Il n'y a qu'une seule source de vérité : le titre.
+-- Il n'y a plus de chef de service : tout échelon au-dessus de la division est le super administrateur.
 
 SET search_path TO rag_sys, public;
 

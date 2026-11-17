@@ -38,7 +38,7 @@ export function Component() {
   const qc = useQueryClient()
   const location = useLocation()
   const [tab, setTab] = useState<'roles' | 'classement'>('roles')
-  const peutChoisir = user?.niveau === 'ROOT' || user?.niveau === 'SERVICE'
+  const peutChoisir = user?.niveau === 'ROOT'
   const divisions = useQuery({ queryKey: ['divisions'], queryFn: listDivisions, enabled: peutChoisir })
   const [choix, setChoix] = useState<number | null>(null)
   const [libelle, setLibelle] = useState('')

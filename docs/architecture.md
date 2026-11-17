@@ -1,5 +1,12 @@
 # Architecture
 
+> **Note (novembre 2026)** : ce document décrit un modèle antérieur de l'application (rôles de dossier
+> `dossier_membre` / `dossier_service`, aujourd'hui abandonnés). Le modèle actuel — GED hiérarchique
+> Direction → Service → Division avec rôles de division, chefs de division, demandes d'accès et mots de
+> passe de dossier — est décrit dans `docs/paln.md` et, comme code, dans `Backend/app/core/acces.py`
+> (la source de vérité des droits). La suppression du poste « chef de service » et le regroupement de
+> toutes ses responsabilités sur le super administrateur sont documentés dans `docs/refonte_super_admin.md`.
+
 ## Rôles et droits
 Deux niveaux (tables `_role`, `permission`, `role_permission` pour le global ; `dossier_membre`, `dossier_service` pour les dossiers).
 

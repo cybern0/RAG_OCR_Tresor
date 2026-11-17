@@ -38,7 +38,7 @@ export interface Me extends UserOut {
   division_id: number | null
   division_nom: string | null
   titre: string | null
-  niveau: 'ROOT' | 'SERVICE' | 'DIVISION' | 'AGENT'
+  niveau: 'ROOT' | 'DIVISION' | 'AGENT'
 }
 
 export interface UserCreate {

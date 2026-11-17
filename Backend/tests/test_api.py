@@ -127,7 +127,7 @@ def mk_dossier(client, h, nom, **extra):
 
 
 def secret_et_deverrouillage(client, h, type_unite, unite_id):
-    """Définit le mot de passe de dossier puis déverrouille l'unité (super administrateur ou chef de service)."""
+    """Définit le mot de passe de dossier puis déverrouille l'unité (super administrateur)."""
     r = client.put("/securite/secrets", json={"type": type_unite, "unite_id": unite_id, "nouveau_mot_de_passe": SECRET}, headers=h)
     assert r.status_code in (204, 400), r.text
     r = client.post("/securite/deverrouiller", json={"type": type_unite, "unite_id": unite_id, "mot_de_passe": SECRET}, headers=h)
@@ -154,7 +154,6 @@ def world(client):
         assert r.status_code == 201, r.text
         div[k] = r.json()
     out["svc"], out["div"] = svc, div
-    out["cs1"] = mk_user(client, h, mk_agent(client, h, "cs1", tag, svc["s1"]["id"], titre="CHEF_SERVICE"), "cs1", tag)
     out["cd1"] = mk_user(client, h, mk_agent(client, h, "cd1", tag, svc["s1"]["id"], div["v1"]["id"], "CHEF_DIVISION"), "cd1", tag)
     out["cd3"] = mk_user(client, h, mk_agent(client, h, "cd3", tag, svc["s2"]["id"], div["v3"]["id"], "CHEF_DIVISION"), "cd3", tag)
     for key, (s, v) in {"a": ("s1", "v1"), "lect": ("s1", "v1"), "mix": ("s1", "v1"), "b": ("s2", "v3")}.items():
@@ -234,7 +233,7 @@ def test_connexion_et_me(client, world):
     assert "chat.utiliser" in me["permissions"] and me["unites_protegees"] is False and me["divisions_gerees"] == []
     chef = client.get("/auth/me", headers=world["cd1"]["h"]).json()
     assert chef["niveau"] == "DIVISION" and "utilisateur.creer" in chef["permissions"] and [d["id"] for d in chef["divisions_gerees"]] == [world["div"]["v1"]["id"]]
-    assert client.get("/auth/me", headers=world["cs1"]["h"]).json()["unites_protegees"] is True
+    assert client.get("/auth/me", headers=world["admin"]).json()["unites_protegees"] is True
     assert client.get("/auth/me", headers=world["admin"]).json()["niveau"] == "ROOT"
     assert client.get("/auth/me").status_code == 401
     assert client.get("/auth/me", headers={"Authorization": "Bearer faux.jeton"}).status_code == 401
