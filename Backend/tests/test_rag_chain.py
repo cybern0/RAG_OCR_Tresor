@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from app.prompts.templates import NO_ANSWER, format_context
 from app.services.chat import rag_chain
 from app.services.chat.streaming import event_stream, sse
+from app.services.chat import history
 from app.services.chat.history import MASQUE, filter_visible
 from app.services.retrieval.similarity_search import RetrievedChunk, dynamic_k
 
@@ -58,16 +59,18 @@ def test_top_k_dynamique_croit_avec_la_taille_des_fichiers_et_reste_borne():
     assert dynamic_k([4, 400, 900, 900, 900], 3, 8) == 8
 
 
-def test_historique_masque_les_reponses_d_un_dossier_perdu():
+def test_historique_masque_les_reponses_d_un_fichier_perdu(monkeypatch):
     def msg(i, who, sources):
         return SimpleNamespace(id=i, emetteur=who, contenu=f"texte {i}", sources=sources)
 
     rows = [msg(1, "utilisateur", []), msg(2, "assistant", [{"document_id": 1, "dossier_id": 7}]),
             msg(3, "assistant", [{"document_id": 2, "dossier_id": 8}]), msg(4, "assistant", [])]
-    out = filter_visible(None, rows, {7})
+    monkeypatch.setattr(history, "ids_documents_accessibles", lambda db, principal, ids: {1} & set(ids))
+    out = filter_visible(None, rows, None)
     assert [v.masque for v in out] == [False, False, True, False]
     assert out[2].contenu == MASQUE and out[2].sources == [] and out[1].contenu == "texte 2"
-    assert all(v.masque for v in filter_visible(None, rows[1:3], set()) if v.message.sources)
+    monkeypatch.setattr(history, "ids_documents_accessibles", lambda db, principal, ids: set())
+    assert all(v.masque for v in filter_visible(None, rows[1:3], None) if v.message.sources)
 
 
 def test_flux_sse_sans_contexte_ne_declenche_pas_d_erreur_et_garde_l_ordre(monkeypatch):

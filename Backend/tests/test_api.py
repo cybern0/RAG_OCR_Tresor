@@ -536,7 +536,9 @@ def test_sources_portent_version_et_date_et_filtre_derniere_version(client, worl
     assert client.get("/chat/preferences", headers=world["b"]["h"]).json()["derniere_version_seulement"] is False
     client.put("/chat/preferences", headers=a, json={"derniere_version_seulement": False})
     # si la version 2 est supprimée, la 1 redevient la version qui fait foi
-    client.delete(f"/documents/{doc['id']}/versions/2", headers=a)
+    # purger une version est réservé au gérant (chef de la division), pas à l'auteur
+    assert client.delete(f"/documents/{doc['id']}/versions/2", headers=a).status_code == 403
+    assert client.delete(f"/documents/{doc['id']}/versions/2", headers=world["cd1"]["h"]).status_code == 204
     client.put("/chat/preferences", headers=a, json={"derniere_version_seulement": True})
     assert mine(ask(client, a, q)) == [1]
     client.put("/chat/preferences", headers=a, json={"derniere_version_seulement": False})
