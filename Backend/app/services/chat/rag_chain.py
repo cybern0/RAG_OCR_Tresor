@@ -1,7 +1,7 @@
 """Chaîne RAG : reformulation de la question de suivi, recherche des chunks, construction du prompt, appel du LLM.
 
 Consigne : répondre en français, uniquement à partir du contexte, sinon dire « je ne sais pas ».
-Droits : la recherche ne porte que sur les dossiers que l'utilisateur peut interroger (core/permissions.py) ; l'historique
+Droits : la recherche ne porte que sur les fichiers que l'utilisateur peut lire (core/acces.py) ; l'historique
 et la mémoire fournis à la chaîne sont déjà filtrés par ses accès (services/chat/history.py et memoire.py).
 Les passages portent leur numéro de version et sa date : le LLM peut ainsi citer l'historique des versions.
 """
@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.clients.ollama import get_llm
 from app.config import get_settings
-from app.core.permissions import Principal, ids_dossiers_interrogeables
+from app.core.acces import condition_acces_fichiers
+from app.core.permissions import Principal
 from app.prompts.templates import CONDENSE_PROMPT, NO_ANSWER, QA_PROMPT, format_context
 from app.services.ingestion.embedding import embed_query
 from app.services.retrieval.similarity_search import RetrievedChunk, search_chunks
@@ -90,12 +91,9 @@ def prepare(
     derniere_version_seulement: bool = False,
 ) -> Prepared:
     historique, memoire = historique or [], memoire or []
-    dossier_ids = ids_dossiers_interrogeables(db, principal)
-    if not dossier_ids:
-        return Prepared(question, [], historique, memoire)
     standalone = condense_question(historique, question)
     chunks = search_chunks(
-        db, embed_query(standalone), standalone, dossier_ids,
+        db, embed_query(standalone), standalone, condition_acces_fichiers(db, principal),
         derniere_version_seulement=derniere_version_seulement,
     )
     chunks = _within_budget(chunks, get_settings().context_max_chars)

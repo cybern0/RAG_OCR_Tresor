@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     secret_key: str = ""
     token_ttl_minutes: int = 480
     cors_origins: str = "http://localhost:5173"
+    # Durée d'un déverrouillage d'unité (mot de passe de dossier) : ré-authentification courte
+    deverrouillage_minutes: int = 15
 
     # Interface web (SPA) : l'API vit sous ce préfixe, ce qui libère tous les autres chemins pour le routage côté navigateur.
     api_prefix: str = "/api"

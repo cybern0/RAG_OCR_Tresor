@@ -38,7 +38,7 @@ class Document(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     dossier_id: Mapped[int] = mapped_column(ForeignKey("dossier.id"))
-    division_id: Mapped[int | None] = mapped_column(ForeignKey("division.id", ondelete="SET NULL"))
+    division_id: Mapped[int] = mapped_column(ForeignKey("division.id"))
     titre: Mapped[str] = mapped_column(String(250))
     categorie_id: Mapped[int | None] = mapped_column(ForeignKey("categorie.id", ondelete="SET NULL"))
     type_document_id: Mapped[int | None] = mapped_column(ForeignKey("type_document.id", ondelete="SET NULL"))

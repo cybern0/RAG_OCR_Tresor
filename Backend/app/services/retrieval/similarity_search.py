@@ -1,8 +1,8 @@
-"""Recherche des chunks les plus proches dans pgvector, filtrée par DOSSIERS accessibles.
+"""Recherche des chunks les plus proches dans pgvector, filtrée par les FICHIERS que le compte peut lire.
 
-Isolation : un seul index partagé ; chaque requête est limitée aux documents des dossiers que l'appelant a le droit
-d'interroger (liste calculée par core/permissions.py à chaque requête). C'est le point de sécurité principal du RAG :
-liste vide = aucun résultat, jamais « tous les dossiers ».
+Isolation : un seul index partagé ; chaque requête est limitée par la condition SQL core.acces.condition_acces_fichiers (rôles
+de la division, auteur, exceptions valides, divisions déverrouillées), recalculée à chaque requête. C'est le point de sécurité
+principal du RAG : sans condition, aucun résultat. Les fichiers en corbeille et les dossiers archivés ne sont jamais interrogés.
 
 Similarité : produit scalaire via l'opérateur <#> (qui renvoie le produit scalaire NÉGATIF, donc ORDER BY croissant),
 servi par l'index HNSW vector_ip_ops. Les embeddings étant tous normalisés (norme 1), le produit scalaire donne
@@ -24,10 +24,11 @@ import statistics
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import func, select, text
+from sqlalchemy import ColumnElement, func, select, text
 from sqlalchemy.orm import Session, aliased
 
 from app.config import get_settings
+from app.db.metier import Dossier
 from app.db.vecteur import Chunk, Document, DocumentVersion
 from app.services.ingestion.embedding import assert_unit
 
@@ -61,7 +62,7 @@ def dynamic_k(tailles: list[int], k_min: int, k_max: int) -> int:
     return max(k_min, min(k_max, k))
 
 
-def _base(dossier_ids: list[int], derniere_version_seulement: bool):
+def _base(acces: ColumnElement[bool], derniere_version_seulement: bool):
     latest = aliased(DocumentVersion)
     # numéro de la version prête la plus récente du fichier
     last_ready = (
@@ -78,7 +79,10 @@ def _base(dossier_ids: list[int], derniere_version_seulement: bool):
         )
         .join(Document, Document.id == Chunk.document_id)
         .join(DocumentVersion, DocumentVersion.id == Chunk.document_version_id)
-        .where(DocumentVersion.statut == "ready", Document.dossier_id.in_(dossier_ids))
+        .join(Dossier, Dossier.id == Document.dossier_id)
+        .where(
+            DocumentVersion.statut == "ready", acces, Document.corbeille_le.is_(None), Dossier.archive.is_(False),
+        )
     )
     if derniere_version_seulement:
         stmt = stmt.where(DocumentVersion.numero == last_ready)
@@ -89,13 +93,13 @@ def search_chunks(
     db: Session,
     query_embedding: list[float],
     query_text: str,
-    dossier_ids: list[int],
+    acces: ColumnElement[bool] | None,
     k: int | None = None,
     document_id: int | None = None,
     derniere_version_seulement: bool = False,
 ) -> list[RetrievedChunk]:
-    """dossier_ids : dossiers autorisés ; liste vide : aucun résultat. k=None : top-k dynamique."""
-    if not dossier_ids:
+    """acces : condition SQL des fichiers autorisés (core.acces.condition_acces_fichiers) ; None : aucun résultat. k=None : top-k dynamique."""
+    if acces is None:
         return []
     assert_unit(query_embedding, "embedding de la question")  # <#> ne vaut le cosinus que si la norme est 1
     settings = get_settings()
@@ -104,7 +108,7 @@ def search_chunks(
 
     db.execute(text("SET LOCAL hnsw.ef_search = 100"))  # meilleur rappel quand le filtre par dossier est sélectif
 
-    vec_stmt = _base(dossier_ids, derniere_version_seulement).order_by(
+    vec_stmt = _base(acces, derniere_version_seulement).order_by(
         Chunk.embedding.max_inner_product(query_embedding)
     ).limit(pool)
     if document_id is not None:
@@ -116,7 +120,7 @@ def search_chunks(
     if words:
         tsquery = func.to_tsquery("french", " | ".join(words))  # mots issus de [^\W_] : sans caractère spécial
         ft_stmt = (
-            _base(dossier_ids, derniere_version_seulement)
+            _base(acces, derniere_version_seulement)
             .where(Chunk.contenu_tsv.op("@@")(tsquery))
             .order_by(func.ts_rank_cd(Chunk.contenu_tsv, tsquery).desc())
             .limit(pool)

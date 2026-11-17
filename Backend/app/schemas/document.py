@@ -14,6 +14,17 @@ Statut = Literal["pending", "processing", "ready", "error"]
 ApercuMode = Literal["pdf", "image", "texte", "csv", "pdf_converti", "aucun"]
 
 
+class RoleBrief(BaseModel):
+    id: int
+    code: str
+    libelle: str
+
+
+class RolesDocumentIn(BaseModel):
+    role_ids: list[int] = Field(max_length=50)
+    motif: str | None = Field(default=None, max_length=500)
+
+
 class VersionOut(BaseModel):
     numero: int
     nom_fichier: str
@@ -34,6 +45,7 @@ class DocumentOut(BaseModel):
     titre: str
     dossier_id: int
     dossier_nom: str
+    division_id: int
     has_tabular: bool
     has_image: bool
     # cases imposées par le type de la version la plus récente (cochées et non modifiables dans l'interface)
@@ -41,7 +53,10 @@ class DocumentOut(BaseModel):
     images_imposees: bool
     nb_versions: int
     version: VersionOut  # la version la plus récente (tous statuts), pour suivre l'indexation
-    mon_role: str
+    mon_role: str  # GERANT | AUTEUR | LECTEUR | SUPERIEUR
+    droits: list[str] = []  # actions permises par ce rôle (voir core/acces.py)
+    roles: list[RoleBrief] = []  # rôles de la division qui donnent accès au fichier
+    a_classer: bool = False  # aucun rôle : accès refusé par défaut, seul le gérant (et l'auteur) le voit
     cree_par_nom: str | None
     cree_le: datetime
     modifie_le: datetime
@@ -61,28 +76,6 @@ class DocumentPageOut(BaseModel):
     total: int
     page: int
     taille: int
-
-
-class DocumentPartageIn(BaseModel):
-    role: str
-    user_id: int | None = None
-    service_id: int | None = None
-    expire_le: datetime | None = None
-    is_anonymous: bool = True
-    token: str | None = None
-
-
-class DocumentPartageOut(BaseModel):
-    id: int
-    document_id: int
-    user_id: int | None = None
-    service_id: int | None = None
-    role: str
-    expire_le: datetime | None = None
-    is_anonymous: bool = True
-    token_hash: str | None = None
-    token: str | None = None
-    cree_le: datetime
 
 
 class DocumentLienPartageIn(BaseModel):

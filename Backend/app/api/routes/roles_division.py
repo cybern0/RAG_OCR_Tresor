@@ -1,83 +1,47 @@
-"""Routes de gestion des rôles de division."""
+"""Dictionnaire de rôles d'une division et rôles d'un utilisateur."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import client_ip, get_db, require
-from app.core.permissions import Principal, STRUCTURE_GERER
-from app.db.metier import RoleDivision, UserRoleDivision
-from app.schemas.role_division import RoleDivisionIn, RoleDivisionOut, RoleDivisionUpdate, UserRoleAssignIn
+from app.api.deps import get_db, get_principal
+from app.core.permissions import Principal
+from app.schemas.roles_division import RoleDivisionIn, RoleDivisionOut, RoleDivisionUpdate
+from app.schemas.user import RoleDivisionBrief, RolesUtilisateurIn
+from app.services import roles_division as svc
+from app.services.users import crud as users_crud
 
-router = APIRouter(prefix="/divisions", tags=["roles_division"])
-_admin = require(STRUCTURE_GERER)
-
-
-@router.get("/{division_id}/roles", response_model=list[RoleDivisionOut])
-def list_roles(division_id: int, _: Principal = Depends(_admin), db: Session = Depends(get_db)):
-    return db.query(RoleDivision).filter(RoleDivision.division_id == division_id).order_by(RoleDivision.libelle.asc()).all()
+router = APIRouter(tags=["roles"])
 
 
-@router.post("/{division_id}/roles", response_model=RoleDivisionOut, status_code=201)
-def create_role(
-    division_id: int,
-    data: RoleDivisionIn,
-    request: Request,
-    actor: Principal = Depends(_admin),
-    db: Session = Depends(get_db),
-):
-    role = RoleDivision(division_id=division_id, code=data.code.strip(), libelle=data.libelle.strip())
-    db.add(role)
-    db.commit()
-    db.refresh(role)
-    return role
+@router.get("/divisions/{division_id}/roles", response_model=list[RoleDivisionOut])
+def lister(division_id: int, actifs_seulement: bool = False, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    return svc.lister_roles(db, principal, division_id, inclure_inactifs=not actifs_seulement)
 
 
-@router.patch("/{division_id}/roles/{role_id}", response_model=RoleDivisionOut)
-def patch_role(
-    division_id: int,
-    role_id: int,
-    data: RoleDivisionUpdate,
-    request: Request,
-    actor: Principal = Depends(_admin),
-    db: Session = Depends(get_db),
-):
-    role = db.get(RoleDivision, role_id)
-    if role is None or role.division_id != division_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Rôle introuvable.")
-    if data.code is not None:
-        role.code = data.code.strip()
-    if data.libelle is not None:
-        role.libelle = data.libelle.strip()
-    if data.actif is not None:
-        role.actif = data.actif
-    db.commit()
-    db.refresh(role)
-    return role
+@router.post("/divisions/{division_id}/roles", response_model=RoleDivisionOut, status_code=201)
+def creer(division_id: int, data: RoleDivisionIn, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    return svc.creer_role(db, principal, division_id, data)
 
 
-@router.delete("/{division_id}/roles/{role_id}", status_code=204)
-def delete_role(
-    division_id: int,
-    role_id: int,
-    actor: Principal = Depends(_admin),
-    db: Session = Depends(get_db),
-):
-    role = db.get(RoleDivision, role_id)
-    if role is None or role.division_id != division_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Rôle introuvable.")
-    db.delete(role)
-    db.commit()
+@router.patch("/divisions/{division_id}/roles/{role_id}", response_model=RoleDivisionOut)
+def modifier(division_id: int, role_id: int, data: RoleDivisionUpdate, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    return svc.modifier_role(db, principal, division_id, role_id, data)
 
 
-@router.put("/users/{user_id}/roles")
-def assign_roles_to_user(
-    user_id: int,
-    data: UserRoleAssignIn,
-    actor: Principal = Depends(_admin),
-    db: Session = Depends(get_db),
-):
-    db.query(UserRoleDivision).filter(UserRoleDivision.user_id == user_id).delete()
-    for role_id in data.role_ids:
-        db.add(UserRoleDivision(user_id=user_id, role_division_id=role_id))
-    db.commit()
-    return {"user_id": user_id, "role_ids": data.role_ids}
+@router.delete("/divisions/{division_id}/roles/{role_id}", status_code=204)
+def supprimer(division_id: int, role_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    svc.supprimer_role(db, principal, division_id, role_id)
+    return Response(status_code=204)
+
+
+@router.get("/users/{user_id}/roles", response_model=list[RoleDivisionBrief])
+def roles_utilisateur(user_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    user = users_crud.get_user_visible(db, principal, user_id)
+    return [RoleDivisionBrief(id=r.id, code=r.code, libelle=r.libelle) for r in svc.roles_de_user(db, user.id)]
+
+
+@router.put("/users/{user_id}/roles", response_model=list[RoleDivisionBrief])
+def definir_roles(user_id: int, data: RolesUtilisateurIn, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    user = users_crud.get_user_visible(db, principal, user_id)
+    roles = svc.definir_roles_utilisateur(db, principal, user, data.role_ids, data.motif)
+    return [RoleDivisionBrief(id=r.id, code=r.code, libelle=r.libelle) for r in roles]

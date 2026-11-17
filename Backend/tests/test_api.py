@@ -1,11 +1,10 @@
 """Tests d'intégration de l'API contre une vraie base PostgreSQL + pgvector (voir conftest.py).
 
-Ils vérifient surtout :
-- l'isolation par DOSSIER (liste, aperçu, téléchargement, chat) : 404 hors de ses dossiers, 403 si le rôle ne suffit pas ;
-- la matrice des rôles LECTEUR / CONTRIBUTEUR / GESTIONNAIRE_DE_CONTENU et l'accès par service ;
-- l'effet immédiat d'un retrait d'accès, y compris sur l'historique et la mémoire du chat ;
+Ils vérifient surtout, sur la GED hiérarchique (voir test_hierarchie.py pour les règles d'accès) :
+- les comptes et leur sécurité (jetons, verrouillage, périmètre de création) ;
 - les versions de fichiers (ajout sans suppression, historique daté, suppression) ;
-- la règle des cases « tableaux / images », le top-k dynamique, la sécurité de l'aperçu et du téléchargement.
+- la règle des cases « tableaux / images », le top-k dynamique, la sécurité de l'aperçu et du téléchargement ;
+- le chat limité aux fichiers lisibles, l'historique, la mémoire, et l'effet immédiat d'un retrait de rôle.
 """
 
 import json
@@ -33,6 +32,7 @@ from app.main import app
 from .conftest import FakeEmbeddings
 
 PWD = "mot-de-passe-de-test-1"
+SECRET = "dossier-de-test-1"
 ADMIN = "admin_test"
 ANSWER = "Le délai est de 30 jours [1]."
 STANDALONE = "délai de paiement des factures"
@@ -95,59 +95,82 @@ def auth(client, username):
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
-def mk_service(client, h, direction_id, key, tag):
-    s = client.post("/structure/services", json={"direction_id": direction_id, "code": f"S{key}{tag}", "nom": f"Service {key} {tag}"}, headers=h)
-    assert s.status_code == 201, s.text
-    return s.json()
-
-
-def mk_user(client, h, service_id, key, tag):
-    ag = client.post("/structure/agents", json={"matricule": f"M{key}{tag}", "nom": "Nom", "prenom": key, "service_id": service_id}, headers=h)
+def mk_agent(client, h, key, tag, service_id, division_id=None, titre=None):
+    body = {"matricule": f"M{key}{tag}", "nom": "Nom", "prenom": key, "service_id": service_id, "division_id": division_id, "titre": titre}
+    ag = client.post("/structure/agents", json=body, headers=h)
     assert ag.status_code == 201, ag.text
+    return ag.json()
+
+
+def mk_user(client, h, agent, key, tag):
     name = f"user_{key}_{tag}"
-    u = client.post("/users", json={"nom_utilisateur": name, "mot_de_passe": PWD, "role": "UTILISATEUR", "agent_id": ag.json()["id"]}, headers=h)
+    u = client.post("/users", json={"nom_utilisateur": name, "mot_de_passe": PWD, "role": "UTILISATEUR", "agent_id": agent["id"]}, headers=h)
     assert u.status_code == 201, u.text
-    return {"agent": ag.json(), "user": u.json(), "name": name, "h": auth(client, name)}
+    return {"agent": agent, "user": u.json(), "name": name, "h": auth(client, name)}
 
 
-def mk_dossier(client, h, nom):
-    r = client.post("/dossiers", json={"nom": nom}, headers=h)
+def mk_role(client, h, division_id, code, libelle):
+    r = client.post(f"/divisions/{division_id}/roles", json={"code": code, "libelle": libelle}, headers=h)
     assert r.status_code == 201, r.text
     return r.json()
 
 
-def grant_service(client, h, dossier_id, service_id, role):
-    r = client.put(f"/dossiers/{dossier_id}/services/{service_id}", json={"role": role}, headers=h)
-    assert r.status_code == 204, r.text
+def set_roles(client, h, user_id, role_ids):
+    r = client.put(f"/users/{user_id}/roles", json={"role_ids": role_ids}, headers=h)
+    assert r.status_code == 200, r.text
 
 
-def grant_user(client, h, dossier_id, user_id, role):
-    r = client.put(f"/dossiers/{dossier_id}/membres/{user_id}", json={"role": role}, headers=h)
-    assert r.status_code == 204, r.text
+def mk_dossier(client, h, nom, **extra):
+    r = client.post("/dossiers", json={"nom": nom, **extra}, headers=h)
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def secret_et_deverrouillage(client, h, type_unite, unite_id):
+    """Définit le mot de passe de dossier puis déverrouille l'unité (super administrateur ou chef de service)."""
+    r = client.put("/securite/secrets", json={"type": type_unite, "unite_id": unite_id, "nouveau_mot_de_passe": SECRET}, headers=h)
+    assert r.status_code in (204, 400), r.text
+    r = client.post("/securite/deverrouiller", json={"type": type_unite, "unite_id": unite_id, "mot_de_passe": SECRET}, headers=h)
+    assert r.status_code == 200, r.text
 
 
 @pytest.fixture(scope="module")
 def world(client):
-    """Trois services (a, b, c) avec un utilisateur chacun ; quatre autres utilisateurs du service c qui n'ont de droits
-    que directs (lect, contrib, gest, mix). Dossiers : A (ouvert au service a), B (ouvert au service b) et R (roles directs)."""
+    """Une direction, deux services (s1, s2), trois divisions (v1 et v2 dans s1, v3 dans s2) avec leurs chefs.
+    Agents : a (v1, rôle COMPTA), lect (v1, COMPTA + AUDIT), mix (v1, rôle PUBLIC), b (v3, rôle RH).
+    Dossiers : A (racine de v1) et B (racine de v3)."""
     tag = uuid.uuid4().hex[:6]
     h = auth(client, ADMIN)
     d = client.post("/structure/directions", json={"code": f"D{tag}", "nom": "Direction test"}, headers=h).json()
     out = {"tag": tag, "admin": h, "dir": d}
-    svc = {k: mk_service(client, h, d["id"], k, tag) for k in ("a", "b", "c")}
-    out["svc"] = svc
-    out["a"] = {**mk_user(client, h, svc["a"]["id"], "a", tag), "service": svc["a"]}
-    out["b"] = {**mk_user(client, h, svc["b"]["id"], "b", tag), "service": svc["b"]}
-    for key in ("lect", "contrib", "gest", "mix"):
-        out[key] = mk_user(client, h, svc["c"]["id"], key, tag)
-    out["A"] = mk_dossier(client, h, f"Dossier A {tag}")
-    out["B"] = mk_dossier(client, h, f"Dossier B {tag}")
-    out["R"] = mk_dossier(client, h, f"Dossier R {tag}")
-    grant_service(client, h, out["A"]["id"], svc["a"]["id"], "GESTIONNAIRE_DE_CONTENU")
-    grant_service(client, h, out["B"]["id"], svc["b"]["id"], "GESTIONNAIRE_DE_CONTENU")
-    grant_user(client, h, out["R"]["id"], out["lect"]["user"]["id"], "LECTEUR")
-    grant_user(client, h, out["R"]["id"], out["contrib"]["user"]["id"], "CONTRIBUTEUR")
-    grant_user(client, h, out["R"]["id"], out["gest"]["user"]["id"], "GESTIONNAIRE_DE_CONTENU")
+    svc = {}
+    for k in ("s1", "s2"):
+        r = client.post("/structure/services", json={"direction_id": d["id"], "code": f"S{k}{tag}", "nom": f"Service {k} {tag}"}, headers=h)
+        assert r.status_code == 201, r.text
+        svc[k] = r.json()
+    div = {}
+    for k, s in (("v1", "s1"), ("v2", "s1"), ("v3", "s2")):
+        r = client.post("/structure/divisions", json={"service_id": svc[s]["id"], "nom": f"Division {k} {tag}", "code": f"{k}{tag}"}, headers=h)
+        assert r.status_code == 201, r.text
+        div[k] = r.json()
+    out["svc"], out["div"] = svc, div
+    out["cs1"] = mk_user(client, h, mk_agent(client, h, "cs1", tag, svc["s1"]["id"], titre="CHEF_SERVICE"), "cs1", tag)
+    out["cd1"] = mk_user(client, h, mk_agent(client, h, "cd1", tag, svc["s1"]["id"], div["v1"]["id"], "CHEF_DIVISION"), "cd1", tag)
+    out["cd3"] = mk_user(client, h, mk_agent(client, h, "cd3", tag, svc["s2"]["id"], div["v3"]["id"], "CHEF_DIVISION"), "cd3", tag)
+    for key, (s, v) in {"a": ("s1", "v1"), "lect": ("s1", "v1"), "mix": ("s1", "v1"), "b": ("s2", "v3")}.items():
+        agent = mk_agent(client, h, key, tag, svc[s]["id"], div[v]["id"])
+        out[key] = {**mk_user(client, out["cd1"]["h"] if v == "v1" else out["cd3"]["h"], agent, key, tag), "service": svc[s], "division": div[v]}
+    out["roles"] = {k: mk_role(client, out["cd1"]["h"], div["v1"]["id"], k, k.title()) for k in ("COMPTA", "AUDIT", "PUBLIC")}
+    out["roles"]["RH"] = mk_role(client, out["cd3"]["h"], div["v3"]["id"], "RH", "Rh")
+    R = out["roles"]
+    set_roles(client, out["cd1"]["h"], out["a"]["user"]["id"], [R["COMPTA"]["id"]])
+    set_roles(client, out["cd1"]["h"], out["lect"]["user"]["id"], [R["COMPTA"]["id"], R["AUDIT"]["id"]])
+    set_roles(client, out["cd1"]["h"], out["mix"]["user"]["id"], [R["PUBLIC"]["id"]])
+    set_roles(client, out["cd3"]["h"], out["b"]["user"]["id"], [R["RH"]["id"]])
+    for k in ("a", "lect", "mix", "b"):
+        out[k]["h"] = auth(client, out[k]["name"])
+    out["A"] = mk_dossier(client, out["a"]["h"], f"Dossier A {tag}")
+    out["B"] = mk_dossier(client, out["b"]["h"], f"Dossier B {tag}")
     return out
 
 
@@ -202,42 +225,34 @@ def conv_id(events) -> int:
     return json.loads(events["meta"][0])["conversation_id"]
 
 
-# --- connexion -------------------------------------------------------------------------------------------------
-
 def test_connexion_et_me(client, world):
     me = client.get("/auth/me", headers=world["a"]["h"]).json()
-    assert me["role"] == "UTILISATEUR" and me["service_id"] == world["a"]["service"]["id"]
-    # un UTILISATEUR n'a plus de droit propre sur les fichiers : tout vient de ses dossiers
-    assert "document.creer" not in me["permissions"] and "utilisateur.creer" not in me["permissions"]
-    assert "chat.utiliser" in me["permissions"] and "dossier.gerer" not in me["permissions"]
+    assert me["role"] == "UTILISATEUR" and me["niveau"] == "AGENT" and me["service_id"] == world["a"]["service"]["id"]
+    assert me["division_id"] == world["a"]["division"]["id"] and [r["code"] for r in me["roles_division"]] == ["COMPTA"]
+    # un agent n'administre rien : ni comptes, ni structure
+    assert "utilisateur.creer" not in me["permissions"] and "structure.gerer" not in me["permissions"]
+    assert "chat.utiliser" in me["permissions"] and me["unites_protegees"] is False and me["divisions_gerees"] == []
+    chef = client.get("/auth/me", headers=world["cd1"]["h"]).json()
+    assert chef["niveau"] == "DIVISION" and "utilisateur.creer" in chef["permissions"] and [d["id"] for d in chef["divisions_gerees"]] == [world["div"]["v1"]["id"]]
+    assert client.get("/auth/me", headers=world["cs1"]["h"]).json()["unites_protegees"] is True
+    assert client.get("/auth/me", headers=world["admin"]).json()["niveau"] == "ROOT"
     assert client.get("/auth/me").status_code == 401
     assert client.get("/auth/me", headers={"Authorization": "Bearer faux.jeton"}).status_code == 401
 
 
 def test_document_corbeille_soft_delete_et_restore(client, world):
-    h = world["admin"]
+    h = world["a"]["h"]  # l'auteur met son fichier à la corbeille et le restaure
     dossier_id = world["A"]["id"]
     doc = ready_doc(client, h, dossier_id, "Document de test corbeille")
     doc_id = doc["id"]
-
-    r = client.delete(f"/documents/{doc_id}", headers=h)
-    assert r.status_code == 204, r.text
-
-    r = client.get("/documents", headers=h, params={"dossier_id": dossier_id})
-    assert r.status_code == 200, r.text
-    assert doc_id not in [item["id"] for item in r.json()]
-
-    r = client.get("/documents", headers=h, params={"dossier_id": dossier_id, "corbeille": True})
-    assert r.status_code == 200, r.text
-    ids = [item["id"] for item in r.json()]
-    assert doc_id in ids
-
-    r = client.post(f"/documents/{doc_id}/restore", headers=h)
-    assert r.status_code == 204, r.text
-
-    r = client.get("/documents", headers=h, params={"dossier_id": dossier_id})
-    assert r.status_code == 200, r.text
-    assert doc_id in [item["id"] for item in r.json()]
+    assert client.delete(f"/documents/{doc_id}", headers=h).status_code == 204
+    assert doc_id not in [item["id"] for item in client.get("/documents", headers=h, params={"dossier_id": dossier_id}).json()]
+    assert doc_id in [item["id"] for item in client.get("/documents", headers=h, params={"dossier_id": dossier_id, "corbeille": True}).json()]
+    assert client.post(f"/documents/{doc_id}/restore", headers=h).status_code == 204
+    assert doc_id in [item["id"] for item in client.get("/documents", headers=h, params={"dossier_id": dossier_id}).json()]
+    # la purge définitive est réservée au chef de division : l'auteur reçoit 403, le chef 204
+    assert client.delete(f"/documents/{doc_id}", headers=h, params={"force": True}).status_code == 403
+    assert client.delete(f"/documents/{doc_id}", headers=world["cd1"]["h"], params={"force": True}).status_code == 204
 
 
 def test_mauvais_mot_de_passe_et_compte_verrouille(client, world):
@@ -275,8 +290,6 @@ def test_changement_de_mot_de_passe_invalide_les_anciens_jetons(client, world):
     world["b"]["h"] = auth(client, world["b"]["name"])
 
 
-# --- ce que l'UTILISATEUR n'a pas le droit de faire -----------------------------------------------------------
-
 def test_utilisateur_ne_peut_creer_ni_agent_ni_utilisateur_ni_structure(client, world):
     h, svc = world["a"]["h"], world["a"]["service"]["id"]
     tag = uuid.uuid4().hex[:5]
@@ -287,8 +300,11 @@ def test_utilisateur_ne_peut_creer_ni_agent_ni_utilisateur_ni_structure(client, 
     assert client.get("/users", headers=h).status_code == 403
     assert client.get("/structure/agents", headers=h).status_code == 403
     assert client.get("/audit", headers=h).status_code == 403
-    assert client.post("/dossiers", headers=h, json={"nom": f"Interdit {tag}"}).status_code == 403
     assert client.patch(f"/users/{world['b']['user']['id']}", headers=h, json={"role": "ADMIN"}).status_code == 403
+    # un chef de division ne crée pas de super administrateur ni de structure
+    c = world["cd1"]["h"]
+    assert client.post("/users", headers=c, json={"nom_utilisateur": f"y{tag}", "mot_de_passe": PWD, "role": "ADMIN"}).status_code == 403
+    assert client.post("/structure/agents", headers=c, json={"matricule": f"Y{tag}", "nom": "a", "prenom": "b", "service_id": svc}).status_code == 403
 
 
 def test_regles_de_creation_de_compte(client, world):
@@ -315,160 +331,6 @@ def test_garde_fous_admin(client, world):
     assert client.patch(f"/users/{me['id']}", headers=h, json={"role": "UTILISATEUR", "agent_id": world["a"]["agent"]["id"]}).status_code in (409, 422)
 
 
-
-
-# --- dossiers : création, accès, archivage --------------------------------------------------------------------
-
-def test_dossiers_creation_reservee_a_l_admin_et_noms_uniques(client, world):
-    h, a = world["admin"], world["a"]["h"]
-    assert client.post("/dossiers", headers=a, json={"nom": "Pirate"}).status_code == 403
-    assert client.post("/dossiers", headers=h, json={"nom": world["A"]["nom"].upper()}).status_code == 409  # casse ignorée
-    assert client.post("/dossiers", headers=h, json={"nom": "   "}).status_code == 422
-    assert client.patch(f"/dossiers/{world['A']['id']}", headers=a, json={"nom": "x"}).status_code == 403
-    assert client.get(f"/dossiers/{world['A']['id']}/acces", headers=a).status_code == 403
-    assert client.put(f"/dossiers/{world['A']['id']}/membres/{world['b']['user']['id']}", headers=a, json={"role": "LECTEUR"}).status_code == 403
-    assert client.put(f"/dossiers/{world['A']['id']}/membres/{world['b']['user']['id']}", headers=h, json={"role": "PROPRIETAIRE"}).status_code == 422
-
-
-def test_chacun_ne_voit_que_ses_dossiers(client, world):
-    a = {d["id"]: d for d in client.get("/dossiers", headers=world["a"]["h"]).json()}
-    assert set(a) == {world["A"]["id"]} and a[world["A"]["id"]]["mon_role"] == "GESTIONNAIRE_DE_CONTENU"
-    assert client.get("/dossiers", headers=world["mix"]["h"]).json() == []
-    admin = {d["id"]: d for d in client.get("/dossiers", headers=world["admin"]).json()}
-    assert {world["A"]["id"], world["B"]["id"], world["R"]["id"]} <= set(admin)
-    assert all(d["mon_role"] == "GESTIONNAIRE_DE_CONTENU" for d in admin.values())  # l'admin a tous les droits partout
-
-
-def test_admin_ne_peut_pas_etre_membre_ni_un_compte_inactif(client, world):
-    h = world["admin"]
-    me = client.get("/auth/me", headers=h).json()
-    assert client.put(f"/dossiers/{world['A']['id']}/membres/{me['id']}", headers=h, json={"role": "LECTEUR"}).status_code == 422
-    assert client.put(f"/dossiers/{world['A']['id']}/membres/99999999", headers=h, json={"role": "LECTEUR"}).status_code == 404
-    assert client.put(f"/dossiers/{world['A']['id']}/services/99999999", headers=h, json={"role": "LECTEUR"}).status_code == 404
-
-
-def test_dossier_archive_lecture_seule_et_hors_chat(client, world):
-    h = world["admin"]
-    d = mk_dossier(client, h, f"Archive {world['tag']}")
-    grant_user(client, h, d["id"], world["mix"]["user"]["id"], "GESTIONNAIRE_DE_CONTENU")
-    doc = ready_doc(client, world["mix"]["h"], d["id"], f"Texte archivé unique {world['tag']} sur la cantine.")
-    assert client.patch(f"/dossiers/{d['id']}", headers=h, json={"archive": True}).json()["archive"] is True
-    m = world["mix"]["h"]
-    assert upload(client, m, d["id"], "autre " + world["tag"]).status_code == 409           # plus d'ajout
-    assert add_version(client, m, doc["id"], "version " + world["tag"]).status_code == 409
-    assert client.patch(f"/documents/{doc['id']}", headers=m, data={"titre": "x"}).status_code == 409
-    assert client.delete(f"/documents/{doc['id']}", headers=m).status_code == 409
-    assert client.get("/documents", headers=m, params={"dossier_id": d["id"]}).status_code == 200  # mais toujours lisible
-    # seul dossier de l'utilisateur et archivé : plus rien d'interrogeable
-    assert client.post("/chat", headers=m, json={"question": "cantine ?"}).status_code == 403
-    client.patch(f"/dossiers/{d['id']}", headers=h, json={"archive": False})
-    assert any("Archive" in s["titre"] or s["document_id"] == doc["id"] for s in sources_of(ask(client, m, "cantine archivé")))
-    client.delete(f"/documents/{doc['id']}", headers=m)
-    client.delete(f"/dossiers/{d['id']}/membres/{world['mix']['user']['id']}", headers=h)
-
-
-def test_suppression_de_dossier_refusee_s_il_contient_des_fichiers(client, world):
-    h = world["admin"]
-    d = mk_dossier(client, h, f"Suppr {world['tag']}")
-    grant_user(client, h, d["id"], world["gest"]["user"]["id"], "GESTIONNAIRE_DE_CONTENU")
-    doc = ready_doc(client, world["gest"]["h"], d["id"], "Fichier à supprimer " + world["tag"])
-    assert client.delete(f"/dossiers/{d['id']}", headers=h).status_code == 409
-    assert client.delete(f"/documents/{doc['id']}", headers=world["gest"]["h"]).status_code == 204
-    assert client.delete(f"/dossiers/{d['id']}", headers=h).status_code == 204
-    assert client.delete(f"/dossiers/{d['id']}", headers=h).status_code == 404
-
-
-# --- matrice des rôles de dossier --------------------------------------------------------------------------------------
-
-def test_matrice_des_roles(client, world):
-    R = world["R"]["id"]
-    seed = ready_doc(client, world["gest"]["h"], R, f"Note du dossier R {world['tag']} sur les congés.", titre="Congés R")
-    did = seed["id"]
-    lect, contrib, gest = world["lect"]["h"], world["contrib"]["h"], world["gest"]["h"]
-
-    # LECTEUR : voit, aperçoit, télécharge, interroge ; ne modifie rien
-    assert client.get("/documents", headers=lect, params={"dossier_id": R}).status_code == 200
-    assert client.get(f"/documents/{did}/versions", headers=lect).status_code == 200
-    assert client.get(f"/documents/{did}/versions/1/apercu", headers=lect).status_code == 200
-    assert client.get(f"/documents/{did}/versions/1/telecharger", headers=lect).status_code == 200
-    assert any(s["document_id"] == did for s in sources_of(ask(client, lect, f"congés {world['tag']}")))
-    assert upload(client, lect, R, "x " + world["tag"]).status_code == 403
-    assert add_version(client, lect, did, "x " + world["tag"]).status_code == 403
-    assert client.patch(f"/documents/{did}", headers=lect, data={"titre": "x"}).status_code == 403
-    assert client.delete(f"/documents/{did}/versions/1", headers=lect).status_code == 403
-    assert client.delete(f"/documents/{did}", headers=lect).status_code == 403
-
-    # CONTRIBUTEUR : ajoute des fichiers et des versions, modifie ; ne supprime pas
-    mine = upload(client, contrib, R, f"Contribution {world['tag']}", titre="Contribution")
-    assert mine.status_code == 201 and mine.json()["mon_role"] == "CONTRIBUTEUR"
-    assert wait_version(client, contrib, mine.json()["id"], 1)["statut"] == "ready"
-    assert add_version(client, contrib, mine.json()["id"], f"Contribution revue {world['tag']}").status_code == 201
-    assert client.patch(f"/documents/{mine.json()['id']}", headers=contrib, data={"titre": "Contribution 2"}).status_code == 200
-    assert client.delete(f"/documents/{mine.json()['id']}/versions/1", headers=contrib).status_code == 403
-    assert client.delete(f"/documents/{mine.json()['id']}", headers=contrib).status_code == 403
-
-    # GESTIONNAIRE : supprime une version (pas la seule), puis le fichier
-    wait_version(client, contrib, mine.json()["id"], 2)
-    assert client.delete(f"/documents/{mine.json()['id']}/versions/1", headers=gest).status_code == 204
-    assert client.delete(f"/documents/{mine.json()['id']}", headers=gest).status_code == 204
-    assert client.delete(f"/documents/{did}/versions/1", headers=gest).status_code == 409  # seule version
-    assert client.delete(f"/documents/{did}", headers=gest).status_code == 204
-
-
-def test_hors_de_ses_dossiers_tout_est_404(client, world):
-    R = world["R"]["id"]
-    doc = ready_doc(client, world["gest"]["h"], R, f"Secret du dossier R {world['tag']}")
-    for who in ("a", "b", "mix"):
-        h = world[who]["h"]
-        assert client.get("/documents", headers=h, params={"dossier_id": R}).status_code == 404
-        assert client.get(f"/documents/{doc['id']}/versions", headers=h).status_code == 404
-        assert client.get(f"/documents/{doc['id']}/versions/1/apercu", headers=h).status_code == 404
-        assert client.get(f"/documents/{doc['id']}/versions/1/telecharger", headers=h).status_code == 404
-        assert client.patch(f"/documents/{doc['id']}", headers=h, data={"titre": "pirate"}).status_code == 404
-        assert client.delete(f"/documents/{doc['id']}", headers=h).status_code == 404
-        assert add_version(client, h, doc["id"], "x" + who + world["tag"]).status_code == 404
-        assert upload(client, h, R, "dépôt" + who + world["tag"]).status_code == 404
-        assert doc["id"] not in {d["id"] for d in client.get("/documents", headers=h).json()}
-    assert client.get("/documents", headers=world["admin"], params={"dossier_id": 99999999}).status_code == 404
-    client.delete(f"/documents/{doc['id']}", headers=world["gest"]["h"])
-
-
-def test_acces_par_service_le_plus_haut_role_gagne_et_retrait_immediat(client, world):
-    h, a = world["admin"], world["a"]
-    S = mk_dossier(client, h, f"Partagé {world['tag']}")["id"]
-    grant_service(client, h, S, a["service"]["id"], "LECTEUR")
-    mon_role = lambda: {d["id"]: d["mon_role"] for d in client.get("/dossiers", headers=a["h"]).json()}.get(S)  # noqa: E731
-    assert mon_role() == "LECTEUR"
-    assert upload(client, a["h"], S, "x " + world["tag"]).status_code == 403
-    grant_user(client, h, S, a["user"]["id"], "CONTRIBUTEUR")      # rôle direct plus élevé que celui du service
-    assert mon_role() == "CONTRIBUTEUR"
-    doc = ready_doc(client, a["h"], S, f"Partage a-b {world['tag']} sur les horaires.", titre="Horaires")
-    # le service b n'y a pas accès
-    assert client.get(f"/documents/{doc['id']}/versions", headers=world["b"]["h"]).status_code == 404
-    # retrait du rôle direct : retour au rôle du service
-    assert client.delete(f"/dossiers/{S}/membres/{a['user']['id']}", headers=h).status_code == 204
-    assert mon_role() == "LECTEUR"
-    assert client.patch(f"/documents/{doc['id']}", headers=a["h"], data={"titre": "x"}).status_code == 403
-    # retrait du service : plus rien, tout de suite, avec le même jeton
-    assert client.delete(f"/dossiers/{S}/services/{a['service']['id']}", headers=h).status_code == 204
-    assert mon_role() is None
-    assert client.get(f"/documents/{doc['id']}/versions/1/apercu", headers=a["h"]).status_code == 404
-    assert client.get(f"/documents/{doc['id']}/versions/1/telecharger", headers=a["h"]).status_code == 404
-    assert not any(s["document_id"] == doc["id"] for s in sources_of(ask(client, a["h"], "horaires partage")))
-    assert client.delete(f"/dossiers/{S}/services/{a['service']['id']}", headers=h).status_code == 404
-    client.delete(f"/documents/{doc['id']}", headers=h)
-
-
-def test_un_service_desactive_ou_un_agent_inactif_perd_l_acces_par_service(client, world):
-    h = world["admin"]
-    tag = uuid.uuid4().hex[:5]
-    s = mk_service(client, h, world["dir"]["id"], "z", tag)
-    u = mk_user(client, h, s["id"], "z", tag)
-    D = mk_dossier(client, h, f"Par service {tag}")["id"]
-    grant_service(client, h, D, s["id"], "LECTEUR")
-    assert [d["id"] for d in client.get("/dossiers", headers=u["h"]).json()] == [D]
-    assert client.patch(f"/structure/services/{s['id']}", headers=h, json={"actif": False}).status_code == 200
-    assert client.get("/dossiers", headers=u["h"]).json() == []
 
 
 # --- fichiers, versions, cases ----------------------------------------------------------------------------------------
@@ -505,13 +367,15 @@ def test_creation_ajout_de_version_et_historique(client, world):
 
     # suppression de la version la plus récente : la précédente redevient la version courante
     wait_version(client, a, doc["id"], 3)
-    assert client.delete(f"/documents/{doc['id']}/versions/3", headers=a).status_code == 204
-    assert client.delete(f"/documents/{doc['id']}/versions/3", headers=a).status_code == 404
+    g = world["cd1"]["h"]  # supprimer une version est réservé au chef de division
+    assert client.delete(f"/documents/{doc['id']}/versions/3", headers=a).status_code == 403
+    assert client.delete(f"/documents/{doc['id']}/versions/3", headers=g).status_code == 204
+    assert client.delete(f"/documents/{doc['id']}/versions/3", headers=g).status_code == 404
     assert [v["est_courante"] for v in client.get(f"/documents/{doc['id']}/versions", headers=a).json()] == [True, False]
 
     # suppression du fichier : versions, chunks et fichiers du disque partent
     paths = [v.chemin_stockage for v in (v1, v2)]
-    assert client.delete(f"/documents/{doc['id']}", headers=a).status_code == 204
+    assert client.delete(f"/documents/{doc['id']}", headers=g, params={"force": True}).status_code == 204
     with SessionLocal() as db:
         assert db.get(Document, doc["id"]) is None
         assert db.scalar(select(DocumentVersion.id).where(DocumentVersion.document_id == doc["id"])) is None
@@ -618,9 +482,7 @@ def test_apercu_et_telechargement_sont_surs(client, world, monkeypatch):
     assert client.get(f"/documents/{tif['id']}/versions/1/apercu", headers=a).status_code == 415
 
 
-# --- chat : seulement les dossiers accessibles ------------------------------------------------------------------------
-
-def test_chat_limite_aux_dossiers_accessibles(client, world):
+def test_chat_limite_aux_fichiers_lisibles(client, world):
     a, b, adm = world["a"]["h"], world["b"]["h"], world["admin"]
     secret = f"codezeta{world['tag']}"
     doc = ready_doc(client, a, world["A"]["id"], f"Le code d'accès du coffre est {secret} et il est valable 30 jours.", name=f"coffre_{secret}.txt", titre="Procédure coffre")
@@ -629,11 +491,15 @@ def test_chat_limite_aux_dossiers_accessibles(client, world):
     src = sources_of(ev)
     assert any(s["titre"] == "Procédure coffre" and s["dossier_id"] == world["A"]["id"] and s["version"] == 1 and s["date"] for s in src)
     assert "30 jours" in answer_text(ev)
-    # le service b n'a aucun accès au dossier A
+    # l'agent d'une autre division n'a aucun accès
     assert not any(s["document_id"] == doc["id"] for s in sources_of(ask(client, b, f"Quel est le code {secret} du coffre ?")))
-    # l'admin interroge tous les dossiers
+    # le super administrateur ne lit rien sans déverrouiller la division : l'accès au chat est refusé tant qu'aucune n'est ouverte
+    assert client.post("/chat", headers=adm, json={"question": "x"}).status_code == 403
+    secret_et_deverrouillage(client, adm, "division", world["div"]["v1"]["id"])
     assert any(s["document_id"] == doc["id"] for s in sources_of(ask(client, adm, f"Quel est le code {secret} du coffre ?")))
-    # un utilisateur sans aucun dossier : refus net
+    client.post("/securite/verrouiller", headers=adm, json={"type": "division", "unite_id": world["div"]["v1"]["id"]})
+    assert client.post("/chat", headers=adm, json={"question": "x"}).status_code == 403
+    # un agent qui n'a aucun fichier lisible : refus net (mix : rôle PUBLIC, aucun fichier déposé ni classé PUBLIC)
     assert client.post("/chat", headers=world["mix"]["h"], json={"question": "x"}).status_code == 403
     assert client.post("/chat", json={"question": "x"}).status_code == 401
 
@@ -702,33 +568,34 @@ def test_memoire_dans_la_session_survit_a_la_reconnexion(client, world):
     assert not any(f"délai de paiement des factures {tag}" in str(m.content) for m in qa_calls()[-1][1:-1])
 
 
-def test_retrait_d_acces_masque_l_historique_et_coupe_la_memoire(client, world):
-    h, mix = world["admin"], world["mix"]
+def test_retrait_d_un_role_masque_l_historique_et_coupe_la_memoire(client, world):
+    chef, mix, R = world["cd1"]["h"], world["mix"], world["roles"]
     tag = world["tag"]
-    X = mk_dossier(client, h, f"X {tag}")["id"]
-    Y = mk_dossier(client, h, f"Y {tag}")["id"]
-    grant_user(client, h, X, mix["user"]["id"], "GESTIONNAIRE_DE_CONTENU")
-    grant_user(client, h, Y, mix["user"]["id"], "LECTEUR")
-    ready_doc(client, mix["h"], X, f"Le budget confidentiel {tag} de la mission est de 30 jours de travail.", titre="Budget X")
-    # un document dans Y pour que le chat reste possible après le retrait de X
-    admin_y = upload(client, h, Y, f"Note publique {tag} sur les horaires.", titre="Note Y")
-    assert wait_version(client, h, admin_y.json()["id"], 1)["statut"] == "ready"
-
+    # le chef dépose un fichier classé AUDIT (mix n'a pas ce rôle) et un fichier classé PUBLIC (mix le lit toujours)
+    def depose(texte, titre, role):
+        r = upload(client, chef, world["A"]["id"], texte, titre=titre, role_ids=[role["id"]])
+        assert r.status_code == 201, r.text
+        assert wait_version(client, chef, r.json()["id"], 1)["statut"] == "ready"
+        return r.json()
+    depose(f"Note publique {tag} sur les horaires.", "Note publique", R["PUBLIC"])
+    budget = depose(f"Le budget confidentiel {tag} de la mission est de 30 jours de travail.", "Budget audit", R["AUDIT"])
+    assert client.get(f"/documents/{budget['id']}", headers=mix["h"]).status_code == 403
+    set_roles(client, chef, mix["user"]["id"], [R["PUBLIC"]["id"], R["AUDIT"]["id"]])
     assert client.put("/chat/preferences", headers=mix["h"], json={"memoire_inter_sessions": True}).json()["memoire_inter_sessions"] is True
     ev = ask(client, mix["h"], f"budget confidentiel {tag} mission")
     cid = conv_id(ev)
-    assert any(s["dossier_id"] == X for s in sources_of(ev))
+    assert any(s["document_id"] == budget["id"] for s in sources_of(ev))
     with SessionLocal() as db:
         mem = db.scalars(select(MemoireChat).where(MemoireChat.user_id == mix["user"]["id"])).all()
-    assert mem and X in mem[-1].dossier_ids and "Résultat" in mem[-1].resume
+    assert mem and budget["id"] in mem[-1].document_ids and "Résultat" in mem[-1].resume
 
     # nouvelle conversation, accès intact : la mémoire enrichit le prompt
     LLM_CALLS.clear()
     ask(client, mix["h"], f"budget confidentiel {tag} mission, rappel")
     assert "Résultat : " in str(qa_calls()[-1][-1].content)
 
-    # retrait de X : l'historique affiché est masqué, la mémoire devient muette, le LLM ne reçoit plus rien de X
-    assert client.delete(f"/dossiers/{X}/membres/{mix['user']['id']}", headers=h).status_code == 204
+    # retrait du rôle AUDIT : l'historique affiché est masqué, la mémoire devient muette, le LLM ne reçoit plus rien du fichier
+    set_roles(client, chef, mix["user"]["id"], [R["PUBLIC"]["id"]])
     msgs = client.get(f"/chat/conversations/{cid}", headers=mix["h"]).json()
     assistant = [m for m in msgs if m["emetteur"] == "assistant"][0]
     assert assistant["masque"] is True and assistant["sources"] == [] and "masquée" in assistant["contenu"] and "30 jours" not in assistant["contenu"]
@@ -736,33 +603,30 @@ def test_retrait_d_acces_masque_l_historique_et_coupe_la_memoire(client, world):
     ev = ask(client, mix["h"], "Et alors ?", conversation_id=cid)
     prompt = " ".join(str(m.content) for m in qa_calls()[-1])
     assert "30 jours" not in prompt and "Résultat : " not in prompt and "(aucune)" in prompt
-    assert not any(s["dossier_id"] == X for s in sources_of(ev))
-    # l'accès revient : l'historique réapparaît
-    grant_user(client, h, X, mix["user"]["id"], "LECTEUR")
+    assert not any(s["document_id"] == budget["id"] for s in sources_of(ev))
+    # le rôle revient : l'historique réapparaît
+    set_roles(client, chef, mix["user"]["id"], [R["PUBLIC"]["id"], R["AUDIT"]["id"]])
     assistant = [m for m in client.get(f"/chat/conversations/{cid}", headers=mix["h"]).json() if m["emetteur"] == "assistant"][0]
     assert assistant["masque"] is False and assistant["sources"]
-    client.delete(f"/dossiers/{X}/membres/{mix['user']['id']}", headers=h)
-    client.delete(f"/dossiers/{Y}/membres/{mix['user']['id']}", headers=h)
+    set_roles(client, chef, mix["user"]["id"], [R["PUBLIC"]["id"]])
     client.put("/chat/preferences", headers=mix["h"], json={"memoire_inter_sessions": False})
 
 
 def test_la_memoire_entre_sessions_est_desactivee_par_defaut(client, world):
     u = world["lect"]
+    ready_doc(client, u["h"], world["A"]["id"], "Un fichier pour que lect puisse interroger " + world["tag"])
     assert client.get("/chat/preferences", headers=u["h"]).json() == {"memoire_inter_sessions": False, "derniere_version_seulement": False}
     ask(client, u["h"], "question sans mémoire")
     with SessionLocal() as db:
         assert db.scalars(select(MemoireChat).where(MemoireChat.user_id == u["user"]["id"])).first() is None
 
 
-# --- audit ---------------------------------------------------------------------------------------------------------------
-
 def test_audit_trace_les_actions(client, world):
     rows = client.get("/audit", headers=world["admin"], params={"limit": 500}).json()
     actions = {r["action"] for r in rows}
-    assert {"connexion.reussie", "connexion.echec", "utilisateur.creer", "document.creer", "document.supprimer",
-            "document.version_ajouter", "document.version_supprimer", "dossier.creer", "dossier.modifier",
-            "dossier.supprimer", "dossier.membre_definir", "dossier.membre_retirer", "dossier.service_definir",
-            "dossier.service_retirer"} <= actions
+    assert {"connexion.reussie", "connexion.echec", "utilisateur.creer", "document.creer", "document.corbeille",
+            "document.supprimer_definitivement", "document.version_ajouter", "document.version_supprimer", "dossier.creer",
+            "structure.agent.creer", "securite.deverrouillage"} <= actions
     assert all("mot_de_passe" not in str(r["detail"]) or r["detail"].get("mot_de_passe") == "réinitialisé" for r in rows)
 
 
@@ -804,3 +668,4 @@ def test_produit_scalaire_et_cosinus_donnent_le_meme_classement(client, world):
     assert all(abs((1 + r.ip) - r.cos) < 1e-4 for r in rows)
     cosines = [r.cos for r in rows]
     assert all(a <= b + 1e-6 for a, b in zip(cosines, cosines[1:]))
+

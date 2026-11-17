@@ -1,11 +1,11 @@
-"""Logique des fichiers (documents) rangés dans des dossiers, et de leurs versions :
-- création d'un fichier : version 1, hash du fichier, dédoublonnage dans le dossier, mise en file d'ingestion ;
+"""Logique des fichiers (documents) rangés dans les dossiers d'une division, et de leurs versions :
+- création d'un fichier : version 1, hash, dédoublonnage dans le dossier, CLASSEMENT PAR RÔLE, mise en file d'ingestion ;
 - nouvelle version : AJOUT d'une version numérotée et datée, jamais de suppression de l'ancienne ;
 - modification : titre et cases « tableaux / images » (la réindexation de la version courante suit un changement de case) ;
-- suppression d'une version ou du fichier entier (réservée au gestionnaire de contenu).
+- rôles du fichier : réservés au gérant de la division ; suppression et purge selon la matrice de core/acces.py.
 
-Droits : rôle de l'utilisateur dans le DOSSIER du fichier (core/permissions.py) ; dossier inconnu ou hors des accès :
-404 ; rôle insuffisant : 403 ; dossier archivé : 409.
+Droits : rôle effectif sur le fichier (core/acces.py) ; hors périmètre : 404 ; division à déverrouiller : 423 ; rôle insuffisant : 403 ;
+dossier archivé ou division désactivée : 409. Toute modification est tracée dans l'historique (hash chaîné).
 """
 
 import hashlib
@@ -15,21 +15,26 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.config import get_settings
-from app.core.permissions import (
-    AJOUTER_FICHIER, AJOUTER_VERSION, MODIFIER, SUPPRIMER, VOIR, Principal, exiger_acces, exiger_acces_document,
-    roles_par_dossier,
+from app.core import acces
+from app.core.acces import (
+    AJOUTER_VERSION, CLASSER, DOSSIER_CREER, DOSSIER_VOIR, MATRICE, MODIFIER, PURGER, SUPPRIMER, VOIR,
+    condition_acces_fichiers, est_chef_nominal, exiger_acces_document, exiger_acces_dossier,
 )
-from app.db.metier import DocumentTag
+from app.core.permissions import Principal
+from app.db.metier import Division, DocumentRole, DocumentTag, RoleDivision
 from app.db.vecteur import Document, DocumentVersion
-from app.schemas.document import DocumentOut, VersionOut
+from app.schemas.document import DocumentOut, RoleBrief, VersionOut
 from app.services.audit import log_action
 from app.services.documents import apercu
+from app.services.historique import ecrire_historique
 from app.services.ingestion.parser import ALLOWED_EXT, apply_flags, forced_flags
+from app.services.notifications import destinataires_gestion, notifier
+from app.services.roles_division import valider_roles
 from app.workers import ingestion_worker
 
 _CHUNK = 1024 * 1024
@@ -52,13 +57,30 @@ def _courante(doc: Document) -> int | None:
     return max(ready) if ready else None
 
 
-def to_out(doc: Document, role: str) -> DocumentOut:
+def roles_par_document(db: Session, document_ids: list[int]) -> dict[int, list[RoleBrief]]:
+    sortie: dict[int, list[RoleBrief]] = {}
+    if not document_ids:
+        return sortie
+    rows = db.execute(
+        select(DocumentRole.document_id, RoleDivision.id, RoleDivision.code, RoleDivision.libelle)
+        .join(RoleDivision, RoleDivision.id == DocumentRole.role_division_id)
+        .where(DocumentRole.document_id.in_(document_ids))
+        .order_by(RoleDivision.libelle)
+    )
+    for did, rid, code, libelle in rows:
+        sortie.setdefault(did, []).append(RoleBrief(id=rid, code=code, libelle=libelle))
+    return sortie
+
+
+def to_out(doc: Document, role: str, roles: list[RoleBrief] | None = None) -> DocumentOut:
     latest = doc.versions[-1]  # versions triées par numéro
     forced_t, forced_i = forced_flags(Path(latest.nom_fichier).suffix)
+    roles = roles or []
     return DocumentOut(
-        id=doc.id, titre=doc.titre, dossier_id=doc.dossier_id, dossier_nom=doc.dossier.nom,
+        id=doc.id, titre=doc.titre, dossier_id=doc.dossier_id, dossier_nom=doc.dossier.nom, division_id=doc.division_id,
         has_tabular=doc.has_tabular, has_image=doc.has_image, tableaux_imposes=forced_t, images_imposees=forced_i,
         nb_versions=len(doc.versions), version=_version_out(latest, _courante(doc)), mon_role=role,
+        droits=sorted(MATRICE[role]), roles=roles, a_classer=not roles,
         cree_par_nom=doc.createur.nom_utilisateur if doc.createur else None,
         cree_le=doc.cree_le, modifie_le=doc.modifie_le,
         categorie_id=doc.categorie_id, categorie_nom=doc.categorie.nom if doc.categorie else None,
@@ -69,10 +91,11 @@ def to_out(doc: Document, role: str) -> DocumentOut:
     )
 
 
-def _fresh(db: Session, principal: Principal, document_id: int, role: str) -> DocumentOut:
+def _fresh(db: Session, principal: Principal, document_id: int) -> DocumentOut:
     """Relit le fichier après une écriture (la session garde sinon l'ancienne liste de versions)."""
     db.expire_all()
-    return to_out(get_document(db, principal, document_id, VOIR)[0], role)
+    doc, role = get_document(db, principal, document_id, VOIR)
+    return to_out(doc, role, roles_par_document(db, [doc.id]).get(doc.id))
 
 
 def versions_out(doc: Document) -> list[VersionOut]:
@@ -92,12 +115,9 @@ def _query():
 # --- Accès -----------------------------------------------------------------------------------------------------------
 
 def get_document(db: Session, principal: Principal, document_id: int, action: str) -> tuple[Document, str]:
-    """Le fichier et le rôle effectif (celui du dossier) ; 404 hors des accès."""
+    """Le fichier et le rôle effectif ; 404 hors périmètre, 403 sans rôle, 423 division à déverrouiller."""
     doc = db.scalars(_query().where(Document.id == document_id)).unique().one_or_none()
-    if doc is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
-    _, role = exiger_acces_document(db, principal, doc, action)
-    return doc, role
+    return exiger_acces_document(db, principal, doc, action)
 
 
 def get_version(db: Session, principal: Principal, document_id: int, numero: int, action: str) -> DocumentVersion:
@@ -190,6 +210,28 @@ def apply_document_filters(
     }
 
 
+def _role_pour_liste(db: Session, principal: Principal, doc: Document, cache: dict[int, str]) -> str:
+    """Rôle effectif d'un fichier déjà retenu par condition_acces_fichiers (aucune requête par fichier)."""
+    if est_chef_nominal(principal, doc.division_id):
+        return acces.GERANT
+    if acces.est_membre(principal, doc.division_id):
+        return acces.AUTEUR if doc.cree_par == principal.user.id else acces.LECTEUR
+    if doc.division_id not in cache:
+        division = db.get(Division, doc.division_id)
+        cache[doc.division_id] = acces.GERANT if acces.peut_gerer_division(db, principal, division) else acces.SUPERIEUR
+    return cache[doc.division_id]
+
+
+def compter_fichiers(db: Session, principal: Principal, dossier_ids: list[int]) -> dict[int, tuple[int, int]]:
+    """Par dossier : (fichiers visibles, fichiers masqués) hors corbeille. Le dossier est visible de tous, pas ses fichiers."""
+    if not dossier_ids:
+        return {}
+    base = select(Document.dossier_id, func.count()).where(Document.dossier_id.in_(dossier_ids), Document.corbeille_le.is_(None))
+    totaux = dict(db.execute(base.group_by(Document.dossier_id)).all())
+    visibles = dict(db.execute(base.where(condition_acces_fichiers(db, principal)).group_by(Document.dossier_id)).all())
+    return {i: (visibles.get(i, 0), totaux.get(i, 0) - visibles.get(i, 0)) for i in dossier_ids}
+
+
 def list_documents(
     db: Session,
     principal: Principal,
@@ -208,43 +250,27 @@ def list_documents(
     page: int | None = None,
     taille: int | None = None,
     corbeille: bool = False,
+    a_classer: bool = False,
 ) -> list[DocumentOut] | dict:
-    roles = roles_par_dossier(db, principal)
-    dossier_ids = set(roles)
+    """Fichiers que le compte peut LIRE (condition SQL unique, la même que pour la recherche et le chat)."""
     if dossier_id is not None:
-        exiger_acces(db, principal, dossier_id, VOIR)  # 404 hors des accès
-        dossier_ids = {dossier_id}
+        exiger_acces_dossier(db, principal, dossier_id, DOSSIER_VOIR)  # 404 / 423
 
-    if not dossier_ids:
-        return {"items": [], "total": 0, "page": page or 1, "taille": taille or 20} if page is not None or taille is not None else []
+    doc_filter = [condition_acces_fichiers(db, principal)]
+    if dossier_id is not None:
+        doc_filter.append(Document.dossier_id == dossier_id)
+    doc_filter.append(Document.corbeille_le.is_not(None) if corbeille else Document.corbeille_le.is_(None))
+    if a_classer:
+        doc_filter.append(~select(DocumentRole.document_id).where(DocumentRole.document_id == Document.id).exists())
 
-    doc_filter = [Document.dossier_id.in_(dossier_ids)]
-    if corbeille:
-        doc_filter.append(Document.corbeille_le.is_not(None))
-    else:
-        doc_filter.append(Document.corbeille_le.is_(None))
-
-    docs = db.scalars(
-        _query().where(*doc_filter).order_by(Document.cree_le.desc(), Document.id.desc())
-    ).unique().all()
-    ordered_docs = list(docs)
+    ordered_docs = list(db.scalars(_query().where(*doc_filter).order_by(Document.cree_le.desc(), Document.id.desc())).unique().all())
     filtered = apply_document_filters(
-        ordered_docs,
-        q=q,
-        categorie_id=categorie_id,
-        type_id=type_id,
-        tag_ids=tag_ids,
-        confidentialite=confidentialite,
-        statut=statut,
-        extension=extension,
-        du=du,
-        au=au,
-        auteur_id=auteur_id,
-        tri=tri,
-        page=page,
-        taille=taille,
+        ordered_docs, q=q, categorie_id=categorie_id, type_id=type_id, tag_ids=tag_ids, confidentialite=confidentialite,
+        statut=statut, extension=extension, du=du, au=au, auteur_id=auteur_id, tri=tri, page=page, taille=taille,
     )
-    items = [to_out(d, roles[d.dossier_id]) for d in filtered["items"]]
+    roles_docs = roles_par_document(db, [d.id for d in filtered["items"]])
+    cache: dict[int, str] = {}
+    items = [to_out(d, _role_pour_liste(db, principal, d, cache), roles_docs.get(d.id)) for d in filtered["items"]]
     if page is not None or taille is not None:
         return {"items": items, "total": filtered["total"], "page": filtered["page"], "taille": filtered["taille"]}
     return items
@@ -310,11 +336,29 @@ def _remove_version_files(version: DocumentVersion) -> None:
     apercu.remove_cache(version.id)
 
 
+def _roles_au_depot(
+    db: Session, principal: Principal, division: Division, role_ids: list[int] | None, explicite: bool
+) -> list[RoleDivision]:
+    """Classement par rôle au dépôt.
+    Agent : tous ses rôles par défaut ; il peut en retirer, jamais en ajouter un qu'il n'a pas.
+    Chef de division : il choisit dans le dictionnaire de la division ; sans choix, le fichier est « à classer » (accès refusé par défaut)."""
+    if est_chef_nominal(principal, division.id):
+        return valider_roles(db, division.id, role_ids or [])
+    demandes = list(principal.role_ids) if role_ids is None and not explicite else (role_ids or [])
+    en_trop = set(demandes) - set(principal.role_ids)
+    if en_trop:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Vous ne pouvez classer un fichier qu'avec vos propres rôles.")
+    return valider_roles(db, division.id, demandes, deja_detenus=set(principal.role_ids))
+
+
 def create_document(
     db: Session, principal: Principal, upload: UploadFile, titre: str, dossier_id: int,
     contient_tableaux: bool, contient_images: bool, ip: str | None,
+    role_ids: list[int] | None = None, roles_explicites: bool = False,
 ) -> DocumentOut:
-    dossier, role = exiger_acces(db, principal, dossier_id, AJOUTER_FICHIER)
+    dossier = exiger_acces_dossier(db, principal, dossier_id, DOSSIER_CREER)  # membres de la division seulement
+    division = db.get(Division, dossier.division_id)
+    roles = _roles_au_depot(db, principal, division, role_ids, roles_explicites)
     path, sha, size, name = _save_upload(upload)
     duplicate = db.scalar(
         select(Document.titre).join(DocumentVersion, DocumentVersion.document_id == Document.id)
@@ -328,7 +372,8 @@ def create_document(
         )
     tableaux, images = apply_flags(path.suffix, contient_tableaux, contient_images)
     doc = Document(
-        dossier_id=dossier.id, titre=(titre.strip() or Path(name).stem)[:250],
+        dossier_id=dossier.id, division_id=division.id, cree_par_service_id=division.service_id,
+        titre=(titre.strip() or Path(name).stem)[:250],
         has_tabular=tableaux, has_image=images, cree_par=principal.user.id, modifie_par=principal.user.id,
     )
     version = DocumentVersion(
@@ -339,15 +384,60 @@ def create_document(
     db.add(doc)
     try:
         db.flush()
+        for r in roles:
+            db.add(DocumentRole(document_id=doc.id, role_division_id=r.id, division_id=division.id))
+        db.flush()
         log_action(db, principal.user.id, "document.creer", "document", doc.id,
                    {"titre": doc.titre, "dossier_id": dossier.id, "version": 1, "taille": size}, ip)
+        ecrire_historique(
+            db, acteur=principal.user, cible_type="document", cible_id=doc.id, action="fichier_depose",
+            apres={"titre": doc.titre, "fichier": name, "roles": [r.libelle for r in roles]},
+            service_id=division.service_id, division_id=division.id,
+        )
+        if not roles:
+            notifier(
+                db, destinataires_gestion(db, division), "fichier_a_classer",
+                f"Un fichier est à classer dans la division « {division.nom} » : « {doc.titre} ».",
+                reference_type="document", reference_id=doc.id, sauf_user_id=principal.user.id,
+            )
         db.commit()
     except IntegrityError:
         db.rollback()
         _remove_file(path)
         raise HTTPException(status.HTTP_409_CONFLICT, "Création impossible : doublon.") from None
     ingestion_worker.enqueue(version.id)
-    return _fresh(db, principal, doc.id, role)
+    return _fresh(db, principal, doc.id)
+
+
+def definir_roles_document(
+    db: Session, principal: Principal, document_id: int, role_ids: list[int], motif: str | None
+) -> DocumentOut:
+    """Remplace les rôles de classement d'un fichier : réservé au gérant de la division. Sans rôle = accès refusé par défaut."""
+    doc, _ = get_document(db, principal, document_id, CLASSER)
+    division = db.get(Division, doc.division_id)
+    actuels = roles_par_document(db, [doc.id]).get(doc.id, [])
+    cibles = valider_roles(db, doc.division_id, role_ids, deja_detenus={r.id for r in actuels})
+    if {r.id for r in cibles} != {r.id for r in actuels}:
+        db.execute(delete(DocumentRole).where(DocumentRole.document_id == doc.id))
+        db.flush()
+        for r in cibles:
+            db.add(DocumentRole(document_id=doc.id, role_division_id=r.id, division_id=doc.division_id))
+        doc.modifie_par = principal.user.id
+        db.flush()
+        ecrire_historique(
+            db, acteur=principal.user, cible_type="document", cible_id=doc.id, action="roles_fichier_modifies",
+            avant=[r.libelle for r in actuels], apres=[r.libelle for r in cibles], motif=motif,
+            service_id=division.service_id, division_id=division.id,
+        )
+        db.commit()
+    return _fresh(db, principal, document_id)
+
+
+def historique_document(db: Session, principal: Principal, document_id: int):
+    from app.services.historique import historique_cible
+
+    doc, _ = get_document(db, principal, document_id, VOIR)
+    return historique_cible(db, "document", doc.id)
 
 
 def add_version(
@@ -379,16 +469,29 @@ def add_version(
     try:
         db.flush()
         log_action(db, principal.user.id, "document.version_ajouter", "document", doc.id, changes, ip)
+        division = db.get(Division, doc.division_id)
+        ecrire_historique(
+            db, acteur=principal.user, cible_type="document", cible_id=doc.id, action="version_ajoutee", apres=changes,
+            service_id=division.service_id, division_id=division.id,
+        )
         db.commit()
     except IntegrityError:  # deux dépôts simultanés ont pris le même numéro
         db.rollback()
         _remove_file(path)
         raise HTTPException(status.HTTP_409_CONFLICT, "Une autre version vient d'être ajoutée : recommencer.") from None
     ingestion_worker.enqueue(version.id)
-    return _fresh(db, principal, document_id, role)
+    return _fresh(db, principal, document_id)
 
 
 # --- Modification et suppression --------------------------------------------------------------------------------------
+
+def _trace(db: Session, principal: Principal, doc: Document, action: str, avant=None, apres=None) -> None:
+    division = db.get(Division, doc.division_id)
+    ecrire_historique(
+        db, acteur=principal.user, cible_type="document", cible_id=doc.id, action=action, avant=avant, apres=apres,
+        service_id=division.service_id, division_id=division.id,
+    )
+
 
 def update_document(
     db: Session, principal: Principal, document_id: int, titre: str | None,
@@ -397,7 +500,9 @@ def update_document(
     doc, role = get_document(db, principal, document_id, MODIFIER)
     latest = doc.versions[-1]
     changes: dict = {}
+    avant: dict = {}
     if titre is not None and titre.strip() and titre.strip() != doc.titre:
+        avant["titre"] = doc.titre
         doc.titre = titre.strip()[:250]
         changes["titre"] = doc.titre
 
@@ -408,9 +513,11 @@ def update_document(
     )
     reindex = False
     if tableaux != doc.has_tabular:
+        avant["has_tabular"] = doc.has_tabular
         doc.has_tabular = changes["has_tabular"] = tableaux
         reindex = True
     if images != doc.has_image:
+        avant["has_image"] = doc.has_image
         doc.has_image = changes["has_image"] = images
         reindex = True
     # une case change la façon de lire le fichier : la version la plus récente est relue (les autres gardent leur index)
@@ -423,15 +530,16 @@ def update_document(
     if changes:
         doc.modifie_par = principal.user.id
         log_action(db, principal.user.id, "document.modifier", "document", doc.id, changes, ip)
+        _trace(db, principal, doc, "fichier_modifie", avant=avant, apres=changes)
         db.commit()
     if reindex:
         ingestion_worker.enqueue(latest.id)
-    return _fresh(db, principal, document_id, role)
+    return _fresh(db, principal, document_id)
 
 
 def delete_version(db: Session, principal: Principal, document_id: int, numero: int, ip: str | None) -> None:
     """Supprime une version (et ses chunks). Si c'était la plus récente, la précédente redevient la version courante."""
-    doc, _ = get_document(db, principal, document_id, SUPPRIMER)
+    doc, _ = get_document(db, principal, document_id, PURGER)
     target = next((v for v in doc.versions if v.numero == numero), None)
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Version introuvable.")
@@ -444,6 +552,7 @@ def delete_version(db: Session, principal: Principal, document_id: int, numero: 
     version_id, path = target.id, target.chemin_stockage
     log_action(db, principal.user.id, "document.version_supprimer", "document", doc.id,
                {"version": numero, "fichier": target.nom_fichier}, ip)
+    _trace(db, principal, doc, "version_supprimee", avant={"version": numero, "fichier": target.nom_fichier})
     doc.modifie_par = principal.user.id
     db.delete(target)  # les chunks partent en cascade (ON DELETE CASCADE)
     db.commit()
@@ -452,12 +561,13 @@ def delete_version(db: Session, principal: Principal, document_id: int, numero: 
 
 
 def delete_document(db: Session, principal: Principal, document_id: int, ip: str | None, force: bool = False) -> None:
-    """Met un document dans la corbeille par défaut ; force=true effectue une purge définitive."""
-    doc, _ = get_document(db, principal, document_id, SUPPRIMER)
+    """Met un document dans la corbeille par défaut (gérant ou auteur) ; force=true : purge définitive (gérant seulement)."""
+    doc, _ = get_document(db, principal, document_id, PURGER if force else SUPPRIMER)
     versions = [(v.id, v.chemin_stockage) for v in doc.versions]
     if force:
         log_action(db, principal.user.id, "document.supprimer_definitivement", "document", doc.id,
                    {"titre": doc.titre, "dossier_id": doc.dossier_id, "versions": len(versions)}, ip)
+        _trace(db, principal, doc, "fichier_purge", avant={"titre": doc.titre, "versions": len(versions)})
         db.delete(doc)  # versions et chunks partent en cascade
         db.commit()
         for version_id, path in versions:
@@ -470,6 +580,7 @@ def delete_document(db: Session, principal: Principal, document_id: int, ip: str
         doc.modifie_par = principal.user.id
         log_action(db, principal.user.id, "document.corbeille", "document", doc.id,
                    {"titre": doc.titre, "dossier_id": doc.dossier_id, "versions": len(versions)}, ip)
+        _trace(db, principal, doc, "fichier_corbeille", avant=doc.titre)
         db.commit()
 
 
@@ -482,6 +593,7 @@ def restore_document(db: Session, principal: Principal, document_id: int, ip: st
     doc.modifie_par = principal.user.id
     log_action(db, principal.user.id, "document.restaurer", "document", doc.id,
                {"titre": doc.titre, "dossier_id": doc.dossier_id}, ip)
+    _trace(db, principal, doc, "fichier_restaure", apres=doc.titre)
     db.commit()
 
 

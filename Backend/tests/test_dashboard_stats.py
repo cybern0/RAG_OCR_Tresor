@@ -87,7 +87,7 @@ def test_build_dashboard_stats_adds_names_and_storage():
 
 
 def test_stats_dashboard_uses_sqlalchemy_text_statements():
-    principal = Principal(user=SimpleNamespace(role=SimpleNamespace(code="ADMIN")), permissions=frozenset({"statistiques.globales"}))
+    principal = Principal(user=SimpleNamespace(role=SimpleNamespace(code="ADMIN")), permissions=frozenset({"statistiques.globales"}), niveau="ROOT")
     db = DummySession()
 
     payload = stats_dashboard(db=db, _=principal)

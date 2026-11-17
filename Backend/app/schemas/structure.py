@@ -1,6 +1,7 @@
 """Schémas Pydantic de la structure : directions, services, agents, journal d'audit."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -77,7 +78,7 @@ class AgentIn(BaseModel):
     email: EmailStr | None = None
     service_id: int
     division_id: int | None = None
-    titre: str | None = Field(default=None, max_length=30)
+    titre: Literal["CHEF_SERVICE", "CHEF_DIVISION"] | None = None
 
 
 class AgentUpdate(BaseModel):
@@ -87,7 +88,7 @@ class AgentUpdate(BaseModel):
     email: EmailStr | None = None
     service_id: int | None = None
     division_id: int | None = None
-    titre: str | None = Field(default=None, max_length=30)
+    titre: Literal["CHEF_SERVICE", "CHEF_DIVISION"] | None = None  # null explicite = retirer le titre
     actif: bool | None = None
 
 
@@ -105,6 +106,55 @@ class AgentOut(BaseModel):
     division_nom: str | None = None
     actif: bool
     nom_utilisateur: str | None  # compte lié, s'il existe
+
+
+class ChefOut(BaseModel):
+    agent_id: int
+    nom_complet: str
+
+
+class PosteServiceOut(BaseModel):
+    service_id: int
+    service_nom: str
+    chef: ChefOut | None
+
+
+class PosteDivisionOut(BaseModel):
+    division_id: int
+    division_nom: str
+    service_id: int
+    chef: ChefOut | None
+
+
+class PostesOut(BaseModel):
+    services: list[PosteServiceOut]
+    divisions: list[PosteDivisionOut]
+
+
+class TransfertChefIn(BaseModel):
+    agent_id: int | None = None  # null = retrait : le poste devient vacant
+    motif: str | None = Field(default=None, max_length=500)
+
+
+class UniteArbreOut(BaseModel):
+    id: int
+    code: str | None
+    nom: str
+    actif: bool
+    chef: ChefOut | None
+    nb_agents: int
+    acces: Literal["membre", "superieur"]
+    deverrouillee: bool = False  # pertinent pour acces = superieur
+    secret_defini: bool = False
+
+
+class ServiceArbreOut(BaseModel):
+    id: int
+    code: str
+    nom: str
+    actif: bool
+    chef: ChefOut | None
+    divisions: list[UniteArbreOut]
 
 
 class AuditOut(BaseModel):

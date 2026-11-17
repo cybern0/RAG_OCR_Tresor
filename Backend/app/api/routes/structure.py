@@ -4,10 +4,10 @@ Un UTILISATEUR ne peut donc créer ni agent, ni service, ni direction."""
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from app.api.deps import client_ip, get_db, require
+from app.api.deps import client_ip, get_db, get_principal, require
 from app.core.permissions import STRUCTURE_GERER, Principal
 from app.schemas.structure import (
-    AgentIn, AgentOut, AgentUpdate, DirectionIn, DirectionOut, DirectionUpdate, DivisionIn, DivisionOut, DivisionUpdate,
+    AgentIn, AgentOut, AgentUpdate, DirectionIn, PostesOut, ServiceArbreOut, TransfertChefIn, DirectionOut, DirectionUpdate, DivisionIn, DivisionOut, DivisionUpdate,
     ServiceIn, ServiceOut, ServiceUpdate,
 )
 from app.services.structure import crud
@@ -72,9 +72,30 @@ def update_division(
     return crud.to_division_out(crud.update_division(db, actor.user.id, division_id, data, client_ip(request)))
 
 
-@router.get("/postes", response_model=dict)
+@router.get("/postes", response_model=PostesOut)
 def list_postes(_: Principal = Depends(_admin), db: Session = Depends(get_db)):
-    return {"chefs_service": [], "chefs_division": []}
+    """Qui occupe quel poste : l'interface désactive la case « chef » d'une unité déjà pourvue."""
+    return crud.postes(db)
+
+
+@router.get("/arbre", response_model=list[ServiceArbreOut])
+def arbre(principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    """Organisation visible par le compte connecté (ses services et divisions, chefs, état du verrouillage)."""
+    return crud.arbre(db, principal)
+
+
+@router.put("/services/{service_id}/chef", response_model=PostesOut)
+def transferer_chef_service(
+    service_id: int, data: TransfertChefIn, request: Request, actor: Principal = Depends(_admin), db: Session = Depends(get_db),
+):
+    return crud.transferer_chef(db, actor.user, type_unite="service", unite_id=service_id, agent_id=data.agent_id, motif=data.motif, ip=client_ip(request))
+
+
+@router.put("/divisions/{division_id}/chef", response_model=PostesOut)
+def transferer_chef_division(
+    division_id: int, data: TransfertChefIn, request: Request, actor: Principal = Depends(_admin), db: Session = Depends(get_db),
+):
+    return crud.transferer_chef(db, actor.user, type_unite="division", unite_id=division_id, agent_id=data.agent_id, motif=data.motif, ip=client_ip(request))
 
 
 @router.get("/agents", response_model=list[AgentOut])
@@ -84,7 +105,7 @@ def list_agents(_: Principal = Depends(_admin), db: Session = Depends(get_db)):
 
 @router.post("/agents", response_model=AgentOut, status_code=201)
 def create_agent(data: AgentIn, request: Request, actor: Principal = Depends(_admin), db: Session = Depends(get_db)):
-    return crud.create_agent(db, actor.user.id, data, client_ip(request))
+    return crud.create_agent(db, actor.user, data, client_ip(request))
 
 
 @router.patch("/agents/{agent_id}", response_model=AgentOut)
@@ -92,4 +113,4 @@ def update_agent(
     agent_id: int, data: AgentUpdate, request: Request,
     actor: Principal = Depends(_admin), db: Session = Depends(get_db),
 ):
-    return crud.update_agent(db, actor.user.id, agent_id, data, client_ip(request))
+    return crud.update_agent(db, actor.user, agent_id, data, client_ip(request))

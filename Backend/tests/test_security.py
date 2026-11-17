@@ -1,6 +1,6 @@
 import time
 
-from app.core.permissions import CONTRIBUTEUR, GESTIONNAIRE, LECTEUR, MATRICE, PARTAGER
+from app.core.acces import AUTEUR, GERANT, LECTEUR, MATRICE, SUPERIEUR
 from app.core.security import (
     LoginThrottle, create_access_token, hash_password, is_locked_hash, read_token, token_matches_password,
     verify_password,
@@ -56,7 +56,11 @@ def test_limitation_des_essais():
     assert not t.is_blocked("ip|bob", now=200)
 
 
-def test_partager_est_restreint_aux_gestionnaires_de_dossier():
-    assert PARTAGER in MATRICE[GESTIONNAIRE]
-    assert PARTAGER not in MATRICE[CONTRIBUTEUR]
-    assert PARTAGER not in MATRICE[LECTEUR]
+def test_matrice_des_roles_effectifs_sur_un_fichier():
+    # le gérant fait tout ; le rôle de classement des fichiers et la purge lui sont réservés
+    assert {"classer", "purger"} <= MATRICE[GERANT] and not ({"classer", "purger"} & MATRICE[AUTEUR])
+    # l'auteur gère ses dépôts ; le lecteur lit et commente seulement
+    assert {"modifier", "ajouter_version", "supprimer"} <= MATRICE[AUTEUR]
+    assert MATRICE[LECTEUR] == {"voir", "apercu", "telecharger", "chat", "commenter"}
+    # l'administrateur supérieur est en lecture seule : ni commentaire, ni écriture
+    assert MATRICE[SUPERIEUR] == {"voir", "apercu", "telecharger", "chat"}

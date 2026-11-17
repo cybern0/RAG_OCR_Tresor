@@ -1,69 +1,48 @@
-"""Routes de demandes d'accès et d'exception."""
+"""Demandes d'accès (rôle ou fichier) et accès ponctuels."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_principal
+from app.api.deps import client_ip, get_db, get_principal
 from app.core.permissions import Principal
-from app.db.metier import DemandeAcces
-from app.schemas.demande import DemandeAccesIn, DemandeAccesOut, DemandeDecisionIn
+from app.schemas.demande import DemandeDecisionIn, DemandeIn, DemandeOut, ExceptionOut
+from app.services import demandes as svc
 
 router = APIRouter(prefix="/demandes", tags=["demandes"])
 
 
-@router.get("", response_model=list[DemandeAccesOut])
-def list_demandes(
-    principal: Principal = Depends(get_principal),
-    db: Session = Depends(get_db),
+@router.get("", response_model=list[DemandeOut])
+def lister(
+    vue: Literal["mes", "a_traiter"] = "mes", statut: Literal["en_attente", "acceptee", "refusee", "annulee"] | None = None,
+    principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
 ):
-    if principal.is_admin:
-        rows = db.scalars(select(DemandeAcces).order_by(DemandeAcces.date_creation.desc())).all()
-    else:
-        rows = db.scalars(
-            select(DemandeAcces)
-            .where(DemandeAcces.demandeur_user_id == principal.user.id)
-            .order_by(DemandeAcces.date_creation.desc())
-        ).all()
-    return rows
+    """mes : mes propres demandes ; a_traiter : demandes des divisions dont je suis gérant (chef, ou intérimaire déverrouillé)."""
+    return svc.lister(db, principal, vue, statut)
 
 
-@router.post("", response_model=DemandeAccesOut, status_code=201)
-def create_demande(
-    payload: DemandeAccesIn,
-    principal: Principal = Depends(get_principal),
-    db: Session = Depends(get_db),
-):
-    item = DemandeAcces(
-        demandeur_user_id=principal.user.id,
-        type_demande=payload.type_demande,
-        cible_type=payload.cible_type,
-        cible_id=payload.cible_id,
-        motif=payload.motif,
-        statut="en_attente",
-    )
-    db.add(item)
-    db.commit()
-    db.refresh(item)
-    return item
+@router.post("", response_model=DemandeOut, status_code=201)
+def creer(data: DemandeIn, request: Request, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    return svc.creer(db, principal, data, client_ip(request))
 
 
-@router.patch("/{demande_id}/decision", response_model=DemandeAccesOut)
-def decide_demande(
-    demande_id: int,
-    payload: DemandeDecisionIn,
-    principal: Principal = Depends(get_principal),
-    db: Session = Depends(get_db),
-):
-    item = db.get(DemandeAcces, demande_id)
-    if item is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Demande introuvable.")
-    if not principal.is_admin:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Action non autorisée.")
-    item.statut = payload.statut
-    item.decisionnaire_user_id = principal.user.id
-    item.reponse = payload.reponse
-    item.date_decision = __import__("datetime").datetime.utcnow()
-    db.commit()
-    db.refresh(item)
-    return item
+@router.get("/exceptions", response_model=list[ExceptionOut])
+def exceptions(principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    return svc.lister_exceptions(db, principal)
+
+
+@router.delete("/exceptions/{exception_id}", status_code=204)
+def revoquer(exception_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    svc.revoquer_exception(db, principal, exception_id)
+    return Response(status_code=204)
+
+
+@router.post("/{demande_id}/decision", response_model=DemandeOut)
+def decider(demande_id: int, data: DemandeDecisionIn, request: Request, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    return svc.decider(db, principal, demande_id, data.accepter, data.reponse, data.duree_heures, client_ip(request))
+
+
+@router.post("/{demande_id}/annuler", response_model=DemandeOut)
+def annuler(demande_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    return svc.annuler(db, principal, demande_id)

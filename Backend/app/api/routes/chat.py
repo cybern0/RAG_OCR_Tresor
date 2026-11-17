@@ -1,6 +1,7 @@
 """Route de chat : reçoit la question et renvoie la réponse en streaming (SSE), avec les sources citées.
 
-- La recherche est limitée aux dossiers que l'utilisateur peut interroger (tous les dossiers pour l'ADMIN).
+- La recherche est limitée aux fichiers que l'utilisateur peut lire (rôles de sa division, ses dépôts, accès ponctuels,
+  divisions déverrouillées pour un administrateur supérieur) : core/acces.py.
 - Mémoire dans une session : obligatoire. L'historique de la conversation est relu en base à chaque question, donc il
   se retrouve après une déconnexion/reconnexion.
 - Deux options personnelles (GET/PUT /chat/preferences) : mémoire entre sessions, et « dernière version seulement ».
@@ -14,9 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require
-from app.core.permissions import (
-    CHAT_UTILISER, Principal, ids_dossiers_accessibles, ids_dossiers_interrogeables,
-)
+from app.core.acces import condition_acces_fichiers
+from app.core.permissions import CHAT_UTILISER, Principal
 from app.db.metier import Conversation, Message
 from app.schemas.chat import ChatIn, ConversationOut, MessageOut, PreferencesIn, PreferencesOut
 from app.services.chat import memoire, rag_chain
@@ -39,10 +39,10 @@ def ask(
     data: ChatIn,
     principal: Principal = Depends(require(CHAT_UTILISER)), db: Session = Depends(get_db),
 ):
-    interrogeables = ids_dossiers_interrogeables(db, principal)
-    if not interrogeables:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Vous n'avez accès à aucun dossier.")
-    accessibles = set(ids_dossiers_accessibles(db, principal))
+    from app.db.vecteur import Document
+
+    if db.scalars(select(Document.id).where(condition_acces_fichiers(db, principal), Document.corbeille_le.is_(None)).limit(1)).first() is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Vous n'avez accès à aucun fichier.")
     prefs = memoire.get_preferences(db, principal.user.id)
 
     if data.conversation_id is not None:
@@ -51,10 +51,10 @@ def ask(
         conv = Conversation(user_id=principal.user.id, titre=" ".join(data.question.split())[:80])
         db.add(conv)
         db.flush()
-    # historique AVANT d'ajouter la question courante ; masqué pour les dossiers dont l'accès a été retiré
-    historique = ConversationHistory(db, conv.id, accessibles).messages
+    # historique AVANT d'ajouter la question courante ; masqué pour les fichiers dont l'accès a été retiré
+    historique = ConversationHistory(db, conv.id, principal).messages
     souvenirs = (
-        memoire.load(db, principal.user.id, accessibles, conv.id) if prefs.memoire_inter_sessions else []
+        memoire.load(db, principal.user.id, principal, conv.id) if prefs.memoire_inter_sessions else []
     )
     db.add(Message(conversation_id=conv.id, emetteur="utilisateur", contenu=data.question, sources=[]))
     db.commit()
@@ -77,7 +77,7 @@ def ask(
         if retenir:
             memoire.record(
                 session, user_id, conversation_id, question, answer,
-                [s["dossier_id"] for s in sources if s.get("dossier_id") is not None],
+                [s["document_id"] for s in sources if s.get("document_id") is not None],
             )
 
     return StreamingResponse(
@@ -117,7 +117,7 @@ def get_messages(
     rows = list(
         db.scalars(select(Message).where(Message.conversation_id == conversation_id).order_by(Message.id))
     )
-    visibles = filter_visible(db, rows, set(ids_dossiers_accessibles(db, principal)))
+    visibles = filter_visible(db, rows, principal)
     return [
         MessageOut(
             id=v.message.id, emetteur=v.message.emetteur, contenu=v.contenu, sources=v.sources, masque=v.masque,

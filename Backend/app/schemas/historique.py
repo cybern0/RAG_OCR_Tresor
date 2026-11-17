@@ -2,14 +2,15 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class HistoriqueOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
+    rang: int | None = None
     acteur_user_id: int | None = None
+    acteur_nom: str | None = None
+    concerne_user_id: int | None = None
     cible_type: str
     cible_id: int | None = None
     action: str
@@ -19,11 +20,16 @@ class HistoriqueOut(BaseModel):
     service_id: int | None = None
     division_id: int | None = None
     date_action: datetime
-    hash_precedent: str | None = None
     hash_courant: str | None = None
+
+
+class HistoriquePageOut(BaseModel):
+    total: int
+    items: list[HistoriqueOut]
 
 
 class VerificationHistoriqueOut(BaseModel):
     ok: bool
     total: int
+    premier_rang_invalide: int | None = None
     message: str

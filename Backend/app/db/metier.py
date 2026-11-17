@@ -1,6 +1,6 @@
 """Connexion à la base métier (schéma rag_sys) : engine SQLAlchemy, session, modèles des tables
 direction, _service, agent, _role, permission, role_permission, _user, journal_audit, conversation, message,
-dossier, dossier_membre, dossier_service, preference_utilisateur, memoire_chat.
+division, dossier, role_division, demandes, secrets, historique, notification, preference_utilisateur, memoire_chat.
 
 Les modèles document, document_version et chunk sont dans db/vecteur.py (même base, même schéma).
 """
@@ -77,7 +77,7 @@ class Division(Base):
     __tablename__ = "division"
 
     id: Mapped[int] = _pk()
-    service_id: Mapped[int] = mapped_column(ForeignKey("_service.id", ondelete="CASCADE"))
+    service_id: Mapped[int] = mapped_column(ForeignKey("_service.id"))
     code: Mapped[str | None] = mapped_column(String(30), unique=True, nullable=True)
     nom: Mapped[str] = mapped_column(String(180))
     actif: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
@@ -97,12 +97,12 @@ class Agent(Base):
     prenom: Mapped[str] = mapped_column(String(100))
     fonction: Mapped[str | None] = mapped_column(String(150))
     email: Mapped[str | None] = mapped_column(String(180))
-    service_id: Mapped[int | None] = mapped_column(ForeignKey("_service.id"))
-    division_id: Mapped[int | None] = mapped_column(ForeignKey("division.id", ondelete="SET NULL"))
+    service_id: Mapped[int] = mapped_column(ForeignKey("_service.id"))
+    division_id: Mapped[int | None] = mapped_column(ForeignKey("division.id"))
     titre: Mapped[str | None] = mapped_column(String(30))
     actif: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
-    service: Mapped[Service | None] = relationship()
+    service: Mapped[Service] = relationship()
     division: Mapped[Division | None] = relationship(back_populates="agents")
 
 
@@ -183,17 +183,16 @@ class Message(Base):
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-# --- Dossiers partagés et rôles --------------------------------------------------------------------------------------
+# --- Dossiers, rôles de division, demandes, secrets, historique, notifications --------------------------------------------
 
 class Dossier(Base):
-    """Dossier de travail : compatible avec l'ancien modèle plat, tout en prenant en charge la hiérarchie
-    direction -> service -> division -> sous-dossiers libres."""
+    """Dossier ou sous-dossier d'UNE division. Sans login ni rôle : visible de toute la division."""
 
     __tablename__ = "dossier"
 
     id: Mapped[int] = _pk()
-    division_id: Mapped[int | None] = mapped_column(ForeignKey("division.id", ondelete="SET NULL"))
-    parent_id: Mapped[int | None] = mapped_column(ForeignKey("dossier.id", ondelete="SET NULL"))
+    division_id: Mapped[int] = mapped_column(ForeignKey("division.id"))
+    parent_id: Mapped[int | None] = mapped_column(BigInteger)
     nom: Mapped[str] = mapped_column(String(150))
     description: Mapped[str | None] = mapped_column(Text)
     archive: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
@@ -201,42 +200,14 @@ class Dossier(Base):
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     modifie_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    division: Mapped[Division | None] = relationship(back_populates="dossiers")
-    parent: Mapped["Dossier | None"] = relationship(remote_side="Dossier.id", back_populates="enfants")
-    enfants: Mapped[list["Dossier"]] = relationship(back_populates="parent")
-
-
-class DossierMembre(Base):
-    """Rôle direct d'un utilisateur dans un dossier."""
-
-    __tablename__ = "dossier_membre"
-
-    dossier_id: Mapped[int] = mapped_column(ForeignKey("dossier.id", ondelete="CASCADE"), primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"), primary_key=True)
-    role: Mapped[str] = mapped_column(String(30))
-    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    user: Mapped[User] = relationship()
-
-
-class DossierService(Base):
-    """Rôle donné à un service entier dans un dossier."""
-
-    __tablename__ = "dossier_service"
-
-    dossier_id: Mapped[int] = mapped_column(ForeignKey("dossier.id", ondelete="CASCADE"), primary_key=True)
-    service_id: Mapped[int] = mapped_column(ForeignKey("_service.id"), primary_key=True)
-    role: Mapped[str] = mapped_column(String(30))
-    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    service: Mapped[Service] = relationship()
+    division: Mapped[Division] = relationship(back_populates="dossiers")
 
 
 class RoleDivision(Base):
     __tablename__ = "role_division"
 
     id: Mapped[int] = _pk()
-    division_id: Mapped[int] = mapped_column(ForeignKey("division.id", ondelete="CASCADE"))
+    division_id: Mapped[int] = mapped_column(ForeignKey("division.id"))
     code: Mapped[str] = mapped_column(String(60))
     libelle: Mapped[str] = mapped_column(String(180))
     actif: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
@@ -247,18 +218,19 @@ class RoleDivision(Base):
 class UserRoleDivision(Base):
     __tablename__ = "user_role_division"
 
-    id: Mapped[int] = _pk()
-    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
-    role_division_id: Mapped[int] = mapped_column(ForeignKey("role_division.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"), primary_key=True)
+    role_division_id: Mapped[int] = mapped_column(ForeignKey("role_division.id", ondelete="CASCADE"), primary_key=True)
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class DocumentRole(Base):
+    """Rôle de classement d'un fichier (le rôle et le fichier sont de la même division, garanti par la base)."""
+
     __tablename__ = "document_role"
 
-    id: Mapped[int] = _pk()
-    document_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    role_division_id: Mapped[int] = mapped_column(ForeignKey("role_division.id", ondelete="CASCADE"))
+    document_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    role_division_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    division_id: Mapped[int] = mapped_column(BigInteger)
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -267,16 +239,17 @@ class DemandeAcces(Base):
 
     id: Mapped[int] = _pk()
     demandeur_user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
-    type_demande: Mapped[str] = mapped_column(String(30), default="role")
-    cible_type: Mapped[str | None] = mapped_column(String(30))
-    cible_id: Mapped[int | None] = mapped_column(BigInteger)
-    motif: Mapped[str | None] = mapped_column(Text)
-    statut: Mapped[str] = mapped_column(String(20), default="en_attente", server_default="en_attente")
+    division_id: Mapped[int] = mapped_column(ForeignKey("division.id"))
+    type_demande: Mapped[str] = mapped_column(String(10))  # 'role' | 'fichier'
+    role_division_id: Mapped[int | None] = mapped_column(ForeignKey("role_division.id", ondelete="CASCADE"))
+    document_id: Mapped[int | None] = mapped_column(BigInteger)
+    motif: Mapped[str] = mapped_column(Text)
+    duree_heures: Mapped[int | None] = mapped_column()
+    statut: Mapped[str] = mapped_column(String(12), default="en_attente", server_default="en_attente")
     decisionnaire_user_id: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
     reponse: Mapped[str | None] = mapped_column(Text)
     date_creation: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     date_decision: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    expiration: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AccesException(Base):
@@ -284,9 +257,11 @@ class AccesException(Base):
 
     id: Mapped[int] = _pk()
     user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
-    document_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    document_id: Mapped[int] = mapped_column(BigInteger)
+    demande_id: Mapped[int | None] = mapped_column(ForeignKey("demande_acces.id", ondelete="SET NULL"))
+    accorde_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
     motif: Mapped[str | None] = mapped_column(Text)
-    expire_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expire_le: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -299,6 +274,7 @@ class SecretUnite(Base):
     division_id: Mapped[int | None] = mapped_column(ForeignKey("division.id", ondelete="CASCADE"))
     admin_user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
     secret_hash: Mapped[str] = mapped_column(Text)
+    modifie_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
     modifie_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -314,21 +290,26 @@ class Deverrouillage(Base):
 
 
 class HistoriqueModification(Base):
+    """Registre en ajout seul : rang et hash sont posés par la base (déclencheur), jamais par le code."""
+
     __tablename__ = "historique_modification"
 
     id: Mapped[int] = _pk()
-    acteur_user_id: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
+    rang: Mapped[int | None] = mapped_column(BigInteger)
+    acteur_user_id: Mapped[int | None] = mapped_column(BigInteger)
+    acteur_nom: Mapped[str | None] = mapped_column(String(80))
+    concerne_user_id: Mapped[int | None] = mapped_column(BigInteger)
     cible_type: Mapped[str] = mapped_column(String(40))
     cible_id: Mapped[int | None] = mapped_column(BigInteger)
     action: Mapped[str] = mapped_column(String(60))
     avant: Mapped[str | None] = mapped_column(Text)
     apres: Mapped[str | None] = mapped_column(Text)
     motif: Mapped[str | None] = mapped_column(Text)
-    service_id: Mapped[int | None] = mapped_column(ForeignKey("_service.id", ondelete="SET NULL"))
-    division_id: Mapped[int | None] = mapped_column(ForeignKey("division.id", ondelete="SET NULL"))
-    date_action: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    hash_precedent: Mapped[str | None] = mapped_column(String(128))
-    hash_courant: Mapped[str | None] = mapped_column(String(128))
+    service_id: Mapped[int | None] = mapped_column(BigInteger)
+    division_id: Mapped[int | None] = mapped_column(BigInteger)
+    date_action: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
+    hash_precedent: Mapped[str | None] = mapped_column(String(64))
+    hash_courant: Mapped[str | None] = mapped_column(String(64))
 
 
 class Notification(Base):
@@ -339,13 +320,13 @@ class Notification(Base):
     type_evenement: Mapped[str] = mapped_column(String(60))
     reference_type: Mapped[str | None] = mapped_column(String(30))
     reference_id: Mapped[int | None] = mapped_column(BigInteger)
-    message: Mapped[str | None] = mapped_column(Text)
+    message: Mapped[str] = mapped_column(Text)
     lu: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Commentaire(Base):
-    """Commentaire sur un fichier (visible des contributeurs et plus)."""
+    """Commentaire sur un fichier."""
 
     __tablename__ = "commentaire"
 
@@ -369,7 +350,7 @@ class PreferenceUtilisateur(Base):
 
 
 class MemoireChat(Base):
-    """Résultat retenu d'une session pour enrichir les suivantes ; dossier_ids sert au filtre d'accès."""
+    """Résultat retenu d'une session pour enrichir les suivantes ; document_ids sert au filtre d'accès."""
 
     __tablename__ = "memoire_chat"
 
@@ -377,7 +358,7 @@ class MemoireChat(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
     conversation_id: Mapped[int | None] = mapped_column(ForeignKey("conversation.id", ondelete="CASCADE"))
     resume: Mapped[str] = mapped_column(Text)
-    dossier_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default=list, server_default="{}")
+    document_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default=list, server_default="{}")
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

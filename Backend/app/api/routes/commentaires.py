@@ -1,6 +1,6 @@
 """Commentaires sur un fichier (côté UI : features/documents, fiche d'un fichier).
 
-Réservés aux contributeurs et plus : même droit que modifier le fichier. Hors de ses accès, le fichier est un 404.
+Lecture : tous ceux qui voient le fichier. Écriture : gérant, auteur, lecteur (pas l'administrateur supérieur, en lecture seule).
 """
 
 from datetime import datetime
@@ -11,7 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db, get_principal
-from app.core.permissions import MODIFIER, Principal
+from app.core.acces import COMMENTER, VOIR
+from app.core.permissions import Principal
 from app.db.metier import Commentaire
 from app.services.documents import crud
 
@@ -45,7 +46,7 @@ def _out(c: Commentaire) -> CommentaireOut:
 
 @router.get("/{document_id}/commentaires", response_model=list[CommentaireOut])
 def list_commentaires(document_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
-    doc, _ = crud.get_document(db, principal, document_id, MODIFIER)
+    doc, _ = crud.get_document(db, principal, document_id, VOIR)
     rows = db.scalars(
         select(Commentaire).options(joinedload(Commentaire.auteur))
         .where(Commentaire.sujet_type == "document", Commentaire.sujet_id == doc.id)
@@ -59,7 +60,7 @@ def create_commentaire(
     document_id: int, data: CommentaireIn,
     principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
 ):
-    doc, _ = crud.get_document(db, principal, document_id, MODIFIER)
+    doc, _ = crud.get_document(db, principal, document_id, COMMENTER)
     comment = Commentaire(sujet_type="document", sujet_id=doc.id, auteur_id=principal.user.id, contenu=data.contenu)
     db.add(comment)
     db.commit()

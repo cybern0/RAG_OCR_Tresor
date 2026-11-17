@@ -1,27 +1,84 @@
-"""Notifications internes de la GED hiérarchique.
-Les événements sont stockés en base et consultés par l'interface via polling de 15 à 30 s.
-"""
+"""Notifications en base (cloche de l'interface) et choix des destinataires."""
 
-from __future__ import annotations
+from collections.abc import Iterable
 
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.db.metier import Notification
+from app.core.acces import chef_division_actif, chef_service_actif
+from app.db.metier import Division, Notification, Role, User
 
 
-def create_notification(db: Session, *, destinataire_user_id: int, type_evenement: str, message: str, reference_type: str | None = None, reference_id: int | None = None) -> Notification:
-    notification = Notification(
-        destinataire_user_id=destinataire_user_id,
-        type_evenement=type_evenement,
-        reference_type=reference_type,
-        reference_id=reference_id,
-        message=message,
-        lu=False,
-    )
-    db.add(notification)
+def notifier(
+    db: Session,
+    user_ids: Iterable[int],
+    type_evenement: str,
+    message: str,
+    *,
+    reference_type: str | None = None,
+    reference_id: int | None = None,
+    sauf_user_id: int | None = None,
+) -> None:
+    for uid in dict.fromkeys(user_ids):  # sans doublon, ordre conservé
+        if uid == sauf_user_id:
+            continue
+        db.add(
+            Notification(
+                destinataire_user_id=uid,
+                type_evenement=type_evenement,
+                message=message,
+                reference_type=reference_type,
+                reference_id=reference_id,
+            )
+        )
     db.flush()
-    return notification
 
 
-def list_notifications(db: Session, *, destinataire_user_id: int):
-    return db.query(Notification).filter(Notification.destinataire_user_id == destinataire_user_id).order_by(Notification.cree_le.desc()).all()
+def users_de_agent(db: Session, agent_id: int | None) -> list[int]:
+    if agent_id is None:
+        return []
+    return list(db.scalars(select(User.id).where(User.agent_id == agent_id, User.actif.is_(True))))
+
+
+def super_admins_actifs(db: Session) -> list[int]:
+    return list(
+        db.scalars(select(User.id).join(Role, Role.id == User.role_id).where(Role.code == "ADMIN", User.actif.is_(True)))
+    )
+
+
+def destinataires_gestion(db: Session, division: Division) -> list[int]:
+    """Qui doit traiter une demande ou classer un fichier : le chef de division ; à défaut le chef de service ; à défaut les super administrateurs."""
+    chef = chef_division_actif(db, division.id)
+    if chef is not None and (ids := users_de_agent(db, chef.id)):
+        return ids
+    chef_s = chef_service_actif(db, division.service_id)
+    if chef_s is not None and (ids := users_de_agent(db, chef_s.id)):
+        return ids
+    return super_admins_actifs(db)
+
+
+def lister(db: Session, user_id: int, *, non_lues_seulement: bool = False, limit: int = 50) -> tuple[int, list[Notification]]:
+    from sqlalchemy import func
+
+    base = select(Notification).where(Notification.destinataire_user_id == user_id)
+    non_lues = db.scalar(select(func.count()).select_from(base.where(Notification.lu.is_(False)).subquery())) or 0
+    if non_lues_seulement:
+        base = base.where(Notification.lu.is_(False))
+    rows = db.scalars(base.order_by(Notification.cree_le.desc(), Notification.id.desc()).limit(limit)).all()
+    return non_lues, list(rows)
+
+
+def marquer_lue(db: Session, user_id: int, notification_id: int) -> bool:
+    res = db.execute(
+        update(Notification)
+        .where(Notification.id == notification_id, Notification.destinataire_user_id == user_id)
+        .values(lu=True)
+    )
+    return res.rowcount > 0
+
+
+def marquer_toutes_lues(db: Session, user_id: int) -> int:
+    res = db.execute(
+        update(Notification).where(Notification.destinataire_user_id == user_id, Notification.lu.is_(False)).values(lu=True)
+    )
+    return res.rowcount

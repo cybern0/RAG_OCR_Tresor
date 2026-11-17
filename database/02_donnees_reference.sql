@@ -1,39 +1,34 @@
+-- 02 - Données indispensables au fonctionnement (aucun compte, aucune organisation, aucune démonstration).
+--   psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/02_donnees_reference.sql
+--
+-- Rôles GLOBAUX : ADMIN (super administrateur, niveau ROOT) et UTILISATEUR (tout autre compte).
+-- Le niveau SERVICE / DIVISION se déduit du TITRE de l'agent (CHEF_SERVICE / CHEF_DIVISION) : il ajoute, en code, les permissions
+-- utilisateur.* limitées à son périmètre (voir Backend/app/core/permissions.py). Il n'y a donc qu'une seule source de vérité : le titre.
+
 SET search_path TO rag_sys, public;
 
 INSERT INTO permission (code, libelle) VALUES
-    ('admin.root', 'Accès racine'),
-    ('admin.service', 'Accès service'),
-    ('admin.division', 'Accès division'),
-    ('document.lister', 'Lister les documents'),
-    ('chat.utiliser', 'Utiliser le chat'),
-    ('utilisateur.lister', 'Lister les comptes'),
-    ('utilisateur.creer', 'Créer un compte'),
-    ('utilisateur.modifier', 'Modifier un compte'),
-    ('structure.gerer', 'Gérer la structure'),
-    ('dossier.gerer', 'Gérer les dossiers')
-ON CONFLICT (code) DO NOTHING;
+    ('document.lister', 'Consulter les dossiers et les fichiers accessibles'),
+    ('chat.utiliser', 'Interroger l''assistant'),
+    ('utilisateur.lister', 'Lister les comptes de son périmètre'),
+    ('utilisateur.creer', 'Créer un compte dans son périmètre'),
+    ('utilisateur.modifier', 'Modifier un compte de son périmètre'),
+    ('structure.gerer', 'Gérer directions, services, divisions, agents et titres'),
+    ('classement.gerer', 'Gérer catégories, types, étiquettes et règles de classement'),
+    ('statistiques.globales', 'Consulter les statistiques globales'),
+    ('audit.consulter', 'Consulter le journal d''audit technique')
+ON CONFLICT (code) DO UPDATE SET libelle = EXCLUDED.libelle;
 
 INSERT INTO _role (code, libelle) VALUES
     ('ADMIN', 'Super administrateur'),
-    ('UTILISATEUR', 'Utilisateur métier')
-ON CONFLICT (code) DO NOTHING;
+    ('UTILISATEUR', 'Utilisateur (accès par rôles de division)')
+ON CONFLICT (code) DO UPDATE SET libelle = EXCLUDED.libelle;
 
--- Raccorder les permissions de base aux rôles globales.
 INSERT INTO role_permission (role_id, permission_id)
-SELECT r.id, p.id
-FROM _role r
-JOIN permission p ON p.code IN (
-    'admin.root', 'admin.service', 'admin.division',
-    'document.lister', 'chat.utiliser', 'utilisateur.lister',
-    'utilisateur.creer', 'utilisateur.modifier', 'structure.gerer',
-    'dossier.gerer'
-)
-WHERE r.code = 'ADMIN'
+SELECT r.id, p.id FROM _role r CROSS JOIN permission p WHERE r.code = 'ADMIN'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO role_permission (role_id, permission_id)
-SELECT r.id, p.id
-FROM _role r
-JOIN permission p ON p.code IN ('document.lister', 'chat.utiliser')
+SELECT r.id, p.id FROM _role r JOIN permission p ON p.code IN ('document.lister', 'chat.utiliser')
 WHERE r.code = 'UTILISATEUR'
 ON CONFLICT DO NOTHING;

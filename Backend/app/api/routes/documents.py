@@ -1,9 +1,7 @@
-"""Routes des fichiers (documents) rangés dans des dossiers, et de leurs versions.
+"""Routes des fichiers (documents) rangés dans les dossiers d'une division, et de leurs versions.
 
-- Liste, historique des versions, aperçu et téléchargement (toute version) : tout membre du dossier.
-- Ajout d'un fichier, d'une nouvelle version, modification du titre et des cases : contributeur ou plus.
-- Suppression d'un fichier ou d'une version : gestionnaire de contenu (ou admin).
-Les droits se vérifient dans services/documents (rôle du dossier) ; dossier hors des accès : 404, rôle insuffisant : 403.
+Les droits se vérifient dans services/documents avec le rôle effectif (core/acces.py) : GERANT, AUTEUR, LECTEUR, SUPERIEUR.
+Hors périmètre : 404 ; division à déverrouiller : 423 ; sans rôle sur le fichier : 403 (« Demander l'accès »).
 Ajouter une version AJOUTE : l'ancienne reste indexée, téléchargeable et interrogeable.
 """
 
@@ -14,9 +12,12 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip, get_db, get_principal
-from app.core.permissions import APERCU, MODIFIER, TELECHARGER, VOIR, Principal, exiger_acces
+from app.core.acces import APERCU, MODIFIER, TELECHARGER, VOIR, exiger_acces_document
+from app.core.permissions import Principal
 from app.db.vecteur import Document
-from app.schemas.document import ClasserLotIn, ClasserLotOut, DocumentOut, DocumentPageOut, VersionOut
+from app.schemas.document import ClasserLotIn, ClasserLotOut, DocumentOut, DocumentPageOut, RolesDocumentIn, VersionOut
+from app.schemas.historique import HistoriqueOut
+from app.services.historique import to_out as historique_to_out
 from app.services.classement import definir_classement_manuel
 from app.services.documents import apercu, crud
 
@@ -40,6 +41,7 @@ def list_documents(
     page: int | None = Query(default=None),
     taille: int | None = Query(default=None),
     corbeille: bool = Query(default=False),
+    a_classer: bool = Query(default=False),
     principal: Principal = Depends(get_principal),
     db: Session = Depends(get_db),
 ):
@@ -61,6 +63,7 @@ def list_documents(
         page=page,
         taille=taille,
         corbeille=corbeille,
+        a_classer=a_classer,
     )
 
 
@@ -72,10 +75,15 @@ def create_document(
     titre: str = Form(""),
     contient_tableaux: bool = Form(False),
     contient_images: bool = Form(False),
+    role_ids: list[int] | None = Form(None),
+    roles_explicites: bool = Form(False),
     principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
 ):
+    """Dépose un fichier. Classement par rôle : un agent reçoit ses rôles par défaut (il peut en retirer) ;
+    le chef de division choisit, sans choix le fichier est « à classer » (accès refusé par défaut)."""
     return crud.create_document(
-        db, principal, fichier, titre, dossier_id, contient_tableaux, contient_images, client_ip(request)
+        db, principal, fichier, titre, dossier_id, contient_tableaux, contient_images, client_ip(request),
+        role_ids=role_ids, roles_explicites=roles_explicites,
     )
 
 
@@ -98,7 +106,7 @@ def classer_lot(
     principal: Principal = Depends(get_principal),
     db: Session = Depends(get_db),
 ):
-    """Classement manuel (catégorie, type, étiquettes, confidentialité) : rôle contributeur ou plus dans chaque dossier."""
+    """Classement documentaire manuel (catégorie, type, étiquettes, confidentialité) : gérant ou auteur de chaque fichier."""
     result = {"ok": [], "not_found": [], "forbidden": []}
     for document_id in dict.fromkeys(data.ids):
         doc = db.get(Document, document_id)
@@ -106,7 +114,7 @@ def classer_lot(
             result["not_found"].append(document_id)
             continue
         try:
-            exiger_acces(db, principal, doc.dossier_id, MODIFIER)
+            exiger_acces_document(db, principal, doc, MODIFIER)
         except HTTPException:
             result["forbidden"].append(document_id)
             continue
@@ -123,7 +131,21 @@ def classer_lot(
 def get_document(document_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
     """Un fichier (lien profond de l'interface) ; hors des accès : 404."""
     doc, role = crud.get_document(db, principal, document_id, VOIR)
-    return crud.to_out(doc, role)
+    return crud.to_out(doc, role, crud.roles_par_document(db, [doc.id]).get(doc.id))
+
+
+@router.put("/{document_id}/roles", response_model=DocumentOut)
+def definir_roles(
+    document_id: int, data: RolesDocumentIn,
+    principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
+):
+    """Rôles de classement du fichier : gérant de la division uniquement. Liste vide = accès refusé par défaut."""
+    return crud.definir_roles_document(db, principal, document_id, data.role_ids, data.motif)
+
+
+@router.get("/{document_id}/historique", response_model=list[HistoriqueOut])
+def historique(document_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    return [historique_to_out(h) for h in crud.historique_document(db, principal, document_id)]
 
 
 @router.delete("/{document_id}", status_code=204)

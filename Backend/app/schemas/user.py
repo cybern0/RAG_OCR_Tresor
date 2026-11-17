@@ -26,22 +26,43 @@ class AgentBrief(BaseModel):
     prenom: str
     service_id: int | None
     service_nom: str | None = None
+    division_id: int | None = None
+    division_nom: str | None = None
+    titre: str | None = None
+
+
+class RoleDivisionBrief(BaseModel):
+    id: int
+    code: str
+    libelle: str
 
 
 class UserOut(BaseModel):
     id: int
     nom_utilisateur: str
     role: RoleCode
+    niveau: Literal["ROOT", "SERVICE", "DIVISION", "AGENT"] = "AGENT"
     actif: bool
     derniere_connexion: datetime | None
     cree_le: datetime
     agent: AgentBrief | None
+    roles_division: list[RoleDivisionBrief] = []
+
+
+class DivisionBrief(BaseModel):
+    id: int
+    nom: str
 
 
 class MeOut(UserOut):
     permissions: list[str]
     service_id: int | None
     service_nom: str | None
+    division_id: int | None = None
+    division_nom: str | None = None
+    titre: str | None = None
+    divisions_gerees: list[DivisionBrief] = []  # divisions dont il est gérant (la sienne, ou intérim)
+    unites_protegees: bool = False  # a des mots de passe de dossier à gérer (super administrateur, chef de service)
 
 
 class TokenOut(BaseModel):
@@ -62,6 +83,7 @@ class UserCreate(BaseModel):
     mot_de_passe: str = Field(max_length=200)
     role: RoleCode = "UTILISATEUR"
     agent_id: int | None = None
+    role_ids: list[int] = Field(default_factory=list, max_length=50)  # rôles de division attribués dès la création
 
     @field_validator("nom_utilisateur")
     @classmethod
@@ -120,3 +142,8 @@ class ProfileUpdate(BaseModel):
         if self.nom_utilisateur is None and self.nouveau_mot_de_passe is None:
             raise ValueError("Rien à modifier.")
         return self
+
+
+class RolesUtilisateurIn(BaseModel):
+    role_ids: list[int] = Field(max_length=50)
+    motif: str | None = Field(default=None, max_length=500)
