@@ -4,12 +4,13 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { useAuth } from '../auth/session'
+import ErreurAcces from '../demandes/ErreurAcces'
 import { listDivisions } from '../roles/api'
 import { plural } from '../../shared/lib/format'
 import Badge from '../../shared/ui/Badge'
-import { EmptyState, ErrorBox, Skeleton } from '../../shared/ui/Feedback'
+import { EmptyState, Skeleton } from '../../shared/ui/Feedback'
 import PageHeader from '../../shared/ui/PageHeader'
-import { useDossiers, queryError } from './queries'
+import { useDossiers } from './queries'
 
 export function Component() {
   const { user } = useAuth()
@@ -19,7 +20,10 @@ export function Component() {
   const divisionId = canChooseDivision ? (choix ?? divisions.data?.[0]?.id ?? null) : user?.division_id ?? null
   const dossiers = useDossiers(divisionId)
   const [search, setSearch] = useState('')
-  const list = (dossiers.data ?? []).filter((d) => d.parent_id === null).filter((d) => `${d.nom} ${d.description ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()))
+  // Le serveur doit renvoyer un tableau ; si une version déployée renvoie autre chose (objet, enveloppe), on ignore
+  // au lieu de planter la page (`.filter is not a function`).
+  const donnees = Array.isArray(dossiers.data) ? dossiers.data : []
+  const list = donnees.filter((d) => d.parent_id === null).filter((d) => `${d.nom} ${d.description ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()))
 
   return (
     <>
@@ -44,8 +48,9 @@ export function Component() {
         </EmptyState>
       ) : (
         <>
-          <ErrorBox message={queryError(dossiers)} />
-          {dossiers.isPending ? (
+          {dossiers.error ? (
+            <ErreurAcces error={dossiers.error} />
+          ) : dossiers.isPending ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-32" />)}</div>
           ) : list.length === 0 ? (
             <EmptyState icon={<FolderOpen className="h-8 w-8" />} title={search ? 'Aucun dossier ne correspond' : 'Aucun dossier disponible'}>

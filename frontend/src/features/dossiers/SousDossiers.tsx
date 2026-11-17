@@ -16,11 +16,12 @@ export default function SousDossiers({ d }: { d: DossierDetail }) {
     mutationFn: () => createDossier({ nom: nom.trim(), parent_id: d.id }),
     onSuccess: () => { setNom(''); return qc.invalidateQueries({ queryKey: ['dossiers'] }) },
   })
-  if (d.sous_dossiers.length === 0 && !d.peut_creer) return null
+  const sousDossiers = d.sous_dossiers ?? [] // champ absent si le backend déployé est d'une autre version
+  if (sousDossiers.length === 0 && !d.peut_creer) return null
   return (
     <section className="mb-4 space-y-2">
       <div className="flex flex-wrap gap-2">
-        {d.sous_dossiers.map((s) => (
+        {sousDossiers.map((s) => (
           <Link key={s.id} to={`/dossiers/${s.id}`} className="card flex items-center gap-2 px-3 py-2 text-sm hover:border-gold-400">
             <FolderOpen className="h-4 w-4 text-gold-400" aria-hidden /> {s.nom} <span className="text-xs text-cream-300">({s.nb_fichiers})</span>
           </Link>

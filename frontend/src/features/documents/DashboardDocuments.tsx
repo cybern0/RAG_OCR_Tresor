@@ -25,7 +25,8 @@ export default function DashboardDocuments() {
   const [history, setHistory] = useState<DocumentMeta | null>(null)
   const [deleting, setDeleting] = useState<DocumentMeta | null>(null)
 
-  const folders = dossiers.data ?? []
+  // Réponse inattendue (backend d'une autre version) : on ignore au lieu de planter (`.find`/`.map` non applicables).
+  const folders = Array.isArray(dossiers.data) ? dossiers.data : []
   const current = folders.find((d) => d.id === selectedId) ?? folders[0] ?? null
   const currentId = current?.id ?? null
 

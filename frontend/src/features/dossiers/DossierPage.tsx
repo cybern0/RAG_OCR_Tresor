@@ -91,7 +91,7 @@ export function Component() {
       <PageHeader
         back={<Link to="/dossiers" className="mb-2 inline-flex items-center gap-1 text-sm text-cream-300 hover:text-gold-300"><ArrowLeft className="h-4 w-4" /> Tous les dossiers</Link>}
         title={d.nom}
-        description={<>{d.division_nom}{d.chemin.length > 1 ? ` · ${d.chemin.map((c) => c.nom).join(' / ')}` : ''}{d.description ? ` · ${d.description}` : ''}</>}
+        description={<>{d.division_nom}{(d.chemin ?? []).length > 1 ? ` · ${(d.chemin ?? []).map((c) => c.nom).join(' / ')}` : ''}{d.description ? ` · ${d.description}` : ''}</>}
         actions={mayAdd && !corbeille ? <button className="btn" onClick={() => setDialog({ kind: 'add' })}><FilePlus2 className="h-4 w-4" /> Ajouter un fichier</button> : null}
       />
       <SousDossiers d={d} />
