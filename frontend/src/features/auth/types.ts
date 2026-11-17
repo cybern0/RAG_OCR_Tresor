@@ -8,6 +8,9 @@ export interface AgentBrief {
   prenom: string
   service_id: number | null
   service_nom: string | null
+  division_id?: number | null
+  division_nom?: string | null
+  titre?: string | null
 }
 
 export interface UserOut {
@@ -25,6 +28,10 @@ export interface Me extends UserOut {
   permissions: string[]
   service_id: number | null
   service_nom: string | null
+  division_id: number | null
+  division_nom: string | null
+  titre: string | null
+  niveau: 'ROOT' | 'SERVICE' | 'DIVISION' | 'AGENT'
 }
 
 export interface UserCreate { nom_utilisateur: string; mot_de_passe: string; role: Role; agent_id: number | null }

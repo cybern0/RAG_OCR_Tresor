@@ -22,10 +22,12 @@ import { StatusBadge } from '../documents/components/StatusBadge'
 import { useDocumentMutations, useDocuments, useReferentiel } from '../documents/queries'
 import type { DocumentFilters, DocumentMeta } from '../documents/types'
 import { queryError, useDossier } from './queries'
-import { canAdd, canDelete, roleLabel } from './types'
 
 const TAILLE = 15
 type Dialog = { kind: 'add' } | { kind: 'edit' | 'version' | 'classify' | 'trash' | 'purge'; doc: DocumentMeta } | { kind: 'classify-many' } | null
+
+import ErreurAcces from '../demandes/ErreurAcces'
+import SousDossiers from './SousDossiers'
 
 export function Component() {
   const dossierId = Number(useParams().dossierId)
@@ -67,12 +69,12 @@ export function Component() {
   }
 
   if (dossier.isPending) return <Loading />
-  if (dossier.error || !dossier.data) return <ErrorBox message={queryError(dossier) ?? 'Dossier introuvable.'} />
+  if (dossier.error || !dossier.data) return (dossier.error ? <ErreurAcces error={dossier.error} /> : <ErrorBox message="Dossier introuvable." />)
 
   const d = dossier.data
   const writable = !d.archive
-  const mayAdd = canAdd(d.mon_role) && writable
-  const mayDelete = canDelete(d.mon_role) && writable
+  const mayAdd = d.peut_creer && writable
+  const mayDelete = d.peut_modifier && writable
   const items = docs.data?.items ?? []
   const allSelected = items.length > 0 && items.every((i) => selected.has(i.id))
   const chosen = items.filter((i) => selected.has(i.id))
@@ -89,9 +91,11 @@ export function Component() {
       <PageHeader
         back={<Link to="/dossiers" className="mb-2 inline-flex items-center gap-1 text-sm text-cream-300 hover:text-gold-300"><ArrowLeft className="h-4 w-4" /> Tous les dossiers</Link>}
         title={d.nom}
-        description={<>Votre rôle : <span className="text-gold-300">{roleLabel(d.mon_role)}</span>{d.description ? ` · ${d.description}` : ''}</>}
+        description={<>{d.division_nom}{d.chemin.length > 1 ? ` · ${d.chemin.map((c) => c.nom).join(' / ')}` : ''}{d.description ? ` · ${d.description}` : ''}</>}
         actions={mayAdd && !corbeille ? <button className="btn" onClick={() => setDialog({ kind: 'add' })}><FilePlus2 className="h-4 w-4" /> Ajouter un fichier</button> : null}
       />
+      <SousDossiers d={d} />
+      {d.nb_fichiers_masques > 0 && <p className="mb-3 text-sm text-cream-300">{d.nb_fichiers_masques} fichier(s) de ce dossier ne sont pas accessibles avec vos rôles ; vous pouvez demander l’accès depuis la page Demandes.</p>}
       {d.archive && <p className="card mb-4 border-amber-300/40 p-3 text-sm text-amber-100">Dossier archivé : lecture seule, et exclu de l’assistant.</p>}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">

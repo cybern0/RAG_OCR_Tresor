@@ -22,6 +22,9 @@ export const router = createBrowserRouter([
             lazy: () => import('./layouts/AppLayout'),
             children: [
               { index: true, lazy: () => import('../features/accueil/AccueilPage') },
+              guarded(['utilisateur.lister'], [{ path: 'roles', lazy: () => import('../features/roles/RolesPage') }]),
+              { path: 'historique', lazy: () => import('../features/historique/HistoriquePage') },
+              { path: 'securite', lazy: () => import('../features/securite/MotsDePassePage') },
               { path: 'demandes', lazy: () => import('../features/demandes/DemandesPage') },
               { path: 'profil', lazy: () => import('../features/auth/ProfilePage') },
               guarded(['document.lister'], [
@@ -34,7 +37,6 @@ export const router = createBrowserRouter([
                 { path: 'chat/:conversationId?', lazy: () => import('../features/chat/ChatPage') },
               ]),
               guarded(['statistiques.globales'], [{ path: 'admin', lazy: () => import('../features/admin/stats/StatsPage') }]),
-              guarded(['dossier.gerer'], [{ path: 'admin/dossiers', lazy: () => import('../features/admin/dossiers/AdminDossiersPage') }]),
               guarded(['utilisateur.lister'], [
                 { path: 'admin/utilisateurs', lazy: () => import('../features/admin/users/UsersPage') },
                 { path: 'admin/utilisateurs/:userId', lazy: () => import('../features/admin/users/UserDetailPage') },

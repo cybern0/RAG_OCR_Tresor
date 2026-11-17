@@ -5,11 +5,11 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { errorMessage } from '../../shared/api/client'
 import { formatDate, formatSize, plural } from '../../shared/lib/format'
 import ConfirmDialog from '../../shared/ui/ConfirmDialog'
+import ErreurAcces from '../demandes/ErreurAcces'
 import { ErrorBox, Loading } from '../../shared/ui/Feedback'
 import PageHeader from '../../shared/ui/PageHeader'
 import { useToast } from '../../shared/hooks/useToast'
 import { useDossier } from '../dossiers/queries'
-import { canAdd, canDelete } from '../dossiers/types'
 import { downloadVersion } from './api'
 import { ClassementBadges } from './components/ClassementBadges'
 import ClassifyModal from './components/ClassifyModal'
@@ -36,14 +36,14 @@ export function Component() {
   const [selected, setSelected] = useState<number | null>(null)
 
   if (doc.isPending) return <Loading />
-  if (doc.error || !doc.data) return <ErrorBox message={doc.error ? errorMessage(doc.error) : 'Fichier introuvable.'} />
+  if (doc.error || !doc.data) return (doc.error ? <ErreurAcces error={doc.error} documentId={Number(documentId)} /> : <ErrorBox message="Fichier introuvable." />)
 
   const d = doc.data
   const list = versions.data ?? []
   const current = list.find((v) => v.numero === selected) ?? list.find((v) => v.est_courante) ?? list[0] ?? null
   const writable = !(dossier.data?.archive ?? false) && !d.corbeille_le
-  const mayAdd = canAdd(d.mon_role) && writable
-  const mayDelete = canDelete(d.mon_role) && writable
+  const mayAdd = d.droits.includes('ajouter_version') && writable
+  const mayDelete = d.droits.includes('purger') && writable
 
   return (
     <>
@@ -92,7 +92,7 @@ export function Component() {
             <ErrorBox message={versions.error ? errorMessage(versions.error) : null} />
           </section>
 
-          {canAdd(d.mon_role) && (
+          {d.droits.includes('ajouter_version') && (
             <section className="card p-4">
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Commentaires</h2>
               <CommentsPanel documentId={d.id} />

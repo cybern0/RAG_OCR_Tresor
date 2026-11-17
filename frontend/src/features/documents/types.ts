@@ -30,6 +30,7 @@ export interface DocumentMeta {
   nb_versions: number
   version: VersionMeta // la plus récente
   mon_role: string
+  droits: string[]
   cree_par_nom: string | null
   cree_le: string
   modifie_le: string

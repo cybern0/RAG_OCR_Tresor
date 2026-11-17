@@ -15,6 +15,7 @@ import { ErrorBox, Loading } from '../../../shared/ui/Feedback'
 import PageHeader from '../../../shared/ui/PageHeader'
 import { useAuth } from '../../auth/session'
 import type { Role, UserOut } from '../../auth/types'
+import RolesAgentPanel from '../../roles/RolesAgentPanel'
 import { updateUser } from '../api'
 import { adminKeys, useAdminMutation, useAgents, useUser } from '../queries'
 
@@ -152,6 +153,7 @@ export function Component() {
         description={<span className="flex flex-wrap items-center gap-2">{u.actif ? <Badge tone="green">Actif</Badge> : <Badge tone="red">Désactivé</Badge>}<Badge tone={u.role === 'ADMIN' ? 'gold' : 'gray'}>{u.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur'}</Badge>{isSelf && <span>(vous)</span>} · dernière connexion : {formatDate(u.derniere_connexion)}</span>} />
       <div className="grid max-w-5xl gap-5 lg:grid-cols-2">
         <AccountForm key={`${u.role}-${u.agent?.id}-${u.actif}`} target={u} canEdit={canEdit} isSelf={isSelf} />
+        {u.agent?.division_id ? <RolesAgentPanel userId={u.id} divisionId={u.agent.division_id} divisionNom={u.agent.division_nom ?? ''} /> : null}
         {canEdit ? <PasswordReset key={u.id} target={u} isSelf={isSelf} /> : null}
       </div>
     </>
