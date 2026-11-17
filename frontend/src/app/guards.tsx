@@ -18,6 +18,12 @@ export function RequirePermission({ any }: { any: string[] }) {
   return canAny(...any) ? <Outlet /> : <Navigate to="/" replace />
 }
 
+export function RequireIntermediateAdmin() {
+  const { user } = useAuth()
+  if (!user || user.niveau === 'AGENT') return <Navigate to="/" replace />
+  return <Outlet />
+}
+
 /** Page d'accueil : première page accessible au compte. */
 export function Home() {
   const { can } = useAuth()

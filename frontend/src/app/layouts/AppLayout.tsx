@@ -5,7 +5,7 @@ import { NavLink, Outlet } from 'react-router'
 import NotificationBell from '../../features/notifications/NotificationBell'
 import { signOut, useAuth } from '../../features/auth/session'
 import { cn } from '../../shared/lib/cn'
-import { ADMIN_NAV, MAIN_NAV, allowed } from '../nav'
+import { ADMIN_NAV, INTERMEDIATE_NAV, MAIN_NAV, allowed, isIntermediateAdmin } from '../nav'
 import type { NavItem } from '../nav'
 
 type Point = { x: number; y: number }
@@ -76,6 +76,7 @@ export function Component() {
   )
 
   const main = MAIN_NAV.filter((i) => allowed(i, can))
+  const intermediate = INTERMEDIATE_NAV.filter(() => isIntermediateAdmin(user))
   const admin = ADMIN_NAV.filter((i) => allowed(i, can))
 
   const sidebar = (
@@ -86,6 +87,7 @@ export function Component() {
       </div>
       <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Navigation principale">
         <NavSection items={main} onNavigate={() => setOpen(false)} />
+        <NavSection title="Administration intermédiaire" items={intermediate} onNavigate={() => setOpen(false)} />
         <NavSection title="Administration" items={admin} onNavigate={() => setOpen(false)} />
       </nav>
     </div>

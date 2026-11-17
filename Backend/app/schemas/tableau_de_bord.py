@@ -5,7 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from app.schemas.demande import DemandeOut
 from app.schemas.document import RoleBrief
 from app.schemas.historique import HistoriqueOut
 
@@ -60,9 +59,7 @@ class TableauDeBordOut(BaseModel):
     repartition: Repartition | None = None
     alertes: list[str] = []
     a_classer: list[FichierBrief] = []
-    demandes_en_attente: list[DemandeOut] = []
     derniers_changements: list[HistoriqueOut] = []
     mes_roles: list[RoleBrief] = []
     mes_fichiers: list[FichierBrief] = []
-    mes_demandes: dict[str, int] = {}
     acces_ponctuels: list[AccesPonctuelBrief] = []

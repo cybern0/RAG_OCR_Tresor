@@ -1,6 +1,6 @@
 // Navigation principale : une entrée par page, avec les permissions qui l'ouvrent. La même table sert à la barre latérale,
 // aux gardes de routes et à la page d'accueil par défaut.
-import { BarChart3, Building2, FolderOpen, Home, Inbox, KeyRound, History, Shield, MessageSquare, Users, UserSquare } from 'lucide-react'
+import { BarChart3, Building2, FolderOpen, Home, KeyRound, History, Shield, MessageSquare, Users, UserSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface NavItem { to: string; label: string; icon: LucideIcon; any: string[]; end?: boolean }
@@ -8,10 +8,12 @@ export interface NavItem { to: string; label: string; icon: LucideIcon; any: str
 export const MAIN_NAV: NavItem[] = [
   { to: '/', label: 'Accueil', icon: Home, any: ['document.lister', 'chat.utiliser', 'statistiques.globales'], end: true },
   { to: '/dossiers', label: 'Dossiers et fichiers', icon: FolderOpen, any: ['document.lister'] },
-  { to: '/demandes', label: 'Demandes d’accès', icon: Inbox, any: ['document.lister'] },
+  { to: '/chat', label: 'Assistant', icon: MessageSquare, any: ['chat.utiliser'] },
+]
+
+export const INTERMEDIATE_NAV: NavItem[] = [
   { to: '/historique', label: 'Historique', icon: History, any: ['document.lister'] },
   { to: '/securite', label: 'Mots de passe de dossier', icon: KeyRound, any: ['document.lister'] },
-  { to: '/chat', label: 'Assistant', icon: MessageSquare, any: ['chat.utiliser'] },
 ]
 
 export const ADMIN_NAV: NavItem[] = [
@@ -23,6 +25,11 @@ export const ADMIN_NAV: NavItem[] = [
 ]
 
 export const allowed = (item: NavItem, can: (p: string) => boolean) => item.any.some(can)
+
+export const isIntermediateAdmin = (user: { niveau?: string | null; role?: string | null } | null): boolean => {
+  if (!user) return false
+  return user.niveau === 'ROOT' || user.niveau === 'SERVICE' || user.niveau === 'DIVISION' || user.role === 'ADMIN'
+}
 
 /** Première page accessible au compte (page d'accueil). */
 export function homePath(can: (p: string) => boolean): string | null {

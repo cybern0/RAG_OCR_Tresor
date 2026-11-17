@@ -22,6 +22,8 @@ def lister(
     offset: int = Query(default=0, ge=0),
     principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
 ):
+    if principal.niveau == NIVEAU_AGENT:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Réservé aux administrateurs intermédiaires.")
     total, rows = svc.lister_historique(
         db, principal, cible_type=cible_type, action=action, division_id=division_id, service_id=service_id, limit=limit, offset=offset
     )

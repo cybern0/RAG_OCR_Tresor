@@ -9,7 +9,7 @@ import { listNotifications, marquerLue, toutMarquerLu } from './api'
 import type { Notification } from './api'
 
 const key = ['notifications'] as const
-const cible = (n: Notification) => n.reference_type === 'demande' ? '/demandes' : n.reference_type === 'document' ? null : null
+const cible = (n: Notification) => { if (n.reference_type === 'document') return null; return null }
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)

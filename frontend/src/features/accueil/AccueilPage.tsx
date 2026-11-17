@@ -50,10 +50,6 @@ export function Component() {
                 {t.repartition!.colonnes.map((c) => <td key={c.cle} className="td text-right">{l.valeurs[c.cle] ?? 0}</td>)}
               </tr>))}</tbody></table></section>
       )}
-      {t.demandes_en_attente.length > 0 && (
-        <section className="card p-4"><div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-gold-300">Demandes en attente</h2><Link className="text-sm text-gold-300 underline" to="/demandes">Tout voir</Link></div>
-          <ul className="text-sm">{t.demandes_en_attente.map((d) => <li key={d.id} className="py-1">{d.demandeur_nom} · {d.cible_libelle} <Badge tone="amber">{d.type_demande === 'role' ? 'Rôle' : 'Fichier'}</Badge></li>)}</ul></section>
-      )}
       <Fichiers titre="Fichiers à classer" items={t.a_classer} />
       <Fichiers titre="Mes fichiers récents" items={t.mes_fichiers} />
       {t.mes_roles.length > 0 && <section className="card p-4"><h2 className="mb-2 font-semibold text-gold-300">Mes rôles</h2><div className="flex flex-wrap gap-2">{t.mes_roles.map((r) => <Badge key={r.id} tone="gold">{r.libelle}</Badge>)}</div></section>}

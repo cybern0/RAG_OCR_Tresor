@@ -3,7 +3,7 @@
 import { createBrowserRouter, redirect } from 'react-router'
 import type { RouteObject } from 'react-router'
 import { Component as NotFound, ErrorPage } from './ErrorPage'
-import { RequireAuth, RequirePermission } from './guards'
+import { RequireAuth, RequireIntermediateAdmin, RequirePermission } from './guards'
 
 const guarded = (any: string[], children: RouteObject[]): RouteObject => ({
   element: <RequirePermission any={any} />,
@@ -23,9 +23,16 @@ export const router = createBrowserRouter([
             children: [
               { index: true, lazy: () => import('../features/accueil/AccueilPage') },
               guarded(['utilisateur.lister', 'classement.gerer'], [{ path: 'roles', lazy: () => import('../features/roles/RolesPage') }]),
-              { path: 'historique', lazy: () => import('../features/historique/HistoriquePage') },
-              { path: 'securite', lazy: () => import('../features/securite/MotsDePassePage') },
-              { path: 'demandes', lazy: () => import('../features/demandes/DemandesPage') },
+              {
+                path: 'historique',
+                element: <RequireIntermediateAdmin />,
+                children: [{ index: true, lazy: () => import('../features/historique/HistoriquePage') }],
+              },
+              {
+                path: 'securite',
+                element: <RequireIntermediateAdmin />,
+                children: [{ index: true, lazy: () => import('../features/securite/MotsDePassePage') }],
+              },
               { path: 'profil', lazy: () => import('../features/auth/ProfilePage') },
               guarded(['document.lister'], [
                 { path: 'dossiers', lazy: () => import('../features/dossiers/DossiersPage') },

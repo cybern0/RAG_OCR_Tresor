@@ -14,7 +14,6 @@ from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, NIVEAU_SERVICE, P
 from app.db.metier import (
     AccesException,
     Agent,
-    DemandeAcces,
     Division,
     Dossier,
     DocumentRole,
@@ -34,7 +33,6 @@ from app.schemas.tableau_de_bord import (
     Repartition,
     TableauDeBordOut,
 )
-from app.services import demandes as demandes_svc
 from app.services import historique as historique_svc
 
 SANS_ROLE = ~select(DocumentRole.document_id).where(DocumentRole.document_id == Document.id).exists()
@@ -95,15 +93,13 @@ def _root(db: Session, principal: Principal) -> TableauDeBordOut:
     nb_agents = _par(db, Agent.service_id, actifs)
     nb_fichiers = _par(db, Document.division_id, fichiers)
     nb_a_classer = _par(db, Document.division_id, fichiers, SANS_ROLE)
-    attente = _par(db, DemandeAcces.division_id, DemandeAcces.statut == "en_attente")
     lignes = []
     for s in services:
         ds = [d for d in divisions if d.service_id == s.id]
         a_classer = sum(nb_a_classer.get(d.id, 0) for d in ds)
         lignes.append(LigneRepartition(
             id=s.id, libelle=s.nom, sous_titre=s.site,
-            valeurs={"divisions": len(ds), "agents": nb_agents.get(s.id, 0), "fichiers": sum(nb_fichiers.get(d.id, 0) for d in ds),
-                     "a_classer": a_classer, "demandes": sum(attente.get(d.id, 0) for d in ds)},
+            valeurs={"divisions": len(ds), "agents": nb_agents.get(s.id, 0), "fichiers": sum(nb_fichiers.get(d.id, 0) for d in ds), "a_classer": a_classer},
             alerte=a_classer > 0,
         ))
     admins = db.scalar(select(func.count(User.id)).where(User.actif.is_(True), User.role.has(code="ADMIN"))) or 0
@@ -117,7 +113,6 @@ def _root(db: Session, principal: Principal) -> TableauDeBordOut:
     verif = historique_svc.verifier_chaine(db)
     if not verif["ok"]:
         alertes.append(f"L'historique de traçabilité est ALTÉRÉ à partir de l'entrée n°{verif['premier_rang_invalide']}.")
-    total_attente = sum(attente.values())
     total_a_classer = sum(nb_a_classer.values())
     return TableauDeBordOut(
         niveau="ROOT", titre="Vue d'ensemble de la direction",
@@ -127,11 +122,10 @@ def _root(db: Session, principal: Principal) -> TableauDeBordOut:
             Indicateur(cle="agents", libelle="Agents actifs", valeur=sum(nb_agents.values())),
             Indicateur(cle="fichiers", libelle="Fichiers", valeur=sum(nb_fichiers.values())),
             Indicateur(cle="a_classer", libelle="Fichiers à classer", valeur=total_a_classer, ton=_ton(total_a_classer)),
-            Indicateur(cle="demandes", libelle="Demandes en attente", valeur=total_attente, ton=_ton(total_attente)),
         ],
         repartition=Repartition(
             titre="Par service",
-            colonnes=[ColonneRepartition(cle=c, libelle=l) for c, l in (("divisions", "Divisions"), ("agents", "Agents"), ("fichiers", "Fichiers"), ("a_classer", "À classer"), ("demandes", "Demandes"))],
+            colonnes=[ColonneRepartition(cle=c, libelle=l) for c, l in (("divisions", "Divisions"), ("agents", "Agents"), ("fichiers", "Fichiers"), ("a_classer", "À classer"))],
             lignes=lignes,
         ),
         alertes=alertes, derniers_changements=_derniers(db, principal),
@@ -145,18 +139,16 @@ def _service(db: Session, principal: Principal) -> TableauDeBordOut:
     nb_agents = _par(db, Agent.division_id, Agent.actif.is_(True), Agent.division_id.in_(ids))
     nb_fichiers = _par(db, Document.division_id, Document.corbeille_le.is_(None), Document.division_id.in_(ids))
     nb_a_classer = _par(db, Document.division_id, Document.corbeille_le.is_(None), Document.division_id.in_(ids), SANS_ROLE)
-    attente = _par(db, DemandeAcces.division_id, DemandeAcces.statut == "en_attente", DemandeAcces.division_id.in_(ids))
     chefs = {a.division_id for a in db.scalars(select(Agent).where(Agent.titre == "CHEF_DIVISION", Agent.actif.is_(True), Agent.service_id == service.id))}
     lignes = [
         LigneRepartition(
             id=d.id, libelle=d.nom, sous_titre=None if d.id in chefs else "Intérim : poste de chef vacant",
-            valeurs={"agents": nb_agents.get(d.id, 0), "fichiers": nb_fichiers.get(d.id, 0), "a_classer": nb_a_classer.get(d.id, 0), "demandes": attente.get(d.id, 0)},
+            valeurs={"agents": nb_agents.get(d.id, 0), "fichiers": nb_fichiers.get(d.id, 0), "a_classer": nb_a_classer.get(d.id, 0)},
             alerte=d.id not in chefs,
         )
         for d in divisions
     ]
-    a_classer, attente_total = sum(nb_a_classer.values()), sum(attente.values())
-    a_traiter = demandes_svc.lister(db, principal, "a_traiter", "en_attente")
+    a_classer = sum(nb_a_classer.values())
     return TableauDeBordOut(
         niveau="SERVICE", titre=f"Service « {service.nom} »", sous_titre="Vue par division",
         indicateurs=[
@@ -164,15 +156,14 @@ def _service(db: Session, principal: Principal) -> TableauDeBordOut:
             Indicateur(cle="agents", libelle="Agents actifs", valeur=sum(nb_agents.values())),
             Indicateur(cle="fichiers", libelle="Fichiers", valeur=sum(nb_fichiers.values())),
             Indicateur(cle="a_classer", libelle="Fichiers à classer", valeur=a_classer, ton=_ton(a_classer)),
-            Indicateur(cle="demandes", libelle="Demandes en attente", valeur=attente_total, ton=_ton(attente_total)),
         ],
         repartition=Repartition(
             titre="Par division",
-            colonnes=[ColonneRepartition(cle=c, libelle=l) for c, l in (("agents", "Agents"), ("fichiers", "Fichiers"), ("a_classer", "À classer"), ("demandes", "Demandes"))],
+            colonnes=[ColonneRepartition(cle=c, libelle=l) for c, l in (("agents", "Agents"), ("fichiers", "Fichiers"), ("a_classer", "À classer"))],
             lignes=lignes,
         ),
         alertes=_postes_vacants(db, [], divisions),
-        demandes_en_attente=a_traiter[:10], derniers_changements=_derniers(db, principal),
+        derniers_changements=_derniers(db, principal),
     )
 
 
@@ -186,7 +177,6 @@ def _division(db: Session, principal: Principal) -> TableauDeBordOut:
     nb_fichiers = db.scalar(select(func.count(Document.id)).where(Document.division_id == division.id, fichiers)) or 0
     a_classer_rows = list(db.scalars(select(Document).where(Document.division_id == division.id, fichiers, SANS_ROLE, condition_acces_fichiers(db, principal)).order_by(Document.cree_le.desc()).limit(10)))
     nb_a_classer = db.scalar(select(func.count(Document.id)).where(Document.division_id == division.id, fichiers, SANS_ROLE)) or 0
-    a_traiter = demandes_svc.lister(db, principal, "a_traiter", "en_attente")
     alertes = []
     if not roles:
         alertes.append("Aucun rôle défini dans cette division : créez le dictionnaire de rôles pour classer les fichiers.")
@@ -197,14 +187,13 @@ def _division(db: Session, principal: Principal) -> TableauDeBordOut:
             Indicateur(cle="roles", libelle="Rôles actifs", valeur=sum(1 for r in roles if r.actif)),
             Indicateur(cle="fichiers", libelle="Fichiers", valeur=nb_fichiers),
             Indicateur(cle="a_classer", libelle="Fichiers à classer", valeur=nb_a_classer, ton=_ton(nb_a_classer), lien="/dossiers?a_classer=1"),
-            Indicateur(cle="demandes", libelle="Demandes en attente", valeur=len(a_traiter), ton=_ton(len(a_traiter)), lien="/demandes"),
         ],
         repartition=Repartition(
             titre="Par rôle",
             colonnes=[ColonneRepartition(cle="agents", libelle="Agents"), ColonneRepartition(cle="fichiers", libelle="Fichiers")],
             lignes=[LigneRepartition(id=r.id, libelle=r.libelle, sous_titre=None if r.actif else "Désactivé", valeurs={"agents": agents_par_role.get(r.id, 0), "fichiers": fichiers_par_role.get(r.id, 0)}) for r in roles],
         ),
-        alertes=alertes, a_classer=_brief_fichiers(db, a_classer_rows), demandes_en_attente=a_traiter[:10],
+        alertes=alertes, a_classer=_brief_fichiers(db, a_classer_rows),
         derniers_changements=_derniers(db, principal),
     )
 
@@ -215,10 +204,6 @@ def _agent(db: Session, principal: Principal) -> TableauDeBordOut:
     roles = list(db.scalars(select(RoleDivision).join(UserRoleDivision, UserRoleDivision.role_division_id == RoleDivision.id).where(UserRoleDivision.user_id == moi).order_by(RoleDivision.libelle)))
     mes = list(db.scalars(select(Document).where(Document.cree_par == moi, Document.corbeille_le.is_(None)).order_by(Document.cree_le.desc()).limit(5)))
     nb_mes = db.scalar(select(func.count(Document.id)).where(Document.cree_par == moi, Document.corbeille_le.is_(None))) or 0
-    demandes = demandes_svc.lister(db, principal, "mes")
-    par_statut: dict[str, int] = {}
-    for d in demandes:
-        par_statut[d.statut] = par_statut.get(d.statut, 0) + 1
     now = datetime.now(timezone.utc)
     exceptions = db.execute(
         select(AccesException, Document.titre).join(Document, Document.id == AccesException.document_id)
@@ -227,16 +212,14 @@ def _agent(db: Session, principal: Principal) -> TableauDeBordOut:
     alertes = [] if division else ["Vous n'êtes rattaché à aucune division : demandez à votre administrateur de vous en affecter une."]
     if division and not roles:
         alertes.append("Aucun rôle ne vous est attribué : vos fichiers déposés seront « à classer » et vous ne verrez que les vôtres. Demandez un rôle.")
-    attente = par_statut.get("en_attente", 0)
     return TableauDeBordOut(
         niveau="AGENT", titre="Mon espace", sous_titre=f"Division « {division.nom} »" if division else None,
         indicateurs=[
             Indicateur(cle="roles", libelle="Mes rôles", valeur=len(roles)),
             Indicateur(cle="fichiers", libelle="Fichiers déposés par moi", valeur=nb_mes),
-            Indicateur(cle="demandes", libelle="Demandes en attente", valeur=attente, ton=_ton(attente), lien="/mes-demandes"),
             Indicateur(cle="acces", libelle="Accès ponctuels actifs", valeur=len(exceptions)),
         ],
         alertes=alertes, mes_roles=[RoleBrief(id=r.id, code=r.code, libelle=r.libelle) for r in roles], mes_fichiers=_brief_fichiers(db, mes),
-        mes_demandes=par_statut, acces_ponctuels=[AccesPonctuelBrief(document_id=e.document_id, document_titre=t, expire_le=e.expire_le) for e, t in exceptions],
+        acces_ponctuels=[AccesPonctuelBrief(document_id=e.document_id, document_titre=t, expire_le=e.expire_le) for e, t in exceptions],
         derniers_changements=_derniers(db, principal, 5),
     )
