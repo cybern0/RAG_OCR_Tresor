@@ -1,4 +1,5 @@
-// Directions et services : création et activation. Un service appartient à une direction.
+// Directions, services et divisions : création et activation. Une division appartient à un service et un service à une direction.
+import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
@@ -11,7 +12,7 @@ import { ErrorBox, Loading } from '../../../shared/ui/Feedback'
 import Modal from '../../../shared/ui/Modal'
 import PageHeader from '../../../shared/ui/PageHeader'
 import { useToast } from '../../../shared/hooks/useToast'
-import { createDirection, createService, updateDirection, updateService } from '../api'
+import { createDirection, createDivision, createService, listDivisionsAdmin, updateDirection, updateDivision, updateService } from '../api'
 import { adminKeys, useAdminMutation, useDirections, useServices } from '../queries'
 
 function DirectionModal({ onClose }: { onClose: () => void }) {
@@ -62,20 +63,48 @@ function ServiceModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+function DivisionModal({ onClose }: { onClose: () => void }) {
+  const toast = useToast()
+  const services = useServices()
+  const [serviceId, setServiceId] = useState<number | ''>('')
+  const [code, setCode] = useState('')
+  const [nom, setNom] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const activeServices = (services.data ?? []).filter((s) => s.actif)
+  const save = useAdminMutation(() => createDivision({ service_id: Number(serviceId), code: code || null, nom }), [adminKeys.services])
+  async function submit(e: FormEvent) { e.preventDefault(); setError(null); try { await save.mutateAsync(undefined); toast.success('Division créée.'); onClose() } catch (err) { setError(errorMessage(err)) } }
+  return (
+    <Modal title="Nouvelle division" onClose={onClose}>
+      <form onSubmit={(e) => void submit(e)} className="space-y-4">
+        <div className="flex justify-end"><ExampleButton onFill={() => { setServiceId(activeServices[0]?.id ?? ''); setCode(exempleCode('DIV')); setNom('Finances / Courrier') }} /></div>
+        <Field label="Service">
+          {(id) => <select id={id} className="input" required value={serviceId} onChange={(e) => setServiceId(e.target.value ? Number(e.target.value) : '')}><option value="">— Choisir —</option>{activeServices.map((s) => <option key={s.id} value={s.id}>{s.nom}</option>)}</select>}
+        </Field>
+        <Field label="Code (facultatif)">{(id) => <input id={id} className="input" maxLength={20} value={code} onChange={(e) => setCode(e.target.value)} />}</Field>
+        <Field label="Nom">{(id) => <input id={id} className="input" required value={nom} onChange={(e) => setNom(e.target.value)} />}</Field>
+        <ErrorBox message={error} />
+        <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={onClose}>Annuler</button><button className="btn" disabled={save.isPending}>Créer</button></div>
+      </form>
+    </Modal>
+  )
+}
+
 export function Component() {
   const toast = useToast()
   const directions = useDirections()
   const services = useServices()
-  const [modal, setModal] = useState<'direction' | 'service' | null>(null)
+  const divisions = useQuery({ queryKey: ['admin', 'divisions'], queryFn: listDivisionsAdmin })
+  const [modal, setModal] = useState<'direction' | 'service' | 'division' | null>(null)
   const toggleDirection = useAdminMutation((v: { id: number; actif: boolean }) => updateDirection(v.id, { actif: v.actif }), [adminKeys.directions, adminKeys.services])
   const toggleService = useAdminMutation((v: { id: number; actif: boolean }) => updateService(v.id, { actif: v.actif }), [adminKeys.services])
+  const toggleDivision = useAdminMutation((v: { id: number; actif: boolean }) => updateDivision(v.id, { actif: v.actif }), [['admin', 'divisions'] as const])
   const fail = (e: unknown) => toast.error(errorMessage(e))
 
   return (
     <>
-      <PageHeader title="Directions et services" description="L’organisation de la structure. Les agents appartiennent à un service ; un service peut recevoir un rôle sur un dossier." />
-      <ErrorBox message={directions.error ? errorMessage(directions.error) : services.error ? errorMessage(services.error) : null} />
-      <div className="grid gap-5 xl:grid-cols-2">
+      <PageHeader title="Directions, services et divisions" description="La hiérarchie de la structure. Les agents appartiennent à un service, les dossiers sont rattachés à une division, et les rôles métier vivent au niveau division." />
+      <ErrorBox message={directions.error ? errorMessage(directions.error) : services.error ? errorMessage(services.error) : divisions.error ? errorMessage(divisions.error) : null} />
+      <div className="grid gap-5 xl:grid-cols-3">
         <section>
           <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-gold-400">Directions</h2><button className="btn-ghost" onClick={() => setModal('direction')}><Plus className="h-4 w-4" /> Direction</button></div>
           {directions.isPending ? <Loading /> : (
@@ -98,9 +127,21 @@ export function Component() {
             </tbody></table></div>
           )}
         </section>
+        <section>
+          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-gold-400">Divisions</h2><button className="btn-ghost" onClick={() => setModal('division')}><Plus className="h-4 w-4" /> Division</button></div>
+          {divisions.isPending ? <Loading /> : (
+            <div className="card overflow-x-auto"><table className="w-full border-collapse"><thead><tr><th className="th">Division</th><th className="th">Service</th><th className="th">État</th><th className="th" /></tr></thead><tbody>
+              {divisions.data!.map((d) => (
+                <tr key={d.id} className="hover:bg-leaf-700/40"><td className="td">{d.nom}<br /><span className="font-mono text-xs text-cream-300">{d.code ?? '—'}</span></td><td className="td text-sm">{d.service_nom ?? '—'}{d.direction_nom ? <><br /><span className="text-xs text-cream-300">{d.direction_nom}</span></> : null}</td><td className="td"><Badge tone={d.actif ? 'green' : 'gray'}>{d.actif ? 'Active' : 'Désactivée'}</Badge></td>
+                  <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleDivision.mutateAsync({ id: d.id, actif: !d.actif }).catch(fail)}>{d.actif ? 'Désactiver' : 'Réactiver'}</button></td></tr>
+              ))}
+            </tbody></table></div>
+          )}
+        </section>
       </div>
       {modal === 'direction' && <DirectionModal onClose={() => setModal(null)} />}
       {modal === 'service' && <ServiceModal onClose={() => setModal(null)} />}
+      {modal === 'division' && <DivisionModal onClose={() => setModal(null)} />}
     </>
   )
 }

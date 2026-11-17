@@ -19,7 +19,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/roles', label: 'Rôles de division', icon: Shield, any: ['utilisateur.lister'] },
   { to: '/admin/utilisateurs', label: 'Utilisateurs', icon: Users, any: ['utilisateur.lister'] },
   { to: '/admin/agents', label: 'Agents', icon: UserSquare, any: ['structure.gerer'] },
-  { to: '/admin/structure', label: 'Directions et services', icon: Building2, any: ['structure.gerer'] },
+  { to: '/admin/structure', label: 'Directions, services et divisions', icon: Building2, any: ['structure.gerer'] },
   { to: '/admin/classement', label: 'Classement', icon: Tags, any: ['classement.gerer'] },
   { to: '/admin/audit', label: 'Journal d’audit', icon: ScrollText, any: ['audit.consulter'] },
 ]
