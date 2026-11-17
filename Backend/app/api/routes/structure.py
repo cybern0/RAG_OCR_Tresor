@@ -91,6 +91,13 @@ def transferer_chef_division(
     return crud.transferer_chef(db, actor.user, division_id=division_id, agent_id=data.agent_id, motif=data.motif, ip=client_ip(request))
 
 
+@router.put("/services/{service_id}/chef", response_model=PostesOut)
+def transferer_chef_service(
+    service_id: int, data: TransfertChefIn, request: Request, actor: Principal = Depends(_admin), db: Session = Depends(get_db),
+):
+    return crud.transferer_chef_service(db, actor.user, service_id=service_id, agent_id=data.agent_id, motif=data.motif, ip=client_ip(request))
+
+
 @router.get("/agents", response_model=list[AgentOut])
 def list_agents(_: Principal = Depends(_admin), db: Session = Depends(get_db)):
     return crud.list_agents(db)

@@ -1,7 +1,7 @@
 """Logique de gestion des comptes.
 
 Règles :
-- le périmètre (qui voit, qui gère quel compte) est dans core/portee.py : super administrateur tout, chef de division les agents de sa division ;
+- le périmètre (qui voit, qui gère quel compte) est dans core/portee.py : super administrateur tout, chef de service les agents de son service, chef de division les agents de sa division ;
 - un UTILISATEUR est lié à un agent actif (son service et sa division en découlent) ; un agent n'a qu'un seul compte ;
 - on ne change jamais un rôle au point de laisser le système sans super administrateur actif.
 """
@@ -86,7 +86,7 @@ def _query():
 
 
 def list_users(db: Session, principal: Principal) -> list[User]:
-    """Comptes du périmètre : tous (super administrateur), sa division (chef de division)."""
+    """Comptes du périmètre : tous (super administrateur), son service (chef de service), sa division (chef de division)."""
     stmt = _query().outerjoin(Agent, Agent.id == User.agent_id)
     perimetre = filtre_comptes_visibles(principal)
     if perimetre is not None:

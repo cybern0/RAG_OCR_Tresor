@@ -1,5 +1,7 @@
 # Refonte : suppression du chef de service, responsabilités regroupées sur le super administrateur
 
+> **Mise à jour 17/11/2026** : le chef de service est rétabli et les dossiers protégés existent désormais par division uniquement — voir `docs/retour_chef_service.md`. Les sections ci-dessous décrivent l'état intermédiaire (sans chef de service) et restent valables pour le reste.
+
 > Refonte appliquée en novembre 2026. Ce document décrit le concept retenu, la liste exacte des changements
 > et la marche à suivre pour les bases existantes. Voir aussi `docs/paln.md` (plan historique de la GED
 > hiérarchique, dont le § « chef de service » est désormais obsolète) et `docs/architecture.md`.

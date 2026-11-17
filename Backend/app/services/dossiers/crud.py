@@ -64,8 +64,9 @@ def _sorties(db: Session, principal: Principal, dossiers: list[Dossier]) -> list
     createurs = {u.id: u.nom_utilisateur for u in db.scalars(select(User).where(User.id.in_({d.cree_par for d in dossiers if d.cree_par})))}
     sortie = []
     for d in dossiers:
-        membre = est_membre(principal, d.division_id)
-        peut_modifier = membre and (est_chef_nominal(principal, d.division_id) or d.cree_par == principal.user.id)
+        gerant = est_chef_nominal(db, principal, d.division_id)
+        membre = est_membre(principal, d.division_id) or gerant
+        peut_modifier = membre and (gerant or d.cree_par == principal.user.id)
         visibles, masques = fichiers.get(d.id, (0, 0))
         sortie.append(
             DossierOut(

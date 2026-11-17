@@ -1,4 +1,5 @@
-// Mots de passe de dossier : déverrouiller (temporairement) ou verrouiller une unité, définir son propre mot de passe de dossier.
+// Mots de passe de dossier : chaque DIVISION protégée a son mot de passe individuel, géré par le super administrateur
+// (déverrouillage temporaire, verrouillage, définition). Aucun dossier ni mot de passe au niveau des services.
 import { Lock, Unlock } from 'lucide-react'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -25,9 +26,9 @@ function Unite({ u }: { u: UniteSecret }) {
   return (
     <li className="card space-y-2 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div><span className="font-medium">{u.nom}</span> <span className="text-xs text-cream-300">{u.type === 'service' ? 'Service' : `Division · ${u.service_nom}`}</span></div>
+        <div><span className="font-medium">{u.nom}</span> <span className="text-xs text-cream-300">Division · {u.service_nom}</span></div>
         {u.deverrouille
-          ? <Badge tone="green"><Unlock className="mr-1 inline h-3 w-3" />Ouverte{u.valide_jusqua ? ` jusqu’à ${formatDate(u.valide_jusqua)}` : ''}{u.via_service ? ' (via le service)' : ''}</Badge>
+          ? <Badge tone="green"><Unlock className="mr-1 inline h-3 w-3" />Ouverte{u.valide_jusqua ? ` jusqu’à ${formatDate(u.valide_jusqua)}` : ''}</Badge>
           : <Badge tone="amber"><Lock className="mr-1 inline h-3 w-3" />Verrouillée</Badge>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -52,7 +53,7 @@ export function Component() {
   const items = q.data ?? []
   return (
     <div className="space-y-4">
-      <PageHeader title="Mots de passe de dossier" description="Le déverrouillage est temporaire ; il se referme tout seul à l’échéance." />
+      <PageHeader title="Mots de passe de dossier" description="Chaque division protégée a son propre mot de passe, individuel. Le déverrouillage est temporaire ; il se referme tout seul à l’échéance." />
       {items.length === 0 ? <EmptyState icon={<Lock className="h-8 w-8" />} title="Aucune unité protégée pour votre compte" />
         : <ul className="space-y-3">{items.map((u) => <Unite key={`${u.type}-${u.id}`} u={u} />)}</ul>}
     </div>

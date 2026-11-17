@@ -41,7 +41,7 @@ class UserOut(BaseModel):
     id: int
     nom_utilisateur: str
     role: RoleCode
-    niveau: Literal["ROOT", "DIVISION", "AGENT"] = "AGENT"
+    niveau: Literal["ROOT", "SERVICE", "DIVISION", "AGENT"] = "AGENT"
     actif: bool
     derniere_connexion: datetime | None
     cree_le: datetime

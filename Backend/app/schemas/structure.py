@@ -78,7 +78,7 @@ class AgentIn(BaseModel):
     email: EmailStr | None = None
     service_id: int
     division_id: int | None = None
-    titre: Literal["CHEF_DIVISION"] | None = None
+    titre: Literal["CHEF_DIVISION", "CHEF_SERVICE"] | None = None
 
 
 class AgentUpdate(BaseModel):
@@ -88,7 +88,7 @@ class AgentUpdate(BaseModel):
     email: EmailStr | None = None
     service_id: int | None = None
     division_id: int | None = None
-    titre: Literal["CHEF_DIVISION"] | None = None  # null explicite = retirer le titre
+    titre: Literal["CHEF_DIVISION", "CHEF_SERVICE"] | None = None  # null explicite = retirer le titre
     actif: bool | None = None
 
 
@@ -120,8 +120,15 @@ class PosteDivisionOut(BaseModel):
     chef: ChefOut | None
 
 
+class PosteServiceOut(BaseModel):
+    service_id: int
+    service_nom: str
+    chef: ChefOut | None
+
+
 class PostesOut(BaseModel):
     divisions: list[PosteDivisionOut]
+    services: list[PosteServiceOut] = []
 
 
 class TransfertChefIn(BaseModel):
@@ -136,7 +143,7 @@ class UniteArbreOut(BaseModel):
     actif: bool
     chef: ChefOut | None
     nb_agents: int
-    acces: Literal["membre", "superieur"]
+    acces: Literal["membre", "gerant", "superieur"]
     deverrouillee: bool = False  # pertinent pour acces = superieur
     secret_defini: bool = False
 

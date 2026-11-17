@@ -212,7 +212,7 @@ def apply_document_filters(
 
 def _role_pour_liste(db: Session, principal: Principal, doc: Document, cache: dict[int, str]) -> str:
     """Rôle effectif d'un fichier déjà retenu par condition_acces_fichiers (aucune requête par fichier)."""
-    if est_chef_nominal(principal, doc.division_id):
+    if est_chef_nominal(db, principal, doc.division_id):
         return acces.GERANT
     if acces.est_membre(principal, doc.division_id):
         return acces.AUTEUR if doc.cree_par == principal.user.id else acces.LECTEUR
@@ -341,8 +341,9 @@ def _roles_au_depot(
 ) -> list[RoleDivision]:
     """Classement par rôle au dépôt.
     Agent : tous ses rôles par défaut ; il peut en retirer, jamais en ajouter un qu'il n'a pas.
-    Chef de division : il choisit dans le dictionnaire de la division ; sans choix, le fichier est « à classer » (accès refusé par défaut)."""
-    if est_chef_nominal(principal, division.id):
+    Chef de division ou de service : il choisit dans le dictionnaire de la division ; sans choix, le fichier est
+    « à classer » (accès refusé par défaut)."""
+    if est_chef_nominal(db, principal, division.id):
         return valider_roles(db, division.id, role_ids or [])
     demandes = list(principal.role_ids) if role_ids is None and not explicite else (role_ids or [])
     en_trop = set(demandes) - set(principal.role_ids)

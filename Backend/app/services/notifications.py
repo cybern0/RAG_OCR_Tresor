@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.acces import chef_division_actif
+from app.core.acces import chef_division_actif, chef_service_actif
 from app.db.metier import Division, Notification, Role, User
 
 
@@ -47,9 +47,13 @@ def super_admins_actifs(db: Session) -> list[int]:
 
 
 def destinataires_gestion(db: Session, division: Division) -> list[int]:
-    """Qui doit traiter une demande ou classer un fichier : le chef de division ; à défaut les super administrateurs (intérim)."""
+    """Qui doit traiter une demande ou classer un fichier : le chef de division ; à défaut le chef de service ;
+    sinon les super administrateurs (intérim)."""
     chef = chef_division_actif(db, division.id)
     if chef is not None and (ids := users_de_agent(db, chef.id)):
+        return ids
+    chef_service = chef_service_actif(db, division.service_id)
+    if chef_service is not None and (ids := users_de_agent(db, chef_service.id)):
         return ids
     return super_admins_actifs(db)
 

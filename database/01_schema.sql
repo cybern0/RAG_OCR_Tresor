@@ -7,7 +7,7 @@
 -- la base naît directement conforme (la refonte « suppression du chef de service » est fusionnée ici, sans ALTER).
 --
 -- Garanties portées par la BASE (et pas seulement par l'API) :
---   * un seul chef de division actif par division (index unique partiel) ;
+--   * un seul chef de division actif par division et un seul chef de service actif par service (index uniques partiels) ;
 --   * un agent est toujours d'un service ET d'une division de ce service (clé étrangère composite) ;
 --   * un dossier, un sous-dossier, un fichier et les rôles d'un fichier restent dans UNE division (clés étrangères composites) ;
 --   * l'historique de traçabilité est en ajout seul, chaîné par hash calculé par la base (déclencheurs).
@@ -56,9 +56,10 @@ CREATE TABLE division (
 );
 CREATE INDEX idx_division_service ON division (service_id);
 
--- Un agent appartient à UN service et à UNE division (de ce service). Le titre vaut rôle d'administration :
--- CHEF_DIVISION (avec division) ou vide. Il n'y a plus de chef de service : l'administration des comptes,
--- l'intérim des divisions vacantes et la supervision des unités relèvent du super administrateur (rôle global ADMIN).
+-- Un agent appartient à UN service et, sauf s'il est chef de service, à UNE division de ce service.
+-- Le titre vaut rôle d'administration : CHEF_DIVISION (avec division), CHEF_SERVICE (sans division :
+-- le même rôle que le chef de division, étendu à toutes les divisions de son service) ou vide.
+-- Les mots de passe de dossier restent réservés au super administrateur (rôle global ADMIN).
 CREATE TABLE agent (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     matricule VARCHAR(50) NOT NULL UNIQUE,
@@ -68,16 +69,18 @@ CREATE TABLE agent (
     email VARCHAR(180),
     service_id BIGINT NOT NULL REFERENCES _service(id),
     division_id BIGINT,
-    titre VARCHAR(30) CHECK (titre IN ('CHEF_DIVISION')),
+    titre VARCHAR(30) CHECK (titre IN ('CHEF_DIVISION', 'CHEF_SERVICE')),
     actif BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT fk_agent_division_service FOREIGN KEY (division_id, service_id) REFERENCES division (id, service_id),
     CONSTRAINT ck_agent_titre_division CHECK (
         titre IS NULL
         OR (titre = 'CHEF_DIVISION' AND division_id IS NOT NULL)
+        OR (titre = 'CHEF_SERVICE' AND division_id IS NULL)
     )
 );
 CREATE INDEX idx_agent_service_division ON agent (service_id, division_id);
 CREATE UNIQUE INDEX uq_chef_division ON agent (division_id) WHERE titre = 'CHEF_DIVISION' AND actif;
+CREATE UNIQUE INDEX uq_chef_service ON agent (service_id) WHERE titre = 'CHEF_SERVICE' AND actif;
 
 -- 2. Comptes, rôles globaux, permissions ------------------------------------------------------------------------------
 
@@ -391,21 +394,20 @@ CREATE TABLE acces_exception (
 );
 CREATE INDEX idx_exception_user_doc ON acces_exception (user_id, document_id) WHERE active;
 
--- 8. Mots de passe de dossier (unités) et déverrouillages -----------------------------------------------------------------------
+-- 8. Mots de passe de dossier (divisions) et déverrouillages ---------------------------------------------------------------------
 
--- Un secret par couple (unité, super administrateur). Le chef de division n'en a pas : sa division ne contient pas de dossier protégé.
+-- Les dossiers protégés existent au niveau des DIVISIONS seulement (aucun dossier ni mot de passe de service) :
+-- un secret par couple (division, super administrateur). Les chefs (division ou service) n'en ont pas :
+-- le mot de passe de dossier appartient au seul super administrateur, qui le gère pour toutes les divisions.
 CREATE TABLE secret_unite (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    service_id BIGINT REFERENCES _service(id) ON DELETE CASCADE,
-    division_id BIGINT REFERENCES division(id) ON DELETE CASCADE,
+    division_id BIGINT NOT NULL REFERENCES division(id) ON DELETE CASCADE,
     admin_user_id BIGINT NOT NULL REFERENCES _user(id) ON DELETE CASCADE,
     secret_hash TEXT NOT NULL,
     modifie_par BIGINT REFERENCES _user(id) ON DELETE SET NULL,
-    modifie_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT ck_secret_une_unite CHECK ((service_id IS NULL) <> (division_id IS NULL))
+    modifie_le TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX uq_secret_service ON secret_unite (service_id, admin_user_id) WHERE service_id IS NOT NULL;
-CREATE UNIQUE INDEX uq_secret_division ON secret_unite (division_id, admin_user_id) WHERE division_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_secret_division ON secret_unite (division_id, admin_user_id);
 
 CREATE TABLE deverrouillage (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

@@ -1,7 +1,7 @@
 """Tableaux de bord : la même application avec un filtre de périmètre appliqué CÔTÉ SERVEUR dans les requêtes.
 
-ROOT : toute l'organisation, par service ; DIVISION : sa division, par rôle ; AGENT : ce qui le concerne.
-Il n'y a plus de niveau SERVICE : le super administrateur a la vue d'ensemble par service, le chef de division la vue par rôle.
+ROOT : toute l'organisation, par service ; SERVICE : les divisions du service du chef de service ;
+DIVISION : sa division, par rôle ; AGENT : ce qui le concerne.
 Les chiffres sont des agrégats : un super administrateur voit des nombres de fichiers, jamais leur contenu (il faut déverrouiller).
 """
 
@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.acces import condition_acces_fichiers
-from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, Principal
+from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, NIVEAU_SERVICE, Principal
 from app.db.metier import (
     AccesException,
     Agent,
@@ -75,9 +75,54 @@ def _postes_vacants(db: Session, divisions: list[Division]) -> list[str]:
 def construire(db: Session, principal: Principal) -> TableauDeBordOut:
     if principal.niveau == NIVEAU_ROOT:
         return _root(db, principal)
+    if principal.niveau == NIVEAU_SERVICE:
+        return _service(db, principal)
     if principal.niveau == NIVEAU_DIVISION:
         return _division(db, principal)
     return _agent(db, principal)
+
+
+def _service(db: Session, principal: Principal) -> TableauDeBordOut:
+    """Chef de service : la vue consolidée des divisions de son service (les mêmes chiffres que le root, restreints)."""
+    service = db.get(Service, principal.service_id)
+    divisions = list(db.scalars(select(Division).where(Division.service_id == service.id).order_by(Division.nom)))
+    actifs = Agent.actif.is_(True)
+    fichiers = Document.corbeille_le.is_(None)
+    nb_agents = _par(db, Agent.division_id, actifs)
+    nb_fichiers = _par(db, Document.division_id, fichiers)
+    nb_a_classer = _par(db, Document.division_id, fichiers, SANS_ROLE)
+    lignes = [
+        LigneRepartition(
+            id=d.id, libelle=d.nom, sous_titre=d.code,
+            valeurs={"agents": nb_agents.get(d.id, 0), "fichiers": nb_fichiers.get(d.id, 0), "a_classer": nb_a_classer.get(d.id, 0)},
+            alerte=nb_a_classer.get(d.id, 0) > 0,
+        )
+        for d in divisions
+    ]
+    chefs_d = {a.division_id for a in db.scalars(select(Agent).where(Agent.titre == "CHEF_DIVISION", Agent.actif.is_(True)))}
+    alertes = [f"Division « {d.nom} » : poste de chef vacant — vous assurez la gestion en attendant la nomination d'un chef."
+               for d in divisions if d.actif and d.id not in chefs_d]
+    total_a_classer = sum(nb_a_classer.values())
+    ids_divisions = [d.id for d in divisions]
+    a_classer_rows = list(db.scalars(
+        select(Document).where(Document.division_id.in_(ids_divisions or [-1]), fichiers, SANS_ROLE).order_by(Document.cree_le.desc()).limit(10)
+    ))
+    return TableauDeBordOut(
+        niveau="SERVICE", titre=f"Service « {service.nom} »", sous_titre="Vue consolidée de vos divisions",
+        indicateurs=[
+            Indicateur(cle="divisions", libelle="Divisions", valeur=len(divisions)),
+            Indicateur(cle="agents", libelle="Agents actifs", valeur=sum(nb_agents.get(d.id, 0) for d in divisions)),
+            Indicateur(cle="fichiers", libelle="Fichiers", valeur=sum(nb_fichiers.get(d.id, 0) for d in divisions)),
+            Indicateur(cle="a_classer", libelle="Fichiers à classer", valeur=total_a_classer, ton=_ton(total_a_classer), lien="/dossiers?a_classer=1"),
+        ],
+        repartition=Repartition(
+            titre="Par division",
+            colonnes=[ColonneRepartition(cle=c, libelle=l) for c, l in (("agents", "Agents"), ("fichiers", "Fichiers"), ("a_classer", "À classer"))],
+            lignes=lignes,
+        ),
+        alertes=alertes, a_classer=_brief_fichiers(db, a_classer_rows),
+        derniers_changements=_derniers(db, principal),
+    )
 
 
 def _root(db: Session, principal: Principal) -> TableauDeBordOut:
@@ -103,7 +148,7 @@ def _root(db: Session, principal: Principal) -> TableauDeBordOut:
     if admins < 2:
         alertes.append(f"Seulement {admins} super administrateur actif : prévoyez-en au moins deux (le compte racine est un point de défaillance unique).")
     alertes += _postes_vacants(db, divisions)
-    sans_division = db.scalar(select(func.count(Agent.id)).where(actifs, Agent.division_id.is_(None))) or 0
+    sans_division = db.scalar(select(func.count(Agent.id)).where(actifs, Agent.division_id.is_(None), Agent.titre.is_(None))) or 0
     if sans_division:
         alertes.append(f"{sans_division} agent(s) actif(s) sans division : ils n'ont accès à aucun fichier.")
     verif = historique_svc.verifier_chaine(db)

@@ -19,7 +19,7 @@ export const listDivisionsAdmin = () => api<{ id: number; service_id: number; no
 export const createDivision = (data: { service_id: number; code?: string | null; nom: string }) => api<{ id: number; service_id: number; nom: string; actif: boolean; code: string | null; service_nom: string | null; direction_nom: string | null }>('/structure/divisions', { method: 'POST', json: data })
 export const updateDivision = (id: number, data: { nom?: string; actif?: boolean; service_id?: number; code?: string | null }) => api<{ id: number; service_id: number; nom: string; actif: boolean; code: string | null; service_nom: string | null; direction_nom: string | null }>(`/structure/divisions/${id}`, { method: 'PATCH', json: data })
 export const listAgents = () => api<Agent[]>('/structure/agents')
-export const createAgent = (data: { matricule: string; nom: string; prenom: string; fonction?: string | null; email?: string | null; service_id: number; division_id?: number | null }) => api<Agent>('/structure/agents', { method: 'POST', json: data })
+export const createAgent = (data: { matricule: string; nom: string; prenom: string; fonction?: string | null; email?: string | null; service_id: number; division_id?: number | null; titre?: 'CHEF_DIVISION' | 'CHEF_SERVICE' | null }) => api<Agent>('/structure/agents', { method: 'POST', json: data })
 export const updateAgent = (id: number, data: { actif?: boolean; service_id?: number; fonction?: string | null }) => api<Agent>(`/structure/agents/${id}`, { method: 'PATCH', json: data })
 
 // --- audit, statistiques, santé
@@ -48,3 +48,5 @@ export const simulate = (d: { nom_fichier?: string; extension?: string; texte?: 
 
 export const transfererChef = (unitId: number, agentId: number | null, motif?: string) =>
   api<unknown>(`/structure/divisions/${unitId}/chef`, { method: 'PUT', json: { agent_id: agentId, motif } })
+export const transfererChefService = (serviceId: number, agentId: number | null, motif?: string) =>
+  api<unknown>(`/structure/services/${serviceId}/chef`, { method: 'PUT', json: { agent_id: agentId, motif } })

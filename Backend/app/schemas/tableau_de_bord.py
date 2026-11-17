@@ -52,7 +52,7 @@ class AccesPonctuelBrief(BaseModel):
 
 
 class TableauDeBordOut(BaseModel):
-    niveau: Literal["ROOT", "DIVISION", "AGENT"]
+    niveau: Literal["ROOT", "SERVICE", "DIVISION", "AGENT"]
     titre: str
     sous_titre: str | None = None
     indicateurs: list[Indicateur]

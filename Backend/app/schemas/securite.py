@@ -44,4 +44,3 @@ class UniteSecretOut(BaseModel):
     secret_defini: bool
     deverrouille: bool
     valide_jusqua: datetime | None = None
-    via_service: bool = False  # ouverte parce que son service est déverrouillé

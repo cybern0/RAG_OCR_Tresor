@@ -71,7 +71,7 @@ def _out(db: Session, principal: Principal, d: DemandeAcces, gerees: set[int]) -
 def _divisions_traitables(db: Session, principal: Principal) -> set[int]:
     """Divisions dont on peut traiter les demandes : gérant, et division déverrouillée si l'on n'en est pas le chef."""
     debloquees = divisions_deverrouillees(db, principal)
-    return {d.id for d in divisions_gerees(db, principal) if est_chef_nominal(principal, d.id) or d.id in debloquees}
+    return {d.id for d in divisions_gerees(db, principal) if est_chef_nominal(db, principal, d.id) or d.id in debloquees}
 
 
 def creer(db: Session, principal: Principal, data: DemandeIn, ip: str | None) -> DemandeOut:

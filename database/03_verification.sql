@@ -11,7 +11,12 @@ UNION ALL
 SELECT 'agent_division_du_meme_service', count(*)
 FROM agent a JOIN division d ON d.id = a.division_id WHERE d.service_id <> a.service_id
 UNION ALL
-SELECT 'agent_titre_inconnu', count(*) FROM agent WHERE titre IS NOT NULL AND titre <> 'CHEF_DIVISION'
+SELECT 'agent_titre_inconnu', count(*) FROM agent WHERE titre IS NOT NULL AND titre NOT IN ('CHEF_DIVISION', 'CHEF_SERVICE')
+UNION ALL
+SELECT 'chef_service_unique', count(*) FROM (
+    SELECT service_id FROM agent WHERE titre = 'CHEF_SERVICE' AND actif GROUP BY service_id HAVING count(*) > 1) t
+UNION ALL
+SELECT 'chef_service_avec_division', count(*) FROM agent WHERE titre = 'CHEF_SERVICE' AND division_id IS NOT NULL
 UNION ALL
 SELECT 'compte_utilisateur_sans_agent', count(*)
 FROM _user u JOIN _role r ON r.id = u.role_id WHERE r.code = 'UTILISATEUR' AND u.agent_id IS NULL
@@ -34,10 +39,6 @@ FROM secret_unite s
 JOIN _user u ON u.id = s.admin_user_id
 JOIN _role r ON r.id = u.role_id
 WHERE r.code <> 'ADMIN'
-UNION ALL
-SELECT 'secret_de_service_sans_droit', count(*)
-FROM secret_unite s JOIN _user u ON u.id = s.admin_user_id JOIN _role r ON r.id = u.role_id
-WHERE s.service_id IS NOT NULL AND r.code <> 'ADMIN'
 UNION ALL
 SELECT 'historique_chaine_alteree', CASE WHEN (SELECT ok FROM verifier_historique()) THEN 0 ELSE 1 END
 UNION ALL

@@ -270,8 +270,7 @@ class SecretUnite(Base):
     __tablename__ = "secret_unite"
 
     id: Mapped[int] = _pk()
-    service_id: Mapped[int | None] = mapped_column(ForeignKey("_service.id", ondelete="CASCADE"))
-    division_id: Mapped[int | None] = mapped_column(ForeignKey("division.id", ondelete="CASCADE"))
+    division_id: Mapped[int] = mapped_column(ForeignKey("division.id", ondelete="CASCADE"))  # les dossiers de service n'existent pas
     admin_user_id: Mapped[int] = mapped_column(ForeignKey("_user.id", ondelete="CASCADE"))
     secret_hash: Mapped[str] = mapped_column(Text)
     modifie_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))

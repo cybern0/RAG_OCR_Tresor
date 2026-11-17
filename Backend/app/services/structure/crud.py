@@ -1,9 +1,10 @@
 """Logique de la structure : directions, services, divisions, agents, titres et postes.
 
 Pas de suppression physique (les fichiers et les comptes en dépendent) : on désactive avec `actif = false`.
-Un titre vaut rôle d'administration : un seul chef de division actif par division, garanti par un index unique en base ;
-ici on donne seulement des messages clairs et on trace dans l'historique. Il n'y a plus de chef de service :
-les comptes, l'intérim des divisions vacantes et la supervision relèvent du super administrateur.
+Un titre vaut rôle d'administration : un seul chef de division actif par division et un seul chef de service actif
+par service, garantis par des index uniques en base ; ici on donne seulement des messages clairs et on trace dans
+l'historique. Le chef de service a le même rôle que le chef de division, étendu à toutes les divisions de son service ;
+les mots de passe de dossier restent réservés au super administrateur.
 """
 
 from fastapi import HTTPException, status
@@ -14,7 +15,9 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.acces import divisions_deverrouillees
 from app.core.permissions import (
     NIVEAU_ROOT,
+    NIVEAU_SERVICE,
     TITRE_CHEF_DIVISION,
+    TITRE_CHEF_SERVICE,
     Principal,
 )
 from app.db.metier import (
@@ -39,6 +42,7 @@ from app.schemas.structure import (
     DivisionOut,
     DivisionUpdate,
     PosteDivisionOut,
+    PosteServiceOut,
     PostesOut,
     ServiceArbreOut,
     ServiceIn,
@@ -258,6 +262,22 @@ def _exiger_poste_libre(db: Session, titre: str, division_id: int, sauf_agent_id
         )
 
 
+def _occupant_service(db: Session, service_id: int, sauf_agent_id: int | None = None) -> Agent | None:
+    stmt = select(Agent).where(Agent.titre == TITRE_CHEF_SERVICE, Agent.actif.is_(True), Agent.service_id == service_id)
+    if sauf_agent_id is not None:
+        stmt = stmt.where(Agent.id != sauf_agent_id)
+    return db.scalars(stmt).first()
+
+
+def _exiger_poste_libre_service(db: Session, service_id: int, sauf_agent_id: int | None = None) -> None:
+    occupant = _occupant_service(db, service_id, sauf_agent_id)
+    if occupant is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Le poste de chef de service est déjà occupé par {_nom(occupant)} : utilisez le transfert de poste.",
+        )
+
+
 def _valider_etat(db: Session, service_id: int, division_id: int | None, titre: str | None, *, creation: bool) -> Division | None:
     service = db.get(Service, service_id)
     if service is None or not service.actif:
@@ -271,6 +291,11 @@ def _valider_etat(db: Session, service_id: int, division_id: int | None, titre: 
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "La division n'appartient pas à ce service.")
     if titre == TITRE_CHEF_DIVISION and division_id is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Un chef de division doit appartenir à une division.")
+    if titre == TITRE_CHEF_SERVICE and division_id is not None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Un chef de service n'appartient à aucune division : il couvre toutes les divisions de son service.",
+        )
     if creation and titre is None and division_id is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Choisissez la division de l'agent.")
     return division
@@ -279,7 +304,9 @@ def _valider_etat(db: Session, service_id: int, division_id: int | None, titre: 
 def create_agent(db: Session, actor: User, data: AgentIn, ip: str | None) -> AgentOut:
     titre = data.titre
     _valider_etat(db, data.service_id, data.division_id, titre, creation=True)
-    if titre:
+    if titre == TITRE_CHEF_SERVICE:
+        _exiger_poste_libre_service(db, data.service_id)
+    elif titre:
         _exiger_poste_libre(db, titre, data.division_id)
     obj = Agent(
         matricule=data.matricule.strip(), nom=data.nom.strip(), prenom=data.prenom.strip(),
@@ -330,10 +357,23 @@ def _retirer_roles_hors_division(db: Session, actor: User, agent: Agent) -> None
 
 
 def _notifier_vacance(db: Session, agent: Agent) -> None:
-    """Un poste de chef devient vacant : on prévient les super administrateurs, qui assurent l'intérim."""
+    """Un poste de chef devient vacant : on prévient les super administrateurs et, pour une division,
+    le chef de service (il en est le gérant en attendant la nomination d'un chef)."""
+    if agent.titre == TITRE_CHEF_SERVICE:
+        notifier(
+            db, super_admins_actifs(db), "poste_vacant",
+            "Poste de chef de service vacant : le super administrateur assure l'intérim.",
+            reference_type="agent", reference_id=agent.id,
+        )
+        return
+    destinataires = list(super_admins_actifs(db))
+    if agent.service_id is not None:
+        chef_service = _occupant_service(db, agent.service_id)
+        if chef_service is not None:
+            destinataires += users_de_agent(db, chef_service.id)
     notifier(
-        db, super_admins_actifs(db), "poste_vacant",
-        "Poste de chef de division vacant : le super administrateur assure l'intérim de la gestion de cette division.",
+        db, list(dict.fromkeys(destinataires)), "poste_vacant",
+        "Poste de chef de division vacant : le super administrateur et le chef de service assurent l'intérim de la gestion de cette division.",
         reference_type="agent", reference_id=agent.id,
     )
 
@@ -358,7 +398,10 @@ def update_agent(db: Session, actor: User, agent_id: int, data: AgentUpdate, ip:
         _valider_etat(db, service_final, division_final, titre_final, creation=False)
     actif_final = values["actif"] if values.get("actif") is not None else obj.actif
     if titre_final and actif_final and (titre_final != titre_avant or not actif_avant or deplace):
-        _exiger_poste_libre(db, titre_final, division_final, sauf_agent_id=obj.id)
+        if titre_final == TITRE_CHEF_SERVICE:
+            _exiger_poste_libre_service(db, service_final, sauf_agent_id=obj.id)
+        else:
+            _exiger_poste_libre(db, titre_final, division_final, sauf_agent_id=obj.id)
 
     changes = {}
     for key in ("nom", "prenom"):
@@ -450,20 +493,73 @@ def transferer_chef(db: Session, actor: User, *, division_id: int, agent_id: int
     return postes(db)
 
 
+def transferer_chef_service(db: Session, actor: User, *, service_id: int, agent_id: int | None, motif: str | None, ip: str | None) -> PostesOut:
+    """Retire le chef de service actuel et nomme le nouveau dans UNE transaction (agent_id = null : le poste devient vacant).
+    Le chef de service a le même rôle que le chef de division, étendu à toutes les divisions de son service ;
+    il appartient au service, sans division."""
+    unite = _get_service(db, service_id)
+    ancien = _occupant_service(db, service_id)
+    nouveau = None
+    if agent_id is not None:
+        nouveau = db.get(Agent, agent_id)
+        if nouveau is None or not nouveau.actif:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Agent introuvable ou inactif.")
+        if nouveau.service_id != unite.id or nouveau.division_id is not None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "Le chef de service appartient à ce service, sans division : retirez d'abord sa division.",
+            )
+        if nouveau.titre is not None and nouveau.titre != TITRE_CHEF_SERVICE:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Cet agent a déjà un autre titre : retirez-le d'abord.")
+    if ancien is not None and nouveau is not None and ancien.id == nouveau.id:
+        return postes(db)
+    if ancien is None and nouveau is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Ce poste est déjà vacant.")
+
+    perimetre = {"service_id": unite.id, "division_id": None}
+    if ancien is not None:
+        ancien.titre = None
+        db.flush()  # libère l'index unique avant de nommer le successeur
+        ecrire_historique(db, acteur=actor, cible_type="agent", cible_id=ancien.id, action="chef_retire", avant=TITRE_CHEF_SERVICE, motif=motif, **perimetre)
+        notifier(db, users_de_agent(db, ancien.id), "chef_retire", "Votre titre de chef vous a été retiré.", reference_type="agent", reference_id=ancien.id)
+    if nouveau is not None:
+        nouveau.titre = TITRE_CHEF_SERVICE
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status.HTTP_409_CONFLICT, "Conflit de poste : réessayez.") from None
+        ecrire_historique(db, acteur=actor, cible_type="agent", cible_id=nouveau.id, action="chef_nomme", apres=TITRE_CHEF_SERVICE, motif=motif, **perimetre)
+        notifier(db, users_de_agent(db, nouveau.id), "chef_nomme", "Vous êtes nommé(e) chef de service : vous gérez toutes les divisions de votre service.", reference_type="agent", reference_id=nouveau.id)
+    else:
+        _notifier_vacance(db, Agent(id=ancien.id, titre=TITRE_CHEF_SERVICE, service_id=unite.id, division_id=None))
+    log_action(db, actor.id, "structure.chef_service.transferer", "service", service_id, {"ancien": ancien.id if ancien else None, "nouveau": agent_id}, ip)
+    db.commit()
+    return postes(db)
+
+
 def postes(db: Session) -> PostesOut:
     chefs = db.scalars(select(Agent).where(Agent.titre == TITRE_CHEF_DIVISION, Agent.actif.is_(True))).all()
     cd = {a.division_id: a for a in chefs}
+    chefs_service = db.scalars(select(Agent).where(Agent.titre == TITRE_CHEF_SERVICE, Agent.actif.is_(True))).all()
+    cs = {a.service_id: a for a in chefs_service}
     divisions = db.scalars(select(Division).order_by(Division.nom)).all()
+    services = db.scalars(select(Service).order_by(Service.nom)).all()
     return PostesOut(
         divisions=[
             PosteDivisionOut(division_id=d.id, division_nom=d.nom, service_id=d.service_id, chef=_chef_out(cd.get(d.id)))
             for d in divisions
         ],
+        services=[
+            PosteServiceOut(service_id=s.id, service_nom=s.nom, chef=_chef_out(cs.get(s.id)))
+            for s in services
+        ],
     )
 
 
 def arbre(db: Session, principal: Principal) -> list[ServiceArbreOut]:
-    """Organisation visible par le compte : tout (ROOT), sa division (chef de division et agents)."""
+    """Organisation visible par le compte : tout (ROOT), son service et toutes ses divisions (chef de service),
+    sa division (chef de division et agents)."""
     chefs = db.scalars(select(Agent).where(Agent.titre == TITRE_CHEF_DIVISION, Agent.actif.is_(True))).all()
     cd = {a.division_id: a for a in chefs}
     from sqlalchemy import func
@@ -482,12 +578,18 @@ def arbre(db: Session, principal: Principal) -> list[ServiceArbreOut]:
         unites = []
         for d in db.scalars(select(Division).where(Division.service_id == s.id).order_by(Division.nom)):
             membre = principal.division_id == d.id
-            if not membre and principal.niveau != NIVEAU_ROOT:
+            if principal.niveau == NIVEAU_ROOT:
+                acces = "superieur"
+            elif principal.niveau == NIVEAU_SERVICE:
+                acces = "gerant"  # le chef de service voit et gère toutes les divisions de son service
+            elif membre:
+                acces = "membre"
+            else:
                 continue
             unites.append(
                 UniteArbreOut(
                     id=d.id, code=d.code, nom=d.nom, actif=d.actif, chef=_chef_out(cd.get(d.id)),
-                    nb_agents=effectifs.get(d.id, 0), acces="membre" if membre else "superieur",
+                    nb_agents=effectifs.get(d.id, 0), acces=acces,
                     deverrouillee=d.id in deverrouillees, secret_defini=d.id in avec_secret,
                 )
             )

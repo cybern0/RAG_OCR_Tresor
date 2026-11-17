@@ -137,8 +137,8 @@ def secret_et_deverrouillage(client, h, type_unite, unite_id):
 @pytest.fixture(scope="module")
 def world(client):
     """Une direction, deux services (s1, s2), trois divisions (v1 et v2 dans s1, v3 dans s2) avec leurs chefs.
-    Agents : a (v1, rôle COMPTA), lect (v1, COMPTA + AUDIT), mix (v1, rôle PUBLIC), b (v3, rôle RH).
-    Dossiers : A (racine de v1) et B (racine de v3)."""
+    Agents : a (v1, rôle COMPTA), lect (v1, COMPTA + AUDIT), mix (v1, rôle PUBLIC), b (v3, rôle RH),
+    cs (chef de service de s1, sans division). Dossiers : A (racine de v1) et B (racine de v3)."""
     tag = uuid.uuid4().hex[:6]
     h = auth(client, ADMIN)
     d = client.post("/structure/directions", json={"code": f"D{tag}", "nom": "Direction test"}, headers=h).json()
@@ -156,6 +156,7 @@ def world(client):
     out["svc"], out["div"] = svc, div
     out["cd1"] = mk_user(client, h, mk_agent(client, h, "cd1", tag, svc["s1"]["id"], div["v1"]["id"], "CHEF_DIVISION"), "cd1", tag)
     out["cd3"] = mk_user(client, h, mk_agent(client, h, "cd3", tag, svc["s2"]["id"], div["v3"]["id"], "CHEF_DIVISION"), "cd3", tag)
+    out["cs"] = mk_user(client, h, mk_agent(client, h, "cs", tag, svc["s1"]["id"], None, "CHEF_SERVICE"), "cs", tag)
     for key, (s, v) in {"a": ("s1", "v1"), "lect": ("s1", "v1"), "mix": ("s1", "v1"), "b": ("s2", "v3")}.items():
         agent = mk_agent(client, h, key, tag, svc[s]["id"], div[v]["id"])
         out[key] = {**mk_user(client, out["cd1"]["h"] if v == "v1" else out["cd3"]["h"], agent, key, tag), "service": svc[s], "division": div[v]}

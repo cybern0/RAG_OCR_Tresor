@@ -28,8 +28,11 @@ export const allowed = (item: NavItem, can: (p: string) => boolean) => item.any.
 
 export const isIntermediateAdmin = (user: { niveau?: string | null; role?: string | null } | null): boolean => {
   if (!user) return false
-  return user.niveau === 'ROOT' || user.niveau === 'DIVISION' || user.role === 'ADMIN'
+  return user.niveau === 'ROOT' || user.niveau === 'SERVICE' || user.niveau === 'DIVISION' || user.role === 'ADMIN'
 }
+
+/** Les mots de passe de dossier ne concernent que le super administrateur (les dossiers protégés sont des divisions). */
+export const voitMotsDePasse = (user: { unites_protegees?: boolean } | null): boolean => !!user?.unites_protegees
 
 /** Première page accessible au compte (page d'accueil). */
 export function homePath(can: (p: string) => boolean): string | null {

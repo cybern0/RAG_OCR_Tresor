@@ -2,13 +2,14 @@
 
 Pour un fichier, le rôle effectif est calculé à chaque requête :
 
+  * chef de division (sa division) ou chef de service (toutes les divisions de son service, même rôle étendu) :
+      GERANT   -> tout : contenu, versions, rôles des fichiers, classement, corbeille (sans déverrouillage)
   * membre de la division du fichier :
-      GERANT   chef de division                      -> tout dans sa division
       AUTEUR   a déposé le fichier                   -> voir, modifier, versions, corbeille
       LECTEUR  un rôle commun avec le fichier, ou une exception ponctuelle valide -> lecture, commentaires
       sinon    403 (« Demander l'accès »)
   * autre division : super administrateur, en lecture seule, seulement si l'unité est déverrouillée (423 sinon).
-    Si la division n'a plus de chef, le super administrateur est GERANT (mais déverrouille).
+    Si la division n'a plus de chef, le super administrateur assure l'intérim (le chef de service reste gérant).
   * tout le reste : 404 (l'existence n'est pas révélée).
 
 Dossiers et sous-dossiers : visibles de tous les agents de la division (ils n'ont pas de rôle).
@@ -21,7 +22,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import ColumnElement, and_, exists, false, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, TITRE_CHEF_DIVISION, Principal
+from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, NIVEAU_SERVICE, TITRE_CHEF_DIVISION, TITRE_CHEF_SERVICE, Principal
 from app.db.metier import (
     AccesException,
     Agent,
@@ -80,6 +81,12 @@ def chef_division_actif(db: Session, division_id: int) -> Agent | None:
     ).first()
 
 
+def chef_service_actif(db: Session, service_id: int) -> Agent | None:
+    return db.scalars(
+        select(Agent).where(Agent.service_id == service_id, Agent.titre == TITRE_CHEF_SERVICE, Agent.actif.is_(True))
+    ).first()
+
+
 def _division(db: Session, division_id: int) -> Division:
     division = db.get(Division, division_id)
     if division is None:
@@ -96,13 +103,21 @@ def est_superieur(principal: Principal, division: Division) -> bool:
     return principal.niveau == NIVEAU_ROOT
 
 
-def est_chef_nominal(principal: Principal, division_id: int) -> bool:
-    return principal.niveau == NIVEAU_DIVISION and principal.division_id == division_id
+def est_chef_nominal(db: Session, principal: Principal, division_id: int) -> bool:
+    """Chef nominal d'une division : le chef de division (sa division) ou le chef de service
+    (le même rôle que le chef de division, étendu à toutes les divisions de son service)."""
+    if principal.niveau == NIVEAU_DIVISION:
+        return principal.division_id == division_id
+    if principal.niveau == NIVEAU_SERVICE and principal.service_id is not None:
+        division = db.get(Division, division_id)
+        return division is not None and division.service_id == principal.service_id
+    return False
 
 
 def peut_gerer_division(db: Session, principal: Principal, division: Division) -> bool:
-    """Gérant d'une division : son chef ; à défaut le super administrateur (il assure l'intérim, avec déverrouillage)."""
-    if est_chef_nominal(principal, division.id):
+    """Gérant d'une division : le chef de division, ou le chef de service (divisions de son service) ;
+    à défaut le super administrateur (il assure l'intérim, avec déverrouillage)."""
+    if est_chef_nominal(db, principal, division.id):
         return True
     if chef_division_actif(db, division.id) is not None:
         return False
@@ -110,7 +125,10 @@ def peut_gerer_division(db: Session, principal: Principal, division: Division) -
 
 
 def divisions_gerees(db: Session, principal: Principal) -> list[Division]:
-    """Divisions dont le compte est gérant (la sienne s'il est chef, plus celles dont il assure l'intérim)."""
+    """Divisions dont le compte est gérant : celles de son service (chef de service), la sienne s'il est chef
+    de division, plus celles dont le super administrateur assure l'intérim."""
+    if principal.niveau == NIVEAU_SERVICE and principal.service_id is not None:
+        return list(db.scalars(select(Division).where(Division.service_id == principal.service_id)))
     if principal.niveau == NIVEAU_DIVISION and principal.division_id is not None:
         division = db.get(Division, principal.division_id)
         return [division] if division else []
@@ -126,21 +144,19 @@ def divisions_deverrouillees(db: Session, principal: Principal) -> set[int]:
     """Divisions que le compte a actuellement déverrouillées ET sur lesquelles il est encore supérieur (droit recalculé)."""
     if principal.niveau != NIVEAU_ROOT:
         return set()
-    rows = db.execute(
-        select(SecretUnite.division_id, SecretUnite.service_id)
-        .join(Deverrouillage, Deverrouillage.secret_unite_id == SecretUnite.id)
-        .where(
-            Deverrouillage.user_id == principal.user.id,
-            SecretUnite.admin_user_id == principal.user.id,
-            Deverrouillage.actif.is_(True),
-            Deverrouillage.valide_jusqua > _maintenant(),
-        )
-    ).all()
-    divisions = {d for d, _ in rows if d is not None}
-    services = {s for _, s in rows if s is not None}
-    if not divisions and not services:
-        return set()
-    return set(db.scalars(select(Division.id).where(or_(Division.id.in_(divisions), Division.service_id.in_(services)))))
+    return set(
+        db.scalars(
+            select(SecretUnite.division_id)
+            .join(Deverrouillage, Deverrouillage.secret_unite_id == SecretUnite.id)
+            .where(
+                Deverrouillage.user_id == principal.user.id,
+                SecretUnite.admin_user_id == principal.user.id,
+                SecretUnite.division_id.is_not(None),
+                Deverrouillage.actif.is_(True),
+                Deverrouillage.valide_jusqua > _maintenant(),
+            )
+        ).all()
+    )
 
 
 def exiger_deverrouillage(db: Session, principal: Principal, division: Division) -> None:
@@ -159,11 +175,11 @@ def exiger_deverrouillage(db: Session, principal: Principal, division: Division)
 def exiger_gestion_division(db: Session, principal: Principal, division_id: int) -> Division:
     """Autorise la gestion du contenu d'une division (rôles, classement, demandes). 404 / 403 / 423."""
     division = _division(db, division_id)
-    if not (est_membre(principal, division_id) or est_superieur(principal, division)):
+    if not (est_membre(principal, division_id) or est_chef_nominal(db, principal, division_id) or est_superieur(principal, division)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
     if not peut_gerer_division(db, principal, division):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul le chef de la division peut faire cette action.")
-    if not est_chef_nominal(principal, division_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul le chef (de division ou de service) peut faire cette action.")
+    if not est_chef_nominal(db, principal, division_id):
         exiger_deverrouillage(db, principal, division)
     return division
 
@@ -218,9 +234,9 @@ def role_sur_document(db: Session, principal: Principal, document: Document) -> 
     division = db.get(Division, document.division_id)
     if division is None:
         return None
+    if est_chef_nominal(db, principal, division.id):
+        return GERANT
     if est_membre(principal, division.id):
-        if est_chef_nominal(principal, division.id):
-            return GERANT
         if document.cree_par == principal.user.id:
             return AUTEUR
         if _a_un_role_commun(db, principal, document.id) or _exception_valide(db, principal.user.id, document.id):
@@ -238,7 +254,7 @@ def exiger_acces_document(db: Session, principal: Principal, document: Document 
     division = db.get(Division, document.division_id)
     if division is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
-    membre = est_membre(principal, division.id)
+    membre = est_membre(principal, division.id) or est_chef_nominal(db, principal, division.id)
     if not membre and not est_superieur(principal, division):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
     if not membre:
@@ -260,6 +276,10 @@ def condition_acces_fichiers(db: Session, principal: Principal) -> ColumnElement
     """Condition SQL « ce compte peut LIRE ce fichier » : sert aux listes, à la recherche vectorielle et au chat.
     Reprend exactement role_sur_document (fichiers de sa division selon son rôle ; autres divisions seulement si déverrouillées)."""
     clauses: list[ColumnElement[bool]] = []
+    if principal.niveau == NIVEAU_SERVICE and principal.service_id is not None:
+        clauses.append(
+            Document.division_id.in_(select(Division.id).where(Division.service_id == principal.service_id))
+        )
     division_id = principal.division_id
     if division_id is not None:
         if principal.niveau == NIVEAU_DIVISION:
@@ -303,7 +323,7 @@ def exiger_acces_dossier(db: Session, principal: Principal, dossier_id: int | No
     if dossier is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dossier introuvable.")
     division = _division(db, dossier.division_id)
-    membre = est_membre(principal, division.id)
+    membre = est_membre(principal, division.id) or est_chef_nominal(db, principal, division.id)
     if not membre and not est_superieur(principal, division):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dossier introuvable.")
     if not membre:
@@ -311,8 +331,8 @@ def exiger_acces_dossier(db: Session, principal: Principal, dossier_id: int | No
         if action != DOSSIER_VOIR:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Un administrateur supérieur consulte sans modifier.")
         return dossier
-    if action == DOSSIER_MODIFIER and not (est_chef_nominal(principal, division.id) or dossier.cree_par == principal.user.id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul le créateur du dossier ou le chef de division peut le modifier.")
+    if action == DOSSIER_MODIFIER and not (est_chef_nominal(db, principal, division.id) or dossier.cree_par == principal.user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul le créateur du dossier ou le chef peut le modifier.")
     if action != DOSSIER_VOIR:
         exiger_ecriture_division(division)
         if dossier.archive and action == DOSSIER_CREER:
@@ -323,7 +343,7 @@ def exiger_acces_dossier(db: Session, principal: Principal, dossier_id: int | No
 def exiger_acces_division(db: Session, principal: Principal, division_id: int, *, ecriture: bool = False) -> Division:
     """Accès à la RACINE d'une division (liste de ses dossiers)."""
     division = _division(db, division_id)
-    membre = est_membre(principal, division_id)
+    membre = est_membre(principal, division_id) or est_chef_nominal(db, principal, division_id)
     if not membre and not est_superieur(principal, division):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
     if not membre:

@@ -80,35 +80,35 @@ def set_password(username: str) -> int:
         return 0
 
 
-def reinitialiser_secret(username: str, type_unite: str, unite_id: int) -> int:
+def reinitialiser_secret(username: str, unite_id: int) -> int:
+    """Procédure de secours : réinitialise le mot de passe de dossier d'UNE division (les dossiers de service n'existent pas)."""
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.nom_utilisateur == username.strip().lower()))
         if user is None or user.role.code != "ADMIN":
             print("Compte introuvable ou ce n'est pas un super administrateur.", file=sys.stderr)
             return 1
-        unite = db.get(Service if type_unite == "service" else Division, unite_id)
+        unite = db.get(Division, unite_id)
         if unite is None:
-            print("Unité introuvable.", file=sys.stderr)
+            print("Division introuvable.", file=sys.stderr)
             return 1
         password = _saisir_mot_de_passe("Nouveau mot de passe de dossier")
         if password is None:
             return 1
-        colonne = SecretUnite.service_id if type_unite == "service" else SecretUnite.division_id
-        secret = db.scalar(select(SecretUnite).where(colonne == unite_id, SecretUnite.admin_user_id == user.id))
+        secret = db.scalar(
+            select(SecretUnite).where(SecretUnite.division_id == unite_id, SecretUnite.admin_user_id == user.id)
+        )
         if secret is None:
             secret = SecretUnite(
-                service_id=unite_id if type_unite == "service" else None, division_id=unite_id if type_unite == "division" else None,
-                admin_user_id=user.id, secret_hash=hash_password(password),
+                division_id=unite.id, admin_user_id=user.id, secret_hash=hash_password(password),
             )
             db.add(secret)
         else:
             secret.secret_hash = hash_password(password)
-        service_id = unite.id if type_unite == "service" else unite.service_id
         ecrire_historique(db, acteur=None, cible_type="unite", cible_id=unite.id, action="secret_reinitialise",
-                          motif="Procédure de secours (CLI)", service_id=service_id,
-                          division_id=unite.id if type_unite == "division" else None, concerne_user_id=user.id)
+                          motif="Procédure de secours (CLI)", service_id=unite.service_id,
+                          division_id=unite.id, concerne_user_id=user.id)
         db.commit()
-        print(f"Mot de passe de dossier défini pour « {user.nom_utilisateur} » sur {type_unite} {unite.nom}.")
+        print(f"Mot de passe de dossier défini pour « {user.nom_utilisateur} » sur la division « {unite.nom} ».")
         return 0
 
 
@@ -121,15 +121,14 @@ def main() -> int:
     sa.add_argument("--direction-nom", default="Direction")
     sp = sub.add_parser("set-password", help="définir le mot de passe d'un compte")
     sp.add_argument("nom_utilisateur")
-    sr = sub.add_parser("reinitialiser-secret", help="secours : redéfinir le mot de passe de dossier d'un super administrateur")
+    sr = sub.add_parser("reinitialiser-secret", help="secours : redéfinir le mot de passe de dossier d'une division")
     sr.add_argument("nom_utilisateur")
-    sr.add_argument("--type", choices=["service", "division"], required=True)
-    sr.add_argument("--unite-id", type=int, required=True)
+    sr.add_argument("--division-id", type=int, required=True)
     args = parser.parse_args()
     if args.commande == "creer-admin":
         return creer_admin(args.nom_utilisateur, args.direction_code, args.direction_nom)
     if args.commande == "reinitialiser-secret":
-        return reinitialiser_secret(args.nom_utilisateur, args.type, args.unite_id)
+        return reinitialiser_secret(args.nom_utilisateur, args.division_id)
     return set_password(args.nom_utilisateur)
 
 

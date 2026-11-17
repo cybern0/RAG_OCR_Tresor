@@ -1,9 +1,9 @@
 import { api } from '../../shared/api/client'
 
-export type TypeUnite = 'service' | 'division'
+export type TypeUnite = 'division'
 export interface UniteSecret {
   type: TypeUnite; id: number; nom: string; service_id: number; service_nom: string
-  secret_defini: boolean; deverrouille: boolean; valide_jusqua: string | null; via_service: boolean
+  secret_defini: boolean; deverrouille: boolean; valide_jusqua: string | null
 }
 export const listUnites = () => api<UniteSecret[]>('/securite/unites')
 export const deverrouiller = (type: TypeUnite, unite_id: number, mot_de_passe: string) =>

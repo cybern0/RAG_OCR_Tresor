@@ -19,7 +19,8 @@ RAG_OCR_Tresor/
 
 ### Documentation complémentaire
 
-- [docs/refonte_super_admin.md](docs/refonte_super_admin.md) : **refonte 11/2026** — suppression du chef de service, responsabilités regroupées sur le super administrateur.
+- [docs/retour_chef_service.md](docs/retour_chef_service.md) : **évolution 11/2026** — le chef de service est rétabli (même rôle que le chef de division, sur toutes les divisions de son service) et les dossiers protégés existent par division uniquement.
+- [docs/refonte_super_admin.md](docs/refonte_super_admin.md) : **refonte 11/2026** — regroupement des responsabilités sur le super administrateur (partiellement remplacée par l'évolution ci-dessus : le chef de service est rétabli).
 - [docs/architecture.md](docs/architecture.md) : architecture applicative et règles de sécurité.
 - [docs/paln.md](docs/paln.md) : plan de la GED hiérarchique (le poste « chef de service » décrit dans ce plan est supprimé par la refonte).
 - [docs/renommages.md](docs/renommages.md) : historique des renommages de fichiers et modules.
@@ -75,14 +76,17 @@ Chaque formulaire de l'interface a un bouton « Remplir avec exemple » qui le r
 
 ## Rôles et niveaux
 
-Trois niveaux de gestion, **sans chef de service** (tout échelon au-dessus de la division est le super
-administrateur — voir `docs/refonte_super_admin.md`) :
+Quatre niveaux de gestion (voir `docs/retour_chef_service.md`) :
 
 - **ADMIN — super administrateur (niveau ROOT)** : gère la structure, **tous les comptes** (y compris les
-  chefs de division), assure **l'intérim des divisions vacantes**, consulte l'audit et l'historique complet,
+  chefs), assure **l'intérim des divisions vacantes**, consulte l'audit et l'historique complet,
   voit le tableau de bord par service. Il est le seul à détenir des **mots de passe de dossier** :
   après déverrouillage (423 → saisie du secret), il consulte en lecture seule toute unité, et il gère
   directement les divisions sans chef. Il ne peut pas être membre d'une division.
+- **Chef de service (titre d'agent `CHEF_SERVICE`, niveau SERVICE)** : le **même rôle que le chef de division**,
+  étendu à **toutes les divisions de son service** — gérant des fichiers, dossiers, classement, demandes et
+  comptes des agents sans titre —, y compris l'intérim local des divisions vacantes (sans déverrouillage).
+  Il appartient à son service **sans division propre** et n'a **aucun mot de passe de dossier**.
 - **Chef de division (titre d'agent `CHEF_DIVISION`, niveau DIVISION)** : gérant de sa division — crée ses
   dossiers et sous-dossiers, définit le dictionnaire des rôles, classe les fichiers, traite les demandes
   d'accès et les exceptions ponctuelles, crée les comptes des agents de sa division. Lecture et écriture

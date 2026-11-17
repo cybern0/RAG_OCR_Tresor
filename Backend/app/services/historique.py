@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import ColumnElement, or_, select, text
 from sqlalchemy.orm import Session
 
-from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, Principal
+from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, NIVEAU_SERVICE, Principal
 from app.db.metier import HistoriqueModification, User
 
 
@@ -56,6 +56,8 @@ def filtre_perimetre(principal: Principal) -> ColumnElement[bool] | None:
     """None = tout (super administrateur)."""
     if principal.niveau == NIVEAU_ROOT:
         return None
+    if principal.niveau == NIVEAU_SERVICE:
+        return HistoriqueModification.service_id == principal.service_id
     if principal.niveau == NIVEAU_DIVISION:
         return HistoriqueModification.division_id == principal.division_id
     moi = principal.user.id
