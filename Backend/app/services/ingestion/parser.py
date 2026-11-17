@@ -1,7 +1,9 @@
 """Parsing des fichiers vers du texte au format LangChain (Document).
 
 - PDF, Office, OpenDocument : LiteParse (markdown page par page, OCR via le serveur PaddleOCR si besoin).
-  Les formats Office/OpenDocument demandent LibreOffice sur la machine du backend.
+  Sous Linux, les formats Office/OpenDocument passent par le LibreOffice appelé en interne par LiteParse.
+  Sous Windows, LiteParse ne sachant appeler que LibreOffice, ces formats sont pré-convertis en PDF
+  par Microsoft Office (repli LibreOffice) via services/conversion_office.py avant la lecture.
   Avec l'option « images » (force_images), les images embarquées sont extraites puis passées à l'OCR EN PLUS du texte natif.
 - Images : client OCR (clients/ocr_paddle.py), avec reconstruction des tableaux par position des boîtes.
 - CSV / XLSX : lecture directe, chaque feuille devient un tableau markdown (est_tableau).
@@ -11,6 +13,7 @@ Chaque Document porte en métadonnées : page (numéro de page, de feuille pour 
 """
 
 import csv
+import os
 import re
 import statistics
 from dataclasses import dataclass
@@ -20,6 +23,9 @@ from langchain_core.documents import Document
 
 from app.clients.ocr_paddle import OcrBox, OcrError, ocr_image
 from app.config import get_settings
+from app.services.conversion_office import OFFICE_EXT, convertir_vers_pdf
+
+IS_WINDOWS = os.name == "nt"
 
 TEXT_EXT = {".txt", ".md"}
 TABULAR_EXT = {".csv", ".xlsx"}
@@ -30,6 +36,7 @@ ALLOWED_EXT = TEXT_EXT | TABULAR_EXT | IMAGE_EXT | DOCUMENT_EXT
 # Règle des cases « tableaux » / « images » : un fichier de type tableur ou image les impose (cochées, non modifiables) ;
 # pour les autres types (pdf, word...) c'est l'utilisateur qui coche. .xls et .ods sont des tableurs au même titre
 # que .xlsx, même s'ils sont lus par LiteParse/LibreOffice et non en lecture directe.
+# Sous Windows ils sont pré-convertis en PDF par Microsoft Office avant la lecture (voir conversion_office.py).
 TABLE_TYPE_EXT = TABULAR_EXT | {".xls", ".ods"}
 IMAGE_TYPE_EXT = IMAGE_EXT
 
@@ -305,8 +312,8 @@ def _ocr_embedded_images(images, skip_pages: set[int]) -> list[Document]:
     return docs
 
 
-def parse_document(path: Path, force_images: bool = False) -> ParsedFile:
-    """Lecture en deux temps : d'abord sans OCR (rapide, et le serveur OCR peut être éteint) ;
+def _parse_pdf(path: Path, force_images: bool = False) -> ParsedFile:
+    """Lecture LiteParse d'un PDF en deux temps : d'abord sans OCR (rapide, et le serveur OCR peut être éteint) ;
     l'OCR n'est lancé que si une page n'a pas de texte natif (scan).
     force_images : en plus, l'OCR des images embarquées des pages qui ont déjà du texte natif."""
     from liteparse import ParseError
@@ -335,6 +342,29 @@ def parse_document(path: Path, force_images: bool = False) -> ParsedFile:
         ocr_utilise=ocr_used,
         has_tabular=any(d.metadata["est_tableau"] for d in docs),
     )
+
+
+def parse_document(path: Path, force_images: bool = False) -> ParsedFile:
+    if IS_WINDOWS and path.suffix.lower() in OFFICE_EXT:
+        return _parse_document_preconverti(path, force_images)
+    return _parse_pdf(path, force_images)
+
+
+def _parse_document_preconverti(path: Path, force_images: bool) -> ParsedFile:
+    """Windows uniquement : LiteParse n'appelle que LibreOffice en interne ; les fichiers Office/OpenDocument
+    sont donc d'abord convertis en PDF (Microsoft Office, repli LibreOffice) puis lus comme un PDF."""
+    import tempfile
+
+    from app.services.conversion_office import ConversionImpossibleError, ConversionTropLongueError, OfficeIndisponibleError
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="ingestion_") as work:
+            pdf = convertir_vers_pdf(path, Path(work))
+            return _parse_pdf(pdf, force_images)
+    except OfficeIndisponibleError as e:
+        raise IngestionError(f"Lecture du document impossible : {e}") from None
+    except (ConversionImpossibleError, ConversionTropLongueError) as e:
+        raise IngestionError(f"Lecture du document impossible : {e}") from None
 
 
 def parse_text(path: Path) -> ParsedFile:

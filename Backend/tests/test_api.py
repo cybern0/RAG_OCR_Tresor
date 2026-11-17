@@ -461,10 +461,10 @@ def test_apercu_et_telechargement_sont_surs(client, world, monkeypatch):
     assert client.get(f"/documents/{doc['id']}/versions/9/apercu", headers=a).status_code == 404
     assert client.get(f"/documents/{doc['id']}/versions/1/apercu").status_code == 401
 
-    # Office : converti en PDF par LibreOffice ; sans LibreOffice, message clair (501)
+    # Office : converti en PDF (Microsoft Office sous Windows, LibreOffice sinon) ; sans aucune suite, message clair (501)
     word = client.post("/documents", headers=a, data={"dossier_id": str(A)}, files={"fichier": ("lettre.docx", b"PK\x03\x04 pas un vrai docx " + world["tag"].encode(), "application/octet-stream")}).json()
     assert word["version"]["apercu"] == "pdf_converti"
-    monkeypatch.setattr("app.services.documents.apercu.shutil.which", lambda _: None)
+    monkeypatch.setattr("app.services.conversion_office.shutil.which", lambda _: None)
     assert client.get(f"/documents/{word['id']}/versions/1/apercu", headers=a).status_code == 501
     fake_pdf = Path(os.environ["UPLOAD_DIR"]) / "faux_apercu.pdf"
     fake_pdf.write_bytes(b"%PDF-1.4 test")

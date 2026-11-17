@@ -4,12 +4,12 @@ Sécurité (le contenu est servi par l'API, jamais exécuté) :
 - seuls des types sûrs sont servis « inline » : PDF, PNG/JPEG/WebP/BMP, texte brut (txt, md, csv servis en text/plain) ;
 - le type MIME est DÉDUIT DE L'EXTENSION validée au dépôt, jamais du type envoyé par le client ;
 - jamais de HTML ni de SVG rendus tels quels ; X-Content-Type-Options: nosniff ; CSP « sandbox » sur toute réponse ;
-- Word, PowerPoint, Excel, ODF : convertis en PDF par LibreOffice (conversion mise en cache, une version ne changeant jamais) ;
+- Word, PowerPoint, Excel, ODF : convertis en PDF avant affichage (Microsoft Office sous Windows,
+  LibreOffice sinon ; voir services/conversion_office.py ; conversion mise en cache, une version ne changeant jamais) ;
 - téléchargement : Content-Disposition: attachment avec le nom d'origine, en application/octet-stream.
 """
 
 import shutil
-import subprocess
 import tempfile
 import threading
 from pathlib import Path
@@ -20,6 +20,9 @@ from fastapi.responses import FileResponse
 
 from app.config import get_settings
 from app.db.vecteur import DocumentVersion
+from app.services.conversion_office import (
+    ConversionImpossibleError, ConversionTropLongueError, OfficeIndisponibleError, convertir_vers_pdf,
+)
 
 _IMAGES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".bmp": "image/bmp"}
 _TEXTE = {".txt", ".md", ".csv"}
@@ -92,38 +95,23 @@ def remove_cache(version_id: int) -> None:
         pass
 
 
-def _soffice() -> str:
-    binary = shutil.which("soffice") or shutil.which("libreoffice")
-    if binary is None:
-        raise HTTPException(
-            status.HTTP_501_NOT_IMPLEMENTED,
-            "Aperçu impossible : LibreOffice n'est pas installé sur le serveur. Télécharger le fichier pour le lire.",
-        )
-    return binary
-
-
 def convert_to_pdf(version: DocumentVersion) -> Path:
-    """PDF de la version (cache ; conversion LibreOffice au premier appel)."""
+    """PDF de la version (cache ; conversion au premier appel : Microsoft Office sous Windows, LibreOffice sinon)."""
     target = cache_path(version.id)
     if target.is_file():
         return target
     source = _stored(version)
-    binary = _soffice()
     target.parent.mkdir(parents=True, exist_ok=True)
     with _convert_lock, tempfile.TemporaryDirectory(prefix="apercu_") as work:
         try:
-            subprocess.run(
-                [binary, f"-env:UserInstallation=file://{work}/profil", "--headless", "--norestore",
-                 "--convert-to", "pdf", "--outdir", work, str(source)],
-                check=True, capture_output=True, timeout=CONVERSION_TIMEOUT,
-            )
-        except subprocess.TimeoutExpired:
+            convertir_vers_pdf(source, Path(work), timeout=CONVERSION_TIMEOUT)
+        except OfficeIndisponibleError as e:
+            raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, str(e)) from None
+        except ConversionTropLongueError:
             raise HTTPException(status.HTTP_504_GATEWAY_TIMEOUT, "La conversion en PDF a pris trop de temps.") from None
-        except subprocess.CalledProcessError:
+        except ConversionImpossibleError:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Ce fichier n'a pas pu être converti en PDF.") from None
         produced = Path(work) / f"{source.stem}.pdf"
-        if not produced.is_file():
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Ce fichier n'a pas pu être converti en PDF.")
         shutil.move(str(produced), target)
     return target
 

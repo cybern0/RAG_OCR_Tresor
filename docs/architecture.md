@@ -51,7 +51,7 @@ Le jeton devient invalide si le mot de passe change ou si le compte est désacti
 
 ## Aperçu et téléchargement
 `GET /documents/{id}/versions/{n}/apercu` et `/telecharger`, protégés par le rôle de dossier. Types sûrs en « inline » : PDF, PNG/JPEG/WebP/BMP, texte brut (txt, md, csv servis en `text/plain`).
-Word, PowerPoint, Excel, ODF : convertis en PDF par LibreOffice (cache par version). `.tif` : pas d'aperçu. Le type MIME vient de l'extension validée au dépôt, jamais du client ;
+Word, PowerPoint, Excel, ODF : convertis en PDF avant affichage — **Microsoft Office sous Windows, LibreOffice sous Linux** (repli LibreOffice si Office manque sur Windows ; voir `services/conversion_office.py` ; cache par version). `.tif` : pas d'aperçu. Le type MIME vient de l'extension validée au dépôt, jamais du client ;
 jamais de HTML ni de SVG ; `nosniff` et CSP `sandbox` partout ; téléchargement en `attachment` + `application/octet-stream`. Le frontend récupère un Blob avec le jeton (pas d'URL publique).
 Fichier absent du disque : 410.
 
@@ -60,7 +60,8 @@ Fichier absent du disque : 410.
 2. Le backend contrôle le rôle de dossier, enregistre le fichier sous un nom généré, crée la version avec le statut `pending` (services/documents/crud.py).
 3. Le worker (workers/ingestion_worker.py, un seul thread) exécute services/ingestion/pipeline.py **pour cette version** :
    parsing LiteParse (OCR seulement si une page n'a pas de texte natif, ou pour les images si la case l'impose), découpage, embeddings Ollama, écriture dans pgvector
-   (chaque chunk garde `document_version_id` et `taille_ref`, le nombre de chunks de sa version).
+   (chaque chunk garde `document_version_id` et `taille_ref`, le nombre de chunks de sa version). Sous Windows, les fichiers Office/OpenDocument sont pré-convertis en PDF
+   par Microsoft Office avant la lecture (LiteParse n'appelle que LibreOffice en interne) ; sous Linux, LiteParse les lit directement.
 4. Le statut de la version passe à `processing`, puis `ready` ou `error` (avec `message_erreur`) ; le tableau de bord le suit.
 Au redémarrage de l'API, les versions restées `pending` ou `processing` sont remises en file.
 
