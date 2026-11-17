@@ -1,6 +1,6 @@
 // Navigation principale : une entrée par page, avec les permissions qui l'ouvrent. La même table sert à la barre latérale,
 // aux gardes de routes et à la page d'accueil par défaut.
-import { BarChart3, Building2, FolderOpen, Home, Inbox, KeyRound, History, Shield, MessageSquare, ScrollText, Tags, Users, UserSquare } from 'lucide-react'
+import { BarChart3, Building2, FolderOpen, Home, Inbox, KeyRound, History, Shield, MessageSquare, Users, UserSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface NavItem { to: string; label: string; icon: LucideIcon; any: string[]; end?: boolean }
@@ -16,12 +16,10 @@ export const MAIN_NAV: NavItem[] = [
 
 export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'Tableau de bord', icon: BarChart3, any: ['statistiques.globales'], end: true },
-  { to: '/roles', label: 'Rôles de division', icon: Shield, any: ['utilisateur.lister'] },
+  { to: '/roles', label: 'Rôles et classement', icon: Shield, any: ['utilisateur.lister', 'classement.gerer'] },
   { to: '/admin/utilisateurs', label: 'Utilisateurs', icon: Users, any: ['utilisateur.lister'] },
   { to: '/admin/agents', label: 'Agents', icon: UserSquare, any: ['structure.gerer'] },
   { to: '/admin/structure', label: 'Directions, services et divisions', icon: Building2, any: ['structure.gerer'] },
-  { to: '/admin/classement', label: 'Classement', icon: Tags, any: ['classement.gerer'] },
-  { to: '/admin/audit', label: 'Journal d’audit', icon: ScrollText, any: ['audit.consulter'] },
 ]
 
 export const allowed = (item: NavItem, can: (p: string) => boolean) => item.any.some(can)

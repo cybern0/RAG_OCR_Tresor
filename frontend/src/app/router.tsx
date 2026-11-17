@@ -1,6 +1,6 @@
 // Table des routes de l'application monopage. Chaque page est chargée à la demande (découpage du code) ;
 // les pages d'administration sont derrière une garde de permission.
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, redirect } from 'react-router'
 import type { RouteObject } from 'react-router'
 import { Component as NotFound, ErrorPage } from './ErrorPage'
 import { RequireAuth, RequirePermission } from './guards'
@@ -22,7 +22,7 @@ export const router = createBrowserRouter([
             lazy: () => import('./layouts/AppLayout'),
             children: [
               { index: true, lazy: () => import('../features/accueil/AccueilPage') },
-              guarded(['utilisateur.lister'], [{ path: 'roles', lazy: () => import('../features/roles/RolesPage') }]),
+              guarded(['utilisateur.lister', 'classement.gerer'], [{ path: 'roles', lazy: () => import('../features/roles/RolesPage') }]),
               { path: 'historique', lazy: () => import('../features/historique/HistoriquePage') },
               { path: 'securite', lazy: () => import('../features/securite/MotsDePassePage') },
               { path: 'demandes', lazy: () => import('../features/demandes/DemandesPage') },
@@ -45,8 +45,8 @@ export const router = createBrowserRouter([
                 { path: 'admin/agents', lazy: () => import('../features/admin/structure/AgentsPage') },
                 { path: 'admin/structure', lazy: () => import('../features/admin/structure/StructurePage') },
               ]),
-              guarded(['classement.gerer'], [{ path: 'admin/classement', lazy: () => import('../features/admin/classement/ClassementPage') }]),
-              guarded(['audit.consulter'], [{ path: 'admin/audit', lazy: () => import('../features/admin/audit/AuditPage') }]),
+              guarded(['utilisateur.lister', 'classement.gerer'], [{ path: 'admin/classement', loader: () => redirect('/roles?tab=classement') }]),
+              guarded(['audit.consulter'], [{ path: 'admin/audit', loader: () => redirect('/historique') }]),
               { path: '*', Component: NotFound },
             ],
           },
