@@ -5,7 +5,7 @@ export const listDocuments = (f: DocumentFilters) => api<DocumentPage>(`/documen
 export const getDocument = (id: number) => api<DocumentMeta>(`/documents/${id}`)
 export const getReferentiel = () => api<Referentiel>('/classement/referentiel')
 
-export interface AddDocumentInput { fichier: File; titre: string; dossierId: number; contientTableaux: boolean; contientImages: boolean }
+export interface AddDocumentInput { fichier: File; titre: string; dossierId: number; contientTableaux: boolean; contientImages: boolean; roleIds?: number[] }
 
 export function addDocument(input: AddDocumentInput) {
   const form = new FormData()
@@ -14,6 +14,7 @@ export function addDocument(input: AddDocumentInput) {
   form.append('dossier_id', String(input.dossierId))
   form.append('contient_tableaux', String(input.contientTableaux))
   form.append('contient_images', String(input.contientImages))
+  if (input.roleIds) { form.append('roles_explicites', 'true'); input.roleIds.forEach((r) => form.append('role_ids', String(r))) }
   return api<DocumentMeta>('/documents', { method: 'POST', form })
 }
 

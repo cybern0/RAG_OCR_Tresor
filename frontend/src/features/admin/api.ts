@@ -16,7 +16,7 @@ export const listServices = () => api<ServiceItem[]>('/structure/services')
 export const createService = (data: { direction_id: number; code: string; nom: string; site?: string | null }) => api<ServiceItem>('/structure/services', { method: 'POST', json: data })
 export const updateService = (id: number, data: { nom?: string; actif?: boolean; direction_id?: number }) => api<ServiceItem>(`/structure/services/${id}`, { method: 'PATCH', json: data })
 export const listAgents = () => api<Agent[]>('/structure/agents')
-export const createAgent = (data: { matricule: string; nom: string; prenom: string; fonction?: string | null; email?: string | null; service_id: number }) => api<Agent>('/structure/agents', { method: 'POST', json: data })
+export const createAgent = (data: { matricule: string; nom: string; prenom: string; fonction?: string | null; email?: string | null; service_id: number; division_id?: number | null }) => api<Agent>('/structure/agents', { method: 'POST', json: data })
 export const updateAgent = (id: number, data: { actif?: boolean; service_id?: number; fonction?: string | null }) => api<Agent>(`/structure/agents/${id}`, { method: 'PATCH', json: data })
 
 // --- audit, statistiques, santé
@@ -42,3 +42,7 @@ export const createRule = (d: RuleInput) => api<RuleItem>('/classement/regles', 
 export const updateRule = (id: number, d: Partial<RuleInput>) => api<RuleItem>(`/classement/regles/${id}`, { method: 'PATCH', json: d })
 export const deleteRule = (id: number) => api<unknown>(`/classement/regles/${id}`, { method: 'DELETE' })
 export const simulate = (d: { nom_fichier?: string; extension?: string; texte?: string }) => api<SimulationResult>('/classement/simuler', { method: 'POST', json: d })
+
+export const listDivisionsAdmin = () => api<{ id: number; service_id: number; nom: string; actif: boolean }[]>('/structure/divisions')
+export const transfererChef = (type: 'service' | 'division', unitId: number, agentId: number | null, motif?: string) =>
+  api<unknown>(`/structure/${type === 'service' ? 'services' : 'divisions'}/${unitId}/chef`, { method: 'PUT', json: { agent_id: agentId, motif } })
