@@ -507,3 +507,65 @@ def test_arbre_de_structure_visible_selon_le_niveau(client, world):
     arbre_a = client.get("/structure/arbre", headers=a).json()
     assert len(arbre_a) == 1 and [d["id"] for d in arbre_a[0]["divisions"]] == [world["div"]["v1"]["id"]] and arbre_a[0]["divisions"][0]["acces"] == "membre"
     assert [d["id"] for d in client.get("/structure/arbre", headers=cd1).json()[0]["divisions"]] == [world["div"]["v1"]["id"]]
+
+
+# --- garanties conservées après la refonte : privilèges, dossiers par division, mots de passe individuels ----
+
+def test_privileges_inchanges_et_dossiers_conerves_par_division(client, world):
+    """La matrice des privilèges ne change pas : AUTEUR / LECTEUR / GERANT / 404, et chaque division garde
+    ses dossiers (stockage et interface) avec son propre mot de passe de dossier, indépendant des autres."""
+    adm = world["admin"]
+    a, lect, mix, b, cd1 = world["a"]["h"], world["lect"]["h"], world["mix"]["h"], world["b"]["h"], world["cd1"]["h"]
+    tag, R = world["tag"], world["roles"]
+    A, B = world["A"]["id"], world["B"]["id"]
+    # dépôt d'un agent : classement automatique (tous ses rôles par défaut), privilèges inchangés
+    f = upload(client, a, A, f"Pièce courante {tag}").json()
+    assert [r["code"] for r in f["roles"]] == ["COMPTA"]          # organisation prévue : COMPTA
+    assert client.get(f"/documents/{f['id']}", headers=a).json()["mon_role"] == "AUTEUR"
+    assert client.get(f"/documents/{f['id']}", headers=lect).json()["mon_role"] == "LECTEUR"
+    assert client.get(f"/documents/{f['id']}", headers=cd1).json()["mon_role"] == "GERANT"
+    assert client.get(f"/documents/{f['id']}", headers=mix).status_code == 403    # rôle PUBLIC absent
+    assert client.get(f"/documents/{f['id']}", headers=b).status_code == 404      # autre division : existence cachée
+    # les dossiers restent propres à chaque division (stockage et interface d'affichage)
+    assert client.get(f"/dossiers/{A}", headers=a).status_code == 200
+    assert client.get(f"/dossiers/{B}", headers=a).status_code == 404             # v3 : hors de sa division
+    liste_a = client.get("/dossiers", headers=a).json()
+    assert A in [d["id"] for d in liste_a] and B not in [d["id"] for d in liste_a]
+    # mot de passe de dossier individuel par division : chaque division a le sien
+    client.post("/securite/deverrouiller", headers=adm, json={"type": "division", "unite_id": world["div"]["v1"]["id"], "mot_de_passe": "nouveau-dossier-2"})
+    assert client.put("/securite/secrets", headers=adm, json={"type": "division", "unite_id": world["div"]["v1"]["id"], "nouveau_mot_de_passe": "secret-individuel-v1-7", "ancien_mot_de_passe": "nouveau-dossier-2"}).status_code == 204
+    assert client.put("/securite/secrets", headers=adm, json={"type": "division", "unite_id": world["div"]["v3"]["id"], "nouveau_mot_de_passe": "secret-individuel-v3-8", "ancien_mot_de_passe": SECRET}).status_code == 204
+    # ouvrir v1 n'ouvre pas v3 : chaque division reste individuellement verrouillée
+    assert client.post("/securite/deverrouiller", headers=adm, json={"type": "division", "unite_id": world["div"]["v1"]["id"], "mot_de_passe": "secret-individuel-v1-7"}).status_code == 200
+    assert client.get("/dossiers", headers=adm, params={"division_id": world["div"]["v1"]["id"]}).status_code == 200
+    assert client.get("/dossiers", headers=adm, params={"division_id": world["div"]["v3"]["id"]}).status_code == 423
+    # ouvrir v3 avec son propre mot de passe, puis verrouiller v1 sans toucher v3
+    assert client.post("/securite/deverrouiller", headers=adm, json={"type": "division", "unite_id": world["div"]["v3"]["id"], "mot_de_passe": "secret-individuel-v3-8"}).status_code == 200
+    client.post("/securite/verrouiller", headers=adm, json={"type": "division", "unite_id": world["div"]["v1"]["id"]})
+    assert client.get("/dossiers", headers=adm, params={"division_id": world["div"]["v1"]["id"]}).status_code == 423
+    assert client.get("/dossiers", headers=adm, params={"division_id": world["div"]["v3"]["id"]}).status_code == 200
+
+
+def test_deux_modes_de_classement(client, world):
+    """Mode 1 (automatique) : un agent dépose sans préciser les rôles, le fichier reçoit tous ses rôles.
+    Mode 2 (manuel) : le chef de division attribue explicitement le fichier à un ou plusieurs agents
+    de sa division, via les rôles du dictionnaire — y compris après le dépôt (« à classer »)."""
+    a, lect, mix, b, cd1 = world["a"]["h"], world["lect"]["h"], world["mix"]["h"], world["b"]["h"], world["cd1"]["h"]
+    tag, R = world["tag"], world["roles"]
+    A = world["A"]["id"]
+    # mode automatique : dépôt sans role_ids -> tous les rôles de l'agent, visible des détenteurs
+    f = upload(client, a, A, f"Classement automatique {tag}").json()
+    assert f["a_classer"] is False and [r["code"] for r in f["roles"]] == ["COMPTA"]
+    assert client.get(f"/documents/{f['id']}", headers=lect).status_code == 200       # détenteur COMPTA
+    assert client.get(f"/documents/{f['id']}", headers=mix).status_code == 403        # hors organisation prévue
+    # mode manuel : dépôt du chef sans choix -> « à classer », invisible de tous les agents
+    m = upload(client, cd1, A, f"Attribution manuelle {tag}").json()
+    assert m["a_classer"] is True and m["roles"] == []
+    assert client.get(f"/documents/{m['id']}", headers=lect).status_code == 403
+    assert client.get(f"/documents/{m['id']}", headers=mix).status_code == 403
+    # le chef attribue explicitement à plusieurs agents (rôles COMPTA + PUBLIC), en une opération tracée
+    r = client.put(f"/documents/{m['id']}/roles", headers=cd1, json={"role_ids": [R["COMPTA"]["id"], R["PUBLIC"]["id"]], "motif": "Attribution manuelle"})
+    assert r.status_code == 200 and sorted(x["code"] for x in r.json()["roles"]) == ["COMPTA", "PUBLIC"]
+    assert client.get(f"/documents/{m['id']}", headers=lect).status_code == 200       # agent COMPTA
+    assert client.get(f"/documents/{m['id']}", headers=mix).status_code == 200        # agent PUBLIC
+    assert client.get(f"/documents/{m['id']}", headers=b).status_code == 404          # hors de la division

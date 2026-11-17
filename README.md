@@ -46,10 +46,11 @@ psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/seed.sql   # facultatif :
 `01` crée tout le schéma en une seule transaction (base NEUVE uniquement) ; `02` insère les rôles globaux
 et les permissions ; `03` contrôle les invariants (`verification_invariants`, chaque ligne attendue à 0).
 
-**Base existante antérieure à la refonte** (installation avec des chefs de service) : exécuter une fois
-`database/10_suppression_chef_service.sql` — les agents titrés `CHEF_SERVICE` redeviennent agents simples,
-leurs secrets et déverrouillages sont retirés, les contraintes et index obsolètes sont nettoyés. Puis le
-super administrateur réaffecte ces agents à une division. Détails : `docs/refonte_super_admin.md`.
+**Base existante antérieure à la refonte** (installée avec des chefs de service) : la migration ALTER a été
+fusionnée dans les scripts de base — il n'y a plus de script `10_`. Recréer la base : `DROP DATABASE`, puis
+exécuter la chaîne ci-dessus (ordre complet et précautions : `docs/ordre_execution_sql.md`). Les agents
+titrés `CHEF_SERVICE` n'existent plus ; le super administrateur réaffecte ces agents à une division après
+restauration des données. Détails : `docs/refonte_super_admin.md`.
 
 Pour contrôler que les embeddings sont bien normalisés : `psql -U postgres -d rag -f database/verif_vecteurs_normalises.sql` (attendu : 0 non normalisé).
 

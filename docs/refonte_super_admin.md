@@ -69,7 +69,7 @@ d'accès et exceptions ponctuelles, les dossiers et sous-dossiers, l'historique 
 | `02_donnees_reference.sql` | commentaire : le niveau SERVICE n'existe plus |
 | `03_verification.sql` | contrôles `chef_service_unique`, `chef_service_sans_division`, `services_actifs_sans_chef` retirés ; nouveau contrôle `agent_titre_inconnu` ; `secret_de_division_sans_droit` simplifié (ADMIN seulement) |
 | `seed.sql` | les deux agents `CHEF_SERVICE` de démonstration retirés |
-| `10_suppression_chef_service.sql` | **nouveau** : migration des bases existantes (titre `CHEF_SERVICE` → NULL, secrets et déverrouillages des anciens chefs supprimés, contraintes et index nettoyés) ; répétable, en une transaction |
+| `10_suppression_chef_service.sql` | script de migration **retiré** : fusionné dans les scripts de base, qui naissent directement conformes (aucun `ALTER` dans `database/`) ; une base existante est recréée depuis `01` → `02` — ordre complet : `docs/ordre_execution_sql.md` |
 
 ### Backend (`Backend/app/`)
 | Fichier | Changement |
@@ -109,18 +109,17 @@ d'accès et exceptions ponctuelles, les dossiers et sous-dossiers, l'historique 
   comptes d'une division vacante par le super administrateur ; arbre et tableaux de bord sans
   niveau SERVICE ; le titre `CHEF_SERVICE` est refusé (422).
 
-## 4. Migration d'une base existante
+## 4. Recréation d'une base existante (migration fusionnée, sans ALTER)
 
-Les installations existantes exécutent, après mise à jour du code :
-
-```
-psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/10_suppression_chef_service.sql
-```
-
-Effets : les anciens chefs de service redeviennent agents simples **sans division** — ils perdent
-l'accès aux fichiers jusqu'à ce que le super administrateur les réaffecte à une division et, s'il
-le veut, nomme l'un d'eux chef de division ; leurs secrets et déverrouillages sont supprimés ;
-leurs comptes restent actifs. Une base neuve n'a besoin de rien : `01_schema.sql` est déjà à jour.
+Le script de migration `10_suppression_chef_service.sql` a été **fusionné dans les scripts de base** :
+`01_schema.sql`, `02_donnees_reference.sql` et `03_verification.sql` naissent directement conformes
+(titre limité à `CHEF_DIVISION`, secrets réservés au rôle ADMIN, contrôles `agent_titre_inconnu` et
+`secret_de_division_sans_droit`), et aucun fichier de `database/` ne contient d'`ALTER`. Une installation
+existante est donc recréée : `DROP DATABASE`, puis la chaîne d'installation (ordre complet et précautions
+dans `docs/ordre_execution_sql.md`), puis restauration des données. Dans une base recréée, les anciens
+chefs de service redeviennent agents simples **sans division** — ils perdent l'accès aux fichiers jusqu'à
+ce que le super administrateur les réaffecte à une division et, s'il le veut, nomme l'un d'eux chef de
+division ; leurs comptes restent recréables. Une base neuve n'a besoin de rien de plus.
 
 ## 5. Corrections de défauts préexistants (hors périmètre, incluses dans la refonte)
 
@@ -136,9 +135,36 @@ Trois tests échouaient déjà avant la refonte (sur la base d'origine : 92 test
 
 Après refonte et corrections : **95 tests passés, 0 échec** (base de test vierge).
 
-## 6. Vérifications effectuées
+## 6. Garanties conservées après la refonte (privilèges, dossiers de division, classement)
 
-- `uv run pytest` : **95/95** (base PostgreSQL + pgvector neuve, pgserver embarqué ; `test_partage_collaboration.py` exclu : module mort cassé à l'identique avant et après la refonte).
+La refonte ne retire **aucun privilège** aux rôles conservés : la matrice d'accès (AUTEUR, LECTEUR,
+GERANT, SUPERIEUR), les codes 404 / 403 / 423 et les périmètres de gestion des chefs de division et
+des agents sont inchangés — seuls les pouvoirs de l'ancien chef de service migrent vers le super
+administrateur. Les dossiers restent **propres à chaque division** : rattachés à leur division dans
+le stockage (clé étrangère composite, aucun déplacement ni suppression lors de la migration) et dans
+l'interface (liste des dossiers filtrée par division, arbre de structure). Chaque division conserve
+**son mot de passe de dossier individuel** : un secret par couple (division, super administrateur),
+déverrouillage et verrouillage indépendants d'une division à l'autre (l'ouverture d'un service entier
+restant possible pour le super administrateur, sans effacer les secrets individuels).
+
+Deux modes de classement des fichiers restent pris en charge :
+
+1. **Classement automatique** : un agent qui dépose un fichier sans préciser les rôles reçoit
+   automatiquement tous ses rôles de division (`_roles_au_depot`, branche agent) — le fichier est
+   classé selon l'organisation prévue et devient visible des détenteurs de ces rôles ;
+   il peut retirer des rôles, jamais en ajouter qu'il ne détient pas.
+2. **Attribution manuelle par le chef de division** : le chef choisit explicitement les rôles dans
+   le dictionnaire de sa division — à l'achat du dépôt, ou après coup sur un fichier « à classer »
+   (`PUT /documents/{id}/roles`, tracé et réservé au gérant) — ce qui attribue le fichier à un ou
+   plusieurs agents de la division (ceux qui détiennent ces rôles) ; sans choix, le fichier est
+   « à classer », l'accès étant refusé par défaut et le chef notifié.
+
+Ces garanties sont couvertes par deux tests dédiés (`test_privileges_inchanges_et_dossiers_conerves_par_division`,
+`test_deux_modes_de_classement`) ; la suite complète passe : **97 tests, 0 échec**.
+
+## 7. Vérifications effectuées
+
+- `uv run pytest` : **97/97** (base PostgreSQL + pgvector neuve, pgserver embarqué ; `test_partage_collaboration.py` exclu : module mort cassé à l'identique avant et après la refonte).
 - `npm run build` (tsc -b + vite) : **succès**, `tsc --noEmit` : **0 erreur** (22 erreurs préexistantes éliminées avec le code mort).
 - `python -c "import app.main"` : succès ; aucun résidu `CHEF_SERVICE` / `NIVEAU_SERVICE` dans le code.
 - Scripts SQL appliqués sur une base neuve : `01`, `02`, `03` sans erreur, `verification_invariants` à 0 anomalie.

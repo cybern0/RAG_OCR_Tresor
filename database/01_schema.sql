@@ -2,7 +2,9 @@
 --
 -- Base NEUVE uniquement (aucune migration). Tout ou rien : une seule transaction, arrêt à la première erreur.
 --   psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/01_schema.sql
--- puis 02_donnees_reference.sql, puis 03_verification.sql (facultatif), puis seed.sql (démonstration, facultatif).
+-- puis 02_donnees_reference.sql, puis 03_verification.sql (contrôle), puis seed.sql (démonstration, facultatif).
+-- Ordre d'exécution complet des six scripts et précautions : docs/ordre_execution_sql.md. Aucune migration :
+-- la base naît directement conforme (la refonte « suppression du chef de service » est fusionnée ici, sans ALTER).
 --
 -- Garanties portées par la BASE (et pas seulement par l'API) :
 --   * un seul chef de division actif par division (index unique partiel) ;
