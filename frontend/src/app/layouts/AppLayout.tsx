@@ -2,6 +2,7 @@
 import { Leaf, LogOut, Menu, UserCircle, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
+import NotificationBell from '../../features/notifications/NotificationBell'
 import { signOut, useAuth } from '../../features/auth/session'
 import { cn } from '../../shared/lib/cn'
 import { ADMIN_NAV, MAIN_NAV, allowed } from '../nav'
@@ -34,7 +35,7 @@ export function Component() {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 px-4 py-4">
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold-500 text-leaf-950"><Leaf className="h-5 w-5" /></span>
-        <span className="text-lg font-bold text-gold-400">Trésor RAG</span>
+        <span className="flex-1 text-lg font-bold text-gold-400">Trésor RAG</span><span className="hidden lg:block"><NotificationBell /></span>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Navigation principale">
         <NavSection items={main} onNavigate={() => setOpen(false)} />
@@ -60,7 +61,7 @@ export function Component() {
 
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-gold-500/20 bg-leaf-950 px-4 py-2.5 lg:hidden">
         <span className="flex items-center gap-2 font-bold text-gold-400"><Leaf className="h-5 w-5" /> Trésor RAG</span>
-        <button className="btn-icon" onClick={() => setOpen(true)} aria-label="Ouvrir le menu"><Menu className="h-5 w-5" /></button>
+        <span className="flex items-center gap-1"><NotificationBell /><button className="btn-icon" onClick={() => setOpen(true)} aria-label="Ouvrir le menu"><Menu className="h-5 w-5" /></button></span>
       </header>
 
       {open && (

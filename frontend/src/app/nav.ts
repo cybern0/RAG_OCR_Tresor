@@ -1,12 +1,14 @@
 // Navigation principale : une entrée par page, avec les permissions qui l'ouvrent. La même table sert à la barre latérale,
 // aux gardes de routes et à la page d'accueil par défaut.
-import { BarChart3, Building2, FolderOpen, FolderTree, MessageSquare, ScrollText, Tags, Users, UserSquare } from 'lucide-react'
+import { BarChart3, Building2, FolderOpen, FolderTree, Home, Inbox, MessageSquare, ScrollText, Tags, Users, UserSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface NavItem { to: string; label: string; icon: LucideIcon; any: string[]; end?: boolean }
 
 export const MAIN_NAV: NavItem[] = [
+  { to: '/', label: 'Accueil', icon: Home, any: ['document.lister', 'chat.utiliser', 'statistiques.globales'], end: true },
   { to: '/dossiers', label: 'Dossiers et fichiers', icon: FolderOpen, any: ['document.lister'] },
+  { to: '/demandes', label: 'Demandes d’accès', icon: Inbox, any: ['document.lister'] },
   { to: '/chat', label: 'Assistant', icon: MessageSquare, any: ['chat.utiliser'] },
 ]
 
@@ -24,5 +26,5 @@ export const allowed = (item: NavItem, can: (p: string) => boolean) => item.any.
 
 /** Première page accessible au compte (page d'accueil). */
 export function homePath(can: (p: string) => boolean): string | null {
-  return [...MAIN_NAV, ...ADMIN_NAV].find((i) => allowed(i, can))?.to ?? null
+  return [...MAIN_NAV.filter((i) => i.to !== '/'), ...ADMIN_NAV].find((i) => allowed(i, can))?.to ?? null
 }
