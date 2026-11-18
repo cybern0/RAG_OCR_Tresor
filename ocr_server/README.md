@@ -13,3 +13,12 @@ Source : dossier `ocr/paddleocr` du dépôt run-llama/liteparse (`server.py` cop
   Seul un hôte injoignable (serveur arrêté, mauvais port) affiche « Serveur OCR : Indisponible » dans
   l'administration. Utiliser le `server.py` de CE dossier (copie avec /health, écoute 127.0.0.1 par
   défaut — pas 0.0.0.0) plutôt que l'original liteparse.
+- **Logs normaux à ne pas confondre avec des pannes** :
+  - `ConnectionResetError [WinError 10054]` côté serveur OCR : le backend a coupé brutalement une
+    connexion (redémarrage du backend en pleine OCR, ou version interrompue). Bénin — le worker
+    remet la version en file au démarrage et l'OCR repart.
+  - Mêmes images POSTées plusieurs fois (mêmes tailles IDAT) : chaque nouvelle version déposée
+    relance l'OCR de ses pages, et après redémarrage le worker re-OCRise les versions remises en
+    file. Chaque POST a son propre port source (une connexion par image, sans keep-alive).
+  - « Creating model … latin_PP-OCRv5_mobile_rec » après le démarrage : le modèle du français est
+    chargé à la première demande en `fr` (OCR_LANGUAGE=fr), pas au lancement.

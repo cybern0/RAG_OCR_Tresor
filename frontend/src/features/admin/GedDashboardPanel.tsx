@@ -102,10 +102,7 @@ export default function GedDashboardPanel() {
   const [simulation, setSimulation] = useState<null | { categorie_id: number | null; type_document_id: number | null; tags: string[]; confidentialite: string | null }>(null)
 
   useEffect(() => {
-    if (!dossiers.data?.length) {
-      setAccessByDossier({})
-      return
-    }
+    if (!dossiers.data?.length) return
     let active = true
     Promise.all(
       dossiers.data.map(async (dossier: Dossier) => ({ id: dossier.id, access: await getAcces(dossier.id) })),
