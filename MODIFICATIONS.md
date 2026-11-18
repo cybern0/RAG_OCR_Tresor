@@ -9,6 +9,19 @@ les droits serveur scopés sont conservés pour alimenter `/admin/utilisateurs`)
 chefs (de division ou de service) au même titre que la création de rôles — ce qui répare aussi le chargement
 des rôles dans le dépôt de fichiers, le classement et la fiche utilisateur pour un chef de service.
 
+**Correction (même jour) — 409 « Création impossible : doublon. » à chaque dépôt** : sur une base migrée
+depuis l'ancien schéma « dossiers », la colonne `document.dossier_id` (NOT NULL) restait en place —
+l'ancienne version de `migration_suppression_dossiers.sql` supprimait la table `dossier` mais pas la
+colonne. Chaque INSERT du code actuel (qui ne la fournit plus) échouait en violation NOT NULL, annoncé
+à tort « doublon ». Corrections : (1) la migration est complétée et **idempotente** — `DROP COLUMN
+IF EXISTS dossier_id`, suppression des fichiers orphelins puis `division_id SET NOT NULL`, recréation
+gardée de `uq_document_id_division` et du CHECK `commentaire.sujet_type` ; **à réexécuter sur la base
+existante** ; (2) le service de dépôt ne renvoie 409 « doublon » que pour une vraie violation d'unicité
+(SQLSTATE 23505), les autres erreurs de base renvoient un 500 qui pointe vers la migration ; (3) un
+verrou par division+contenu sérialise deux dépôts simultanés du même fichier (double-clic) : le second
+reçoit le message de dédoublonnage voulu au lieu de créer un doublon. Test ajouté : dépôt concurrent
+du même contenu → exactement un 201 et un 409 explicite.
+
 1. **Suppression des dossiers** : plus d'arborescence du tout — les fichiers se déposent DIRECTEMENT dans
    une division (`POST /documents` avec `division_id`), la page **Fichiers** liste à plat tout ce qui est
    accessible avec recherche, filtres de classes, **filtre par rôle** et (chef de service) **filtre par

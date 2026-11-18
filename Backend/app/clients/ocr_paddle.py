@@ -61,7 +61,12 @@ def ocr_image(path: Path, language: str | None = None) -> list[OcrBox]:
 
 
 def ping_ocr() -> bool:
+    """Le serveur OCR est-il joignable ? Toute réponse HTTP suffit : une installation locale
+    personnalisée (autre server.py) n'expose pas forcément /health — un 404 sur /health prouve
+    quand même que l'hôte répond, et l'indexation via POST /ocr fonctionne. False uniquement
+    si le host est injoignable (refus de connexion, délai dépassé, DNS)."""
     try:
-        return httpx.get(get_settings().ocr_url.rstrip("/") + "/health", timeout=3).is_success
+        httpx.get(get_settings().ocr_url.rstrip("/") + "/health", timeout=3)
+        return True
     except httpx.HTTPError:
         return False

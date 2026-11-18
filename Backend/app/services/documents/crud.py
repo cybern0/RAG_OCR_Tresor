@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -391,6 +391,10 @@ def create_document(
     division = exiger_depot_division(db, principal, division_id)  # membres et chefs de la division
     roles = _roles_au_depot(db, principal, division, role_ids, roles_explicites)
     path, sha, size, name = _save_upload(upload)  # à plat dans upload_dir (services/stockage.py)
+    # Deux dépôts CONCURRENTS du même contenu (double-clic) : le test puis l'insertion sont sérialisés
+    # par division et contenu, sinon les deux transactions passent le test avant que la première ne
+    # commette et le fichier serait déposé en double. Verrou de transaction : libéré au commit/rollback.
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:cle))"), {"cle": f"document.{division.id}.{sha}"})
     duplicate = db.scalar(
         select(Document.titre).join(DocumentVersion, DocumentVersion.document_id == Document.id)
         .where(Document.division_id == division.id, DocumentVersion.hash_sha256 == sha).limit(1)
@@ -432,10 +436,18 @@ def create_document(
                 reference_type="document", reference_id=doc.id, sauf_user_id=principal.user.id,
             )
         db.commit()
-    except IntegrityError:
+    except IntegrityError as e:
         db.rollback()
         _remove_file(path)
-        raise HTTPException(status.HTTP_409_CONFLICT, "Création impossible : doublon.") from None
+        # Un doublon (SQLSTATE 23505) ne doit plus masquer une autre cause : sur une base migrée avec
+        # l'ancienne version de migration_suppression_dossiers.sql, la colonne document.dossier_id
+        # NOT NULL restait en place et le dépôt échouait en violation NOT NULL — annoncé à tort « doublon ».
+        if getattr(getattr(e, "orig", None), "sqlstate", None) == "23505":
+            raise HTTPException(status.HTTP_409_CONFLICT, "Création impossible : doublon.") from None
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Création impossible : la base a refusé l'écriture (schéma obsolète ? appliquer database/migration_suppression_dossiers.sql).",
+        ) from e
     ingestion_worker.enqueue(version.id)
     return _fresh(db, principal, doc.id)
 

@@ -390,6 +390,40 @@ def test_validation_des_depots(client, world):
         assert ".." not in db.scalar(select(DocumentVersion.chemin_stockage).where(DocumentVersion.document_id == r.json()["id"]))
 
 
+def test_double_depot_concurrent_du_meme_contenu(client, world):
+    """Double-clic sur « Déposer » : deux requêtes simultanées du même contenu dans la même division.
+    Le verrou par division+contenu sérialise le test puis l'insertion : un seul dépôt, l'autre reçoit
+    le dédoublonnage voulu (message clair) — jamais deux fichiers identiques, jamais un 409 « doublon »
+    qui masquerait une autre erreur de base."""
+    import threading
+
+    a, A = world["a"]["h"], world["A"]["id"]
+    contenu = "Contenu déposé deux fois en même temps " + world["tag"]
+    resultats: list = []
+
+    def depot(nom: str) -> None:
+        r = upload(client, a, A, contenu, name=nom)
+        resultats.append((r.status_code, r.json().get("detail", "")))
+
+    fils = [threading.Thread(target=depot, args=(f"conc{i}.txt",)) for i in (1, 2)]
+    for f in fils:
+        f.start()
+    for f in fils:
+        f.join()
+    codes = sorted(code for code, _ in resultats)
+    assert codes == [201, 409], resultats
+    assert any("existe déjà" in detail for _, detail in resultats)
+    # et un seul document porte ce contenu dans la division
+    from sqlalchemy import func
+
+    with SessionLocal() as db:
+        n = db.scalar(
+            select(func.count()).select_from(Document)
+            .where(Document.division_id == A, Document.titre.in_(["conc1", "conc2"]))
+        )
+        assert n == 1
+
+
 def test_document_illisible_passe_en_erreur_avec_message(client, world):
     a = world["a"]["h"]
     r = client.post("/documents", headers=a, data={"division_id": str(world["A"]["id"])}, files={"fichier": ("faux.xlsx", b"ce n'est pas un classeur", "application/octet-stream")})
