@@ -65,6 +65,12 @@ def _password_fingerprint(stored_hash: str) -> str:
     return hashlib.sha256(stored_hash.encode()).hexdigest()[:16]
 
 
+def empreinte_session(mot_de_passe_hash: str | None) -> str:
+    """Empreinte liant le jeton au hash du compte : le changement de mot de passe invalide toujours
+    les jetons déjà émis."""
+    return _password_fingerprint(mot_de_passe_hash or "")
+
+
 def _sign(payload_b64: str) -> str:
     key = get_settings().secret_key.encode()
     return _b64e(hmac.new(key, payload_b64.encode(), hashlib.sha256).digest())

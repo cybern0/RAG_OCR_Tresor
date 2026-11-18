@@ -9,7 +9,7 @@ CREATE TEMP TABLE _d_user ON COMMIT DROP AS
     UNION SELECT u.id FROM _user u JOIN agent a ON a.id = u.agent_id WHERE a.matricule LIKE 'DEMO-%';
 DELETE FROM document WHERE division_id IN (SELECT id FROM _d_div);   -- versions, passages, rôles, étiquettes en cascade
 DELETE FROM commentaire WHERE auteur_id IN (SELECT id FROM _d_user);
-DELETE FROM dossier WHERE division_id IN (SELECT id FROM _d_div);    -- une seule instruction : parents et enfants ensemble
+DELETE FROM dossier WHERE division_id IN (SELECT id FROM _d_div);
 DELETE FROM demande_acces WHERE division_id IN (SELECT id FROM _d_div) OR demandeur_user_id IN (SELECT id FROM _d_user);
 DELETE FROM role_division WHERE division_id IN (SELECT id FROM _d_div);    -- liens user_role_division en cascade
 DELETE FROM _user WHERE id IN (SELECT id FROM _d_user);    -- conversations, notifications, préférences en cascade

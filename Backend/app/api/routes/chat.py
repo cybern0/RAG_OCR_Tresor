@@ -1,7 +1,7 @@
 """Route de chat : reçoit la question et renvoie la réponse en streaming (SSE), avec les sources citées.
 
 - La recherche est limitée aux fichiers que l'utilisateur peut lire (rôles de sa division, ses dépôts, accès ponctuels ;
-  le super administrateur consulte tout, en lecture) : core/acces.py.
+  le super administrateur n'y entre pas : l'IA est pour les chefs et les agents) : core/acces.py.
 - Mémoire dans une session : obligatoire. L'historique de la conversation est relu en base à chaque question, donc il
   se retrouve après une déconnexion/reconnexion.
 - Deux options personnelles (GET/PUT /chat/preferences) : mémoire entre sessions, et « dernière version seulement ».
@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require
 from app.core.acces import condition_acces_fichiers
-from app.core.permissions import CHAT_UTILISER, Principal
+from app.core.permissions import CHAT_UTILISER, NIVEAU_ROOT, Principal
 from app.db.metier import Conversation, Message
 from app.schemas.chat import ChatIn, ConversationOut, MessageOut, PreferencesIn, PreferencesOut
 from app.services.chat import memoire, rag_chain
@@ -41,6 +41,11 @@ def ask(
 ):
     from app.db.vecteur import Document
 
+    if principal.niveau == NIVEAU_ROOT:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "L'IA n'est pas accessible au super administrateur : il administre, les chefs et les agents interrogent.",
+        )
     if db.scalars(select(Document.id).where(condition_acces_fichiers(db, principal), Document.corbeille_le.is_(None)).limit(1)).first() is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Vous n'avez accès à aucun fichier.")
     prefs = memoire.get_preferences(db, principal.user.id)

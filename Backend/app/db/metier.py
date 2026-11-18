@@ -186,13 +186,13 @@ class Message(Base):
 # --- Dossiers, rôles de division, demandes, secrets, historique, notifications --------------------------------------------
 
 class Dossier(Base):
-    """Dossier ou sous-dossier d'UNE division. Sans login ni rôle : visible de toute la division."""
+    """Dossier à un seul niveau d'UNE division, créé par le super administrateur. Sans login ni rôle :
+    visible de toute la division."""
 
     __tablename__ = "dossier"
 
     id: Mapped[int] = _pk()
     division_id: Mapped[int] = mapped_column(ForeignKey("division.id"))
-    parent_id: Mapped[int | None] = mapped_column(BigInteger)
     nom: Mapped[str] = mapped_column(String(150))
     description: Mapped[str | None] = mapped_column(Text)
     archive: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")

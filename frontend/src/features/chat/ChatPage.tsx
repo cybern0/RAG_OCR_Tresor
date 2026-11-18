@@ -133,7 +133,7 @@ export function Component() {
           {chat.messages.length === 0 && !chat.loading && (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-cream-300">
               <Bot className="h-10 w-10 text-gold-400" aria-hidden />
-              <p className="max-w-md">Posez une question : la réponse s’appuie uniquement sur les fichiers des dossiers auxquels vous avez accès. La conversation est mémorisée et retrouvée après une reconnexion.</p>
+              <p className="max-w-md">Posez une question : la réponse s’appuie uniquement sur les fichiers de votre division classés selon vos rôles — un chef interroge toute sa division, un chef de service toutes les divisions de son service. La conversation est mémorisée et retrouvée après une reconnexion.</p>
             </div>
           )}
           {chat.messages.map((m) => (

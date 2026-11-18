@@ -17,10 +17,11 @@ if not os.environ.get("TEST_DATABASE_URL"):
 
 from sqlalchemy import text, update
 
+from app.config import get_settings
 from app.db.metier import SessionLocal
 
 from .test_api import (  # noqa: F401  (fixtures et aides partagées)
-    PWD, auth, client, login, mk_agent, mk_dossier, mk_role, mk_user, ready_doc, set_roles,
+    PWD, auth, client, dossier_par_defaut, login, mk_agent, mk_role, mk_user, ready_doc, set_roles,
     upload, wait_version, world,
 )
 
@@ -116,14 +117,11 @@ def test_404_403_selon_la_position_de_l_appelant(client, world):
     dossiers = {d["id"]: d for d in client.get("/dossiers", headers=mix).json()}
     assert world["A"]["id"] in dossiers and dossiers[world["A"]["id"]]["nb_fichiers_masques"] >= 1
     assert client.get(f"/dossiers/{world['A']['id']}", headers=b).status_code == 404
-    # super administrateur : consultation directe, en lecture seule
-    sup = client.get(f"/documents/{fid}", headers=adm).json()
-    assert sup["mon_role"] == "SUPERIEUR" and "commenter" not in sup["droits"] and "modifier" not in sup["droits"]
-    assert client.get(f"/documents/{fid}/versions/1/telecharger", headers=adm).status_code == 200
-    assert client.patch(f"/documents/{fid}", headers=adm, data={"titre": "x"}).status_code == 403
-    assert client.post(f"/documents/{fid}/commentaires", headers=adm, json={"contenu": "bonjour"}).status_code == 403
-    assert client.post("/dossiers", headers=adm, json={"nom": "Interdit", "division_id": world["div"]["v1"]["id"]}).status_code == 403
-    assert upload(client, adm, world["A"]["id"], "x" + world["tag"]).status_code == 403          # lecture seule : pas de dépôt
+    # super administrateur : il ne fait qu'administrer — ni fichiers, ni téléchargement, ni dépôt
+    assert client.get(f"/documents/{fid}", headers=adm).status_code == 404
+    assert client.get(f"/documents/{fid}/versions/1/telecharger", headers=adm).status_code == 404
+    assert client.post("/dossiers", headers=adm, json={"nom": "Interdit", "division_id": world["div"]["v1"]["id"]}).status_code == 405  # plus de création manuelle de dossier
+    assert upload(client, adm, world["A"]["id"], "x" + world["tag"]).status_code == 403          # l'administration ne dépose pas
     assert client.post(f"/documents/{fid}/commentaires", headers=lect, json={"contenu": "ok"}).status_code == 201
 
 
@@ -172,53 +170,58 @@ def test_classement_automatique_selon_l_utilisateur_qui_depose(client, world):
     set_roles(client, cd1, world["lect"]["user"]["id"], [R["COMPTA"]["id"], R["AUDIT"]["id"]])
 
 
-def test_sous_dossiers_sans_role_et_fichiers_avec_roles(client, world):
-    a, lect, mix, b, cd1, tag, R = world["a"]["h"], world["lect"]["h"], world["mix"]["h"], world["b"]["h"], world["cd1"]["h"], world["tag"], world["roles"]
-    A = world["A"]["id"]
-    sub = mk_dossier(client, a, f"Sous-dossier {tag}", parent_id=A)
-    subsub = mk_dossier(client, mix, f"Niveau 2 {tag}", parent_id=sub["id"])       # tout agent de la division en crée, sans nouveau login
-    assert sub["division_id"] == world["div"]["v1"]["id"] and subsub["parent_id"] == sub["id"]
-    # le sous-dossier est un simple dossier : visible de toute la division, indépendamment des rôles
+def test_dossiers_automatiques_sans_role_et_fichiers_avec_roles(client, world):
+    """Les dossiers naissent du modèle à la création d'une division : aucune création manuelle (POST refusé).
+    Le même jeu pour toutes les divisions ; les fichiers gardent leurs rôles ;
+    renommer, archiver, supprimer : super administrateur seulement."""
+    a, lect, mix, b, cd1, adm, tag = world["a"]["h"], world["lect"]["h"], world["mix"]["h"], world["b"]["h"], world["cd1"]["h"], world["admin"], world["tag"]
+    v1, s1 = world["div"]["v1"]["id"], world["svc"]["s1"]["id"]
+    d = world["A"]  # « Courrier entrant » de v1, posé automatiquement
+    # aucun POST /dossiers : la création manuelle a disparu, quel que soit le compte (405 = route absente)
+    for h in (adm, a, cd1):
+        assert client.post("/dossiers", headers=h, json={"nom": "Interdit", "division_id": v1}).status_code == 405
+    # le modèle est posé à la création de la division : cinq dossiers, les mêmes partout
+    modele = ["Archives", "Courrier entrant", "Courrier sortant", "Notes de service", "Rapports"]  # ordre alphabétique de l'API
+    assert sorted(x["nom"] for x in client.get("/dossiers", headers=a).json()) == modele
+    # le dossier est visible de toute la division, indépendamment des rôles
     for h in (a, lect, mix, cd1):
-        assert sub["id"] in ids(client.get("/dossiers", headers=h, params={"parent_id": A}).json())
-    detail = client.get(f"/dossiers/{subsub['id']}", headers=mix).json()
-    assert [c["id"] for c in detail["chemin"]] == [A, sub["id"], subsub["id"]]
-    f = fichier(client, a, sub["id"], f"Fichier du sous-dossier {tag}", titre="Fichier SD")
-    assert client.get(f"/documents/{f['id']}", headers=mix).status_code == 403                    # ce sont les fichiers qui ont des rôles
-    assert client.get("/dossiers", headers=mix, params={"parent_id": A}).json()[0]["nb_sous_dossiers"] >= 0
-    assert next(d for d in client.get("/dossiers", headers=mix, params={"parent_id": A}).json() if d["id"] == sub["id"])["nb_fichiers_masques"] == 1
-    # hors division : 404
-    assert client.get(f"/dossiers/{sub['id']}", headers=b).status_code == 404
-    assert client.post("/dossiers", headers=b, json={"nom": "Intrus", "parent_id": sub["id"]}).status_code == 404
-    # noms uniques (casse ignorée) par niveau ; mêmes noms permis ailleurs
-    assert client.post("/dossiers", headers=a, json={"nom": sub["nom"].upper(), "parent_id": A}).status_code == 409
-    assert client.post("/dossiers", headers=a, json={"nom": "   ", "parent_id": A}).status_code == 422
-    # déplacements : jamais dans soi-même ni dans un descendant ; modifier = créateur ou chef
-    assert client.patch(f"/dossiers/{sub['id']}", headers=a, json={"parent_id": subsub["id"]}).status_code == 409
-    assert client.patch(f"/dossiers/{sub['id']}", headers=lect, json={"nom": "Pirate"}).status_code == 403
-    assert client.patch(f"/dossiers/{sub['id']}", headers=cd1, json={"nom": f"Renommé {tag}"}).status_code == 200
-    assert client.patch(f"/dossiers/{subsub['id']}", headers=mix, json={"parent_id": None}).status_code == 200       # à la racine
-    # suppression : refusée s'il reste des sous-dossiers ou des fichiers
-    assert client.delete(f"/dossiers/{sub['id']}", headers=a).status_code == 409
-    # archivage : s'applique aux sous-dossiers, lecture seule, hors chat
-    d = mk_dossier(client, a, f"Archive {tag}", parent_id=A)
-    enfant = mk_dossier(client, a, f"Enfant {tag}", parent_id=d["id"])
-    doc = fichier(client, a, enfant["id"], f"Texte archivé unique {tag} sur la cantine.")
-    assert client.patch(f"/dossiers/{d['id']}", headers=a, json={"archive": True}).json()["archive"] is True
-    assert client.get(f"/dossiers/{enfant['id']}", headers=a).json()["archive"] is True
-    assert upload(client, a, enfant["id"], "autre " + tag).status_code == 409
+        assert d["id"] in ids(client.get("/dossiers", headers=h).json())
+    # hors division : 404 ; une division créée via l'API reçoit le même jeu automatiquement
+    assert client.get(f"/dossiers/{d['id']}", headers=b).status_code == 404
+    nv = client.post("/structure/divisions", headers=adm, json={"service_id": s1, "nom": f"Division auto {tag}", "code": f"auto{tag}"})
+    assert nv.status_code == 201
+    assert sorted(x["nom"] for x in client.get("/dossiers", headers=adm, params={"division_id": nv.json()["id"]}).json()) == modele
+    # stockage à plat : plus de répertoire par division ni par dossier (l'accès est purement applicatif)
+    racine = get_settings().upload_dir
+    assert not (racine / str(nv.json()["id"])).exists()
+    # renommer, archiver, supprimer : super administrateur seulement
+    assert client.patch(f"/dossiers/{d['id']}", headers=a, json={"nom": "Pirate"}).status_code == 403
+    assert client.patch(f"/dossiers/{d['id']}", headers=cd1, json={"nom": "Pirate"}).status_code == 403
+    assert client.patch(f"/dossiers/{d['id']}", headers=adm, json={"nom": f"Renommé {tag}"}).status_code == 200
+    # ce sont les fichiers qui portent les rôles, pas le dossier
+    f = fichier(client, a, d["id"], f"Fichier du dossier automatique {tag}", titre="Fichier DA")
+    assert any(p.is_file() for p in racine.iterdir())  # déposé à plat dans upload_dir (nom généré)
+    assert client.get(f"/documents/{f['id']}", headers=mix).status_code == 403
+    assert next(x for x in client.get("/dossiers", headers=mix).json() if x["id"] == d["id"])["nb_fichiers_masques"] >= 1
+    # archivage : lecture seule pour les fichiers, le dossier reste lisible
+    doc = fichier(client, a, d["id"], f"Texte archivé unique {tag} sur la cantine.")
+    assert client.patch(f"/dossiers/{d['id']}", headers=adm, json={"archive": True}).json()["archive"] is True
+    assert upload(client, a, d["id"], "autre " + tag).status_code == 409
     assert client.patch(f"/documents/{doc['id']}", headers=a, data={"titre": "x"}).status_code == 409
-    assert client.patch(f"/dossiers/{d['id']}", headers=a, json={"nom": "x"}).status_code == 409
-    assert client.get("/documents", headers=a, params={"dossier_id": enfant["id"]}).status_code == 200               # mais lisible
-    assert client.patch(f"/dossiers/{d['id']}", headers=a, json={"archive": False}).json()["archive"] is False
-    # suppression : fichier puis dossiers
-    assert client.delete(f"/dossiers/{enfant['id']}", headers=a).status_code == 409
-    client.delete(f"/documents/{doc['id']}", headers=a)
-    assert client.delete(f"/dossiers/{enfant['id']}", headers=a).status_code == 409                                  # corbeille comprise
-    client.delete(f"/documents/{doc['id']}", headers=cd1, params={"force": True})
-    assert client.delete(f"/dossiers/{enfant['id']}", headers=a).status_code == 204
-    assert client.delete(f"/dossiers/{d['id']}", headers=a).status_code == 204
-    assert client.delete(f"/dossiers/{d['id']}", headers=a).status_code == 404
+    assert client.patch(f"/dossiers/{d['id']}", headers=adm, json={"nom": "x"}).status_code == 409
+    assert client.get("/documents", headers=a, params={"dossier_id": d["id"]}).status_code == 200
+    assert client.patch(f"/dossiers/{d['id']}", headers=adm, json={"archive": False}).json()["archive"] is False
+    # suppression : super administrateur seul, refusée tant que le dossier contient des fichiers (corbeille comprise)
+    arch = next(x for x in client.get("/dossiers", headers=adm, params={"division_id": v1}).json() if x["nom"] == "Archives")
+    g = fichier(client, a, arch["id"], f"Fichier des archives {tag}", titre="Archives")
+    assert client.delete(f"/dossiers/{arch['id']}", headers=a).status_code == 403
+    assert client.delete(f"/dossiers/{arch['id']}", headers=adm).status_code == 409
+    client.delete(f"/documents/{g['id']}", headers=a)                                                            # à la corbeille : compte toujours
+    assert client.delete(f"/dossiers/{arch['id']}", headers=adm).status_code == 409
+    client.delete(f"/documents/{g['id']}", headers=cd1, params={"force": True})
+    assert client.delete(f"/dossiers/{arch['id']}", headers=adm).status_code == 204
+    assert client.delete(f"/dossiers/{arch['id']}", headers=adm).status_code == 404
+    # stockage à plat : aucune arborescence par dossier à nettoyer, les fichiers sont purgés par chemin en base
 
 
 # --- demandes d'accès et exceptions ---------------------------------------------------------------------------------------------
@@ -457,8 +460,10 @@ def test_arbre_de_structure_visible_selon_le_niveau(client, world):
     # le chef de service voit toutes les divisions de son service, en gérant
     arbre_cs = client.get("/structure/arbre", headers=world["cs"]["h"]).json()
     assert len(arbre_cs) == 1 and arbre_cs[0]["id"] == world["svc"]["s1"]["id"]
-    assert [d["id"] for d in arbre_cs[0]["divisions"]] == [world["div"]["v1"]["id"], world["div"]["v2"]["id"]]
-    assert all(d["acces"] == "gerant" for d in arbre_cs[0]["divisions"])
+    v1, v2 = world["div"]["v1"]["id"], world["div"]["v2"]["id"]
+    ids_cs = {d["id"] for d in arbre_cs[0]["divisions"]}
+    assert {v1, v2} <= ids_cs  # une division créée par un autre test peut exister aussi dans s1
+    assert all(d["acces"] == "gerant" for d in arbre_cs[0]["divisions"] if d["id"] in (v1, v2))
 
 
 # --- garanties conservées après la refonte : privilèges, dossiers par division ----
@@ -522,16 +527,16 @@ def test_le_chef_de_service_meme_role_sur_toutes_les_divisions(client, world):
     me = client.get("/auth/me", headers=cs).json()
     assert me["titre"] == "CHEF_SERVICE" and me["niveau"] == "SERVICE" and me["division_id"] is None and me["service_id"] == s1
     assert "utilisateur.creer" in me["permissions"]
-    assert {d["id"] for d in me["divisions_gerees"]} == {v1, v2}
+    gerees = {d["id"] for d in me["divisions_gerees"]}
+    assert {v1, v2} <= gerees  # (une division créée par un autre test peut exister aussi dans s1)
     # hors de son service : l'existence n'est pas révélée
     assert client.post(f"/divisions/{world['div']['v3']['id']}/roles", headers=cs, json={"code": "PIRATE", "libelle": "Pirate"}).status_code == 404
     # GERANT sur les fichiers des divisions de son service, sans déverrouillage
     f1 = upload(client, world["a"]["h"], world["A"]["id"], f"Sous la houlette du chef de service {tag}").json()
     assert client.get(f"/documents/{f1['id']}", headers=cs).json()["mon_role"] == "GERANT"
-    # il crée un dossier dans v2, y dépose un fichier « à classer », puis le classe avec un rôle DE v2
-    d2 = client.post("/dossiers", headers=cs, json={"nom": f"Relance {tag}", "division_id": v2})
-    assert d2.status_code == 201, d2.text
-    f2 = upload(client, cs, d2.json()["id"], f"Pièce relancée {tag}", titre="Relance").json()
+    # dans un dossier de v2 (le modèle automatique), il dépose un fichier « à classer », puis le classe avec un rôle DE v2
+    d2 = dossier_par_defaut(client, adm, v2)
+    f2 = upload(client, cs, d2["id"], f"Pièce relancée {tag}", titre="Relance").json()
     assert f2["a_classer"] is True
     assert client.get(f"/documents/{f2['id']}", headers=world["cd1"]["h"]).status_code == 404
     r_v2 = client.post(f"/divisions/{v2}/roles", headers=cs, json={"code": "RELANCE", "libelle": "Relance"})

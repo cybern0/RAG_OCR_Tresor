@@ -1,5 +1,5 @@
 // Pastille de statut d'indexation d'une version.
-import type { Statut } from '../../types/document'
+import type { Statut } from './types'
 
 const STATUS: Record<Statut, { label: string; cls: string }> = {
   pending: { label: 'En attente', cls: 'border-cream-300/60 text-cream-100' },

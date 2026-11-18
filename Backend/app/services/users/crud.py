@@ -32,8 +32,8 @@ def to_user_out(user: User, roles: list[RoleDivisionBrief] | None = None) -> Use
         )
     return UserOut(
         id=user.id, nom_utilisateur=user.nom_utilisateur, role=user.role.code, niveau=niveau_compte(user),
-        actif=user.actif, derniere_connexion=user.derniere_connexion, cree_le=user.cree_le, agent=agent,
-        roles_division=roles or [],
+        actif=user.actif, derniere_connexion=user.derniere_connexion,
+        cree_le=user.cree_le, agent=agent, roles_division=roles or [],
     )
 
 

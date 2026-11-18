@@ -9,12 +9,11 @@ from sqlalchemy.orm import Session, joinedload
 from app.api.deps import client_ip, get_db, get_principal
 from app.core.permissions import Principal, construire_principal
 from app.core.security import (
-    DUMMY_HASH, create_access_token, login_throttle, verify_password,
+    DUMMY_HASH, create_access_token, empreinte_session, login_throttle, verify_password,
 )
 from app.db.metier import Agent, User
 from app.schemas.user import LoginIn, MeOut, ProfileUpdate, TokenOut
 from app.services.audit import log_action
-from app.services.users import crud as users_crud
 from app.services.users.crud import to_me_out
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -35,10 +34,11 @@ def login(data: LoginIn, request: Request, db: Session = Depends(get_db)) -> Tok
         .where(User.nom_utilisateur == username)
     ).unique().one_or_none()
 
-    # on vérifie toujours un hash (factice si le compte n'existe pas) pour ne pas révéler les comptes par le temps de réponse
+    # Compte applicatif : on vérifie toujours un hash (factice si le compte n'existe pas)
+    # pour ne pas révéler les comptes par le temps de réponse.
     password_ok = verify_password(data.mot_de_passe, user.mot_de_passe_hash if user else DUMMY_HASH)
-    agent_inactif = user is not None and user.agent is not None and not user.agent.actif
-    if user is None or not user.actif or agent_inactif or not password_ok:
+
+    def _echec() -> None:
         login_throttle.record_failure(throttle_key)
         # le nom saisi n'est pas journalisé s'il est inconnu (il pourrait être un mot de passe tapé au mauvais endroit)
         log_action(db, user.id if user else None, "connexion.echec", "utilisateur", user.id if user else None,
@@ -46,11 +46,15 @@ def login(data: LoginIn, request: Request, db: Session = Depends(get_db)) -> Tok
         db.commit()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, _INVALID)
 
+    agent_inactif = user is not None and user.agent is not None and not user.agent.actif
+    if user is None or not user.actif or agent_inactif or not password_ok:
+        _echec()
+
     login_throttle.reset(throttle_key)
     user.derniere_connexion = datetime.now(UTC)
     log_action(db, user.id, "connexion.reussie", "utilisateur", user.id, {}, ip)
     db.commit()
-    token, ttl = create_access_token(user.id, user.mot_de_passe_hash)
+    token, ttl = create_access_token(user.id, empreinte_session(user.mot_de_passe_hash))
     principal = construire_principal(db, user)
     return TokenOut(access_token=token, expires_in=ttl, user=to_me_out(principal, db))
 
@@ -77,5 +81,5 @@ def update_me(
     Les jetons sont liés au mot de passe : on en renvoie un nouveau pour que la session en cours continue.
     """
     users_crud.update_profile(db, principal.user, data, client_ip(request))
-    token, ttl = create_access_token(principal.user.id, principal.user.mot_de_passe_hash)
+    token, ttl = create_access_token(principal.user.id, empreinte_session(principal.user.mot_de_passe_hash))
     return TokenOut(access_token=token, expires_in=ttl, user=to_me_out(principal, db))

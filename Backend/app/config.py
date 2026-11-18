@@ -35,10 +35,18 @@ class Settings(BaseSettings):
     upload_dir: Path = BASE_DIR / "storage" / "uploads"
     max_upload_mb: int = 50
 
+    # Modèle des dossiers : le même jeu est créé automatiquement dans chaque nouvelle division
+    # (pas de création manuelle). Surchargeable via .env, ex. DOSSIERS_DEFAUT='["Courrier","Archives"]'.
+    dossiers_defaut: list[str] = ["Courrier entrant", "Courrier sortant", "Notes de service", "Rapports", "Archives"]
+
     # Sécurité
     secret_key: str = ""
     token_ttl_minutes: int = 480
     cors_origins: str = "http://localhost:5173"
+
+    # Authentification : l'application gère elle-même ses comptes — mots de passe hachés (scrypt) dans _user,
+    # créés par le super administrateur ou au CLI (`creer-admin`), jamais de comptes du système d'exploitation
+    # (voir docs/refonte_classes.md pour la décision et le périmètre).
 
     # Interface web (SPA) : l'API vit sous ce préfixe, ce qui libère tous les autres chemins pour le routage côté navigateur.
     api_prefix: str = "/api"

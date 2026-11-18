@@ -5,9 +5,10 @@ Deux sources, évaluées à CHAQUE requête (aucun cache : un retrait de droit o
 1. Le rôle GLOBAL du compte (tables _role, permission, role_permission) : ADMIN (super administrateur) ou UTILISATEUR.
 2. Le NIVEAU, déduit du TITRE de l'agent (une seule source de vérité) :
    ROOT (rôle ADMIN) > SERVICE (CHEF_SERVICE) > DIVISION (CHEF_DIVISION) > AGENT.
-   Le chef de service a le MÊME rôle que le chef de division, étendu à toutes les divisions de son service ;
-   les mots de passe de dossier restent réservés au super administrateur.
+   Le chef de service a le MÊME rôle que le chef de division, étendu à toutes les divisions de son service.
    Les niveaux SERVICE et DIVISION ajoutent les permissions utilisateur.* ; leur PÉRIMÈTRE est appliqué par core/portee.py.
+   Le super administrateur ADMINISTRE SEULEMENT : document.lister et chat.utiliser lui sont retirés
+   (structure, comptes, dictionnaires de rôles, dossiers, audit — ni fichiers ni IA).
 
 La règle d'accès aux dossiers et aux fichiers est dans core/acces.py.
 """
@@ -49,6 +50,8 @@ PERMISSIONS_DU_NIVEAU: dict[str, frozenset[str]] = {
     NIVEAU_DIVISION: _GESTION_COMPTES,
     NIVEAU_AGENT: frozenset(),
 }
+# Le super administrateur ne fait qu'administrer : il ne consulte pas les fichiers et n'utilise pas l'IA.
+_INTERDITS_ROOT = frozenset({DOCUMENT_LISTER, CHAT_UTILISER})
 
 
 def niveau_compte(user: User) -> str:
@@ -101,7 +104,10 @@ def load_permissions(db: Session, user: User) -> frozenset[str]:
         .join(role_permission, role_permission.c.permission_id == Permission.id)
         .where(role_permission.c.role_id == user.role_id)
     )
-    return frozenset(rows) | PERMISSIONS_DU_NIVEAU[niveau_compte(user)]
+    codes = frozenset(rows) | PERMISSIONS_DU_NIVEAU[niveau_compte(user)]
+    if niveau_compte(user) == NIVEAU_ROOT:
+        codes -= _INTERDITS_ROOT
+    return codes
 
 
 def construire_principal(db: Session, user: User) -> Principal:

@@ -1,7 +1,8 @@
 # RAG_OCR_Tresor
 
 Assistant RAG 100 % local en français, sur CPU, organisé en **GED hiérarchique** :
-Direction → Service → Division → agents. Des **divisions** possèdent des **dossiers et sous-dossiers**,
+Direction → Service → Division → agents. Des **divisions** possèdent des **dossiers** (un seul niveau,
+sans sous-dossiers, posés automatiquement à la création de la division d'après un modèle fixe),
 des **fichiers versionnés** (OCR inclus, aperçu et téléchargement), des **rôles de division** pour le
 classement et l'accès, et un **chatbot** qui ne répond qu'à partir des fichiers auxquels on a accès.
 
@@ -47,11 +48,12 @@ psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/seed.sql   # facultatif :
 `01` crée tout le schéma en une seule transaction (base NEUVE uniquement) ; `02` insère les rôles globaux
 et les permissions ; `03` contrôle les invariants (`verification_invariants`, chaque ligne attendue à 0).
 
-**Base existante antérieure à la refonte** (installée avec des chefs de service) : la migration ALTER a été
-fusionnée dans les scripts de base — il n'y a plus de script `10_`. Recréer la base : `DROP DATABASE`, puis
-exécuter la chaîne ci-dessus (ordre complet et précautions : `docs/ordre_execution_sql.md`). Les agents
-titrés `CHEF_SERVICE` n'existent plus ; le super administrateur réaffecte ces agents à une division après
-restauration des données. Détails : `docs/refonte_super_admin.md`.
+**Base existante antérieure aux refontes** (chefs de service, sous-dossiers, dossiers créés à la main) :
+il n'y a plus de script de migration — les changements sont fusionnés dans les scripts de base
+(`01_schema.sql`, `seed.sql`). Recréer la base : `DROP DATABASE`, puis exécuter la chaîne ci-dessus
+(ordre complet et précautions : `docs/ordre_execution_sql.md`). Les agents titrés `CHEF_SERVICE`
+n'existent plus ; les dossiers reviennent avec la restauration des données et, pour toute division
+créée ensuite via l'API, le backend pose automatiquement le jeu du modèle.
 
 Pour contrôler que les embeddings sont bien normalisés : `psql -U postgres -d rag -f database/verif_vecteurs_normalises.sql` (attendu : 0 non normalisé).
 
@@ -69,6 +71,11 @@ Le backend peut être déployé sur l'un ou l'autre ; la conversion bureautique 
 
 Sans aucune suite bureautique, l'aperçu de ces types répond par un message clair (501) et le téléchargement reste possible.
 
+La démo et le développement peuvent tourner **entièrement sur Windows 11** (Python, PostgreSQL, OCR, API :
+rien ne dépend du système), la **cible de production est Linux** — même code, mêmes commandes, LibreOffice
+et systemd en exploitation. L'application ne s'intègre à aucun annuaire ni compte du système : voir
+`docs/refonte_classes.md` pour la décision et le périmètre.
+
 ## Démarrer
 
 1. Base : voir ci-dessus, puis `cp .env.example .env` et renseigner `SECRET_KEY`.
@@ -83,6 +90,10 @@ Connexion avec `admin` et le mot de passe choisi à l'étape 4. Le super adminis
 structure (direction, services, divisions, agents), les **comptes** (chaque compte est lié à un agent,
 donc à une division) et nomme des **chefs de division** (transfert de poste dans l'onglet Agents).
 
+Authentification gérée **par l'application elle-même** : comptes créés par le super administrateur (ou au
+CLI), mots de passe hachés (scrypt) dans la base — aucun compte du système d'exploitation, aucune
+intégration PAM ni annuaire. Décision de refonte et modèle d'accès : `docs/refonte_classes.md`.
+
 L'aperçu des fichiers Word, PowerPoint, Excel et OpenDocument demande une suite bureautique sur le serveur — Microsoft Office sous Windows, LibreOffice sous Linux (voir « Serveur Linux ou Windows ») ;
 sans elle, l'aperçu de ces types répond par un message clair et le téléchargement reste possible.
 
@@ -90,23 +101,25 @@ Chaque formulaire de l'interface a un bouton « Remplir avec exemple » qui le r
 
 ## Rôles et niveaux
 
-Quatre niveaux de gestion (voir `docs/retour_chef_service.md`) :
+Quatre niveaux de gestion (voir `docs/retour_chef_service.md` et `docs/refonte_classes.md`) :
 
 - **ADMIN — super administrateur (niveau ROOT)** : gère la structure, **tous les comptes** (y compris les
-  chefs), assure **l'intérim des divisions vacantes**, consulte l'audit et l'historique complet,
-  voit le tableau de bord par service. Il consulte en lecture seule toute unité, et il gère
-  directement les divisions sans chef. Il ne peut pas être membre d'une division.
+  chefs), assure **l'intérim de la gestion des divisions vacantes**, consulte l'audit et l'historique complet,
+  voit le tableau de bord par service. **Il ne fait qu'administrer** : ni consultation des fichiers,
+  ni interrogation IA. Il ne peut pas être membre d'une division.
 - **Chef de service (titre d'agent `CHEF_SERVICE`, niveau SERVICE)** : le **même rôle que le chef de division**,
-  étendu à **toutes les divisions de son service** — gérant des fichiers, dossiers, classement, demandes et
-  comptes des agents sans titre —, y compris l'intérim local des divisions vacantes.
-  Il appartient à son service **sans division propre**.
-- **Chef de division (titre d'agent `CHEF_DIVISION`, niveau DIVISION)** : gérant de sa division — crée ses
-  dossiers et sous-dossiers, définit le dictionnaire des rôles, classe les fichiers, traite les demandes
+  étendu à **toutes les divisions de son service** — gérant des fichiers, dossiers, **classement des fichiers**,
+  demandes et comptes des agents sans titre —, y compris l'intérim local des divisions vacantes.
+  Il appartient à son service **sans division propre**. L'IA lui répond depuis tous les fichiers
+  d'une division ou de toutes les divisions de son service.
+- **Chef de division (titre d'agent `CHEF_DIVISION`, niveau DIVISION)** : gérant de sa division — définit
+  le dictionnaire des rôles, **assigne les classes des fichiers**, traite les demandes
   d'accès et les exceptions ponctuelles, crée les comptes des agents de sa division. Lecture et écriture
-  de tous les fichiers de sa division.
-- **Agent (niveau AGENT)** : dépose des fichiers dans les dossiers de sa division (il en devient AUTEUR),
-  voit les fichiers qui partagent un **rôle de division** avec lui, commente, demande un accès ponctuel
-  (`demande_acces`). Hors de sa division : 404 ; rôle insuffisant : 403 ; unité verrouillée : 423.
+  de tous les fichiers de sa division ; l'IA couvre sa division entière.
+- **Agent (niveau AGENT)** : dépose des fichiers dans les dossiers de sa division (il en devient AUTEUR,
+  classés automatiquement à ses rôles), voit **uniquement les fichiers de sa division classés selon ses
+  rôles**, commente, demande un accès ponctuel
+  (`demande_acces`). Hors de sa division : 404 ; rôle insuffisant : 403 ; dossier archivé : écritures refusées (409).
 
 Rôles effectifs sur un fichier (recalculés à chaque requête, matrice `MATRICE` de `core/acces.py`) :
 
@@ -117,6 +130,12 @@ Rôles effectifs sur un fichier (recalculés à chaque requête, matrice `MATRIC
 | Corbeille, restauration | non | oui | oui | non |
 | Purge définitive, rôles du fichier | non | non | oui | non |
 
-Dossiers et sous-dossiers : visibles de tous les agents de la division (ils n'ont pas de rôle) ;
-renommer/déplacer : créateur ou gérant. La traçabilité complète est dans `historique_modification`
+Dossiers : à un seul niveau, créés **automatiquement** à la création d'une division d'après le modèle
+configuré (`DOSSIERS_DEFAUT`, le même jeu pour toutes les divisions — aucune création manuelle) ;
+visibles de tous les agents de la division (ils n'ont pas de rôle) ; renommer/archiver/supprimer :
+super administrateur. **Stockage à plat** (refonte, `docs/refonte_classes.md`) : tous les fichiers
+vivent dans le seul `storage/uploads/` sous un nom généré — plus de répertoires par division ni par
+dossier sur le disque, l'accès est entièrement contrôlé par l'application. Les dépôts anciens
+(`<division>/<dossier>/…` ou déjà à plat) restent lisibles : c'est le chemin enregistré en base qui fait foi.
+La traçabilité complète est dans `historique_modification`
 (en ajout seul, chaîné par hash, vérifiable via `/api/historique/verification`).

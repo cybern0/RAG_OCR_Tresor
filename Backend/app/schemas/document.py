@@ -53,7 +53,7 @@ class DocumentOut(BaseModel):
     images_imposees: bool
     nb_versions: int
     version: VersionOut  # la version la plus récente (tous statuts), pour suivre l'indexation
-    mon_role: str  # GERANT | AUTEUR | LECTEUR | SUPERIEUR
+    mon_role: str  # GERANT | AUTEUR | LECTEUR
     droits: list[str] = []  # actions permises par ce rôle (voir core/acces.py)
     roles: list[RoleBrief] = []  # rôles de la division qui donnent accès au fichier
     a_classer: bool = False  # aucun rôle : accès refusé par défaut, seul le gérant (et l'auteur) le voit

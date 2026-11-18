@@ -3,23 +3,27 @@
 Pour un fichier, le rôle effectif est calculé à chaque requête :
 
   * chef de division (sa division) ou chef de service (toutes les divisions de son service, même rôle étendu) :
-      GERANT   -> tout : contenu, versions, rôles des fichiers, classement, corbeille
+      GERANT   -> tout : contenu, versions, rôles des fichiers (les « classes »), classement, corbeille
   * membre de la division du fichier :
       AUTEUR   a déposé le fichier                   -> voir, modifier, versions, corbeille
       LECTEUR  un rôle commun avec le fichier, ou une exception ponctuelle valide -> lecture, commentaires
       sinon    403 (« Demander l'accès »)
-  * autre division : super administrateur, en lecture seule.
-    Si la division n'a plus de chef, le super administrateur assure l'intérim (le chef de service reste gérant).
-  * tout le reste : 404 (l'existence n'est pas révélée).
+  * tout le reste : 404 (l'existence n'est pas révélée) — y compris le super administrateur : il ne fait
+    qu'administrer (structure, comptes, dictionnaires de rôles, dossiers, audit) et n'accède ni aux fichiers
+    ni à l'IA ; il n'assure l'intérim que d'une division sans chef pour sa gestion, pas pour son contenu.
+  * Si la division n'a plus de chef, le super administrateur assure l'intérim de sa GESTION (rôles, classement
+    du référentiel), sans jamais consulter les fichiers ni utiliser l'IA.
 
-Dossiers et sous-dossiers : visibles de tous les agents de la division (ils n'ont pas de rôle).
+Dossiers (un seul niveau, sans sous-dossiers) : créés automatiquement à la création de la division (modèle
+configuré), visibles de tous les agents de la division (ils n'ont pas de rôle) ; les renommer, les archiver
+ou les supprimer est réservé au super administrateur (administration, sans consultation du contenu).
 """
 
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import ColumnElement, and_, exists, false, or_, select, true
+from sqlalchemy import ColumnElement, and_, exists, false, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, NIVEAU_SERVICE, TITRE_CHEF_DIVISION, TITRE_CHEF_SERVICE, Principal
@@ -37,7 +41,7 @@ from app.db.vecteur import Document
 GERANT = "GERANT"
 AUTEUR = "AUTEUR"
 LECTEUR = "LECTEUR"
-SUPERIEUR = "SUPERIEUR"
+SUPERIEUR = "SUPERIEUR"  # conservé pour la matrice historique ; plus attribué depuis la refonte
 
 # Actions sur un fichier
 VOIR = "voir"
@@ -63,8 +67,9 @@ MATRICE: dict[str, frozenset[str]] = {
 
 # Actions sur un dossier
 DOSSIER_VOIR = "dossier_voir"
-DOSSIER_CREER = "dossier_creer"  # sous-dossier ou fichier : réservé aux membres de la division
-DOSSIER_MODIFIER = "dossier_modifier"  # renommer, déplacer, archiver, supprimer : créateur ou gérant
+DOSSIER_CREER = "dossier_creer"  # déposer un fichier dans un dossier : réservé aux membres de la division
+DOSSIER_GERER = "dossier_gerer"  # renommer, archiver, supprimer un dossier : réservé au super administrateur
+# (la création n'est pas une action d'API : les dossiers naissent du modèle configuré à la création de la division)
 
 
 def _maintenant() -> datetime:
@@ -94,11 +99,6 @@ def _division(db: Session, division_id: int) -> Division:
 
 def est_membre(principal: Principal, division_id: int) -> bool:
     return principal.division_id is not None and principal.division_id == division_id
-
-
-def est_superieur(principal: Principal, division: Division) -> bool:
-    """Administrateur hiérarchiquement supérieur à la division (lecture seule) : le super administrateur."""
-    return principal.niveau == NIVEAU_ROOT
 
 
 def est_chef_nominal(db: Session, principal: Principal, division_id: int) -> bool:
@@ -139,9 +139,11 @@ def divisions_gerees(db: Session, principal: Principal) -> list[Division]:
 # --- Gestion d'une division -------------------------------------------------------------------------------------------
 
 def exiger_gestion_division(db: Session, principal: Principal, division_id: int) -> Division:
-    """Autorise la gestion du contenu d'une division (rôles, classement, demandes). 404 / 403."""
+    """Autorise la gestion du contenu d'une division (rôles, classement, demandes). 404 / 403.
+    Le super administrateur franchit le premier seuil (il administre) mais reste soumis au second :
+    avec un chef en poste, la gestion du contenu revient au chef."""
     division = _division(db, division_id)
-    if not (est_membre(principal, division_id) or est_chef_nominal(db, principal, division_id) or est_superieur(principal, division)):
+    if not (est_membre(principal, division_id) or est_chef_nominal(db, principal, division_id) or principal.is_admin):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
     if not peut_gerer_division(db, principal, division):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul le chef (de division ou de service) peut faire cette action.")
@@ -194,7 +196,8 @@ def acces_refuse(document_id: int) -> HTTPException:
 
 
 def role_sur_document(db: Session, principal: Principal, document: Document) -> str | None:
-    """Rôle effectif du compte sur un fichier (None = aucun accès). Pour les usages internes."""
+    """Rôle effectif du compte sur un fichier (None = aucun accès). Pour les usages internes.
+    Le super administrateur n'y entre jamais : il n'administre pas le contenu."""
     division = db.get(Division, document.division_id)
     if division is None:
         return None
@@ -206,8 +209,6 @@ def role_sur_document(db: Session, principal: Principal, document: Document) -> 
         if _a_un_role_commun(db, principal, document.id) or _exception_valide(db, principal.user.id, document.id):
             return LECTEUR
         return None
-    if est_superieur(principal, division):
-        return GERANT if peut_gerer_division(db, principal, division) else SUPERIEUR
     return None
 
 
@@ -219,7 +220,7 @@ def exiger_acces_document(db: Session, principal: Principal, document: Document 
     if division is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
     membre = est_membre(principal, division.id) or est_chef_nominal(db, principal, division.id)
-    if not membre and not est_superieur(principal, division):
+    if not membre:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fichier introuvable.")
     role = role_sur_document(db, principal, document)
     if role is None:
@@ -236,7 +237,9 @@ def exiger_acces_document(db: Session, principal: Principal, document: Document 
 
 def condition_acces_fichiers(db: Session, principal: Principal) -> ColumnElement[bool]:
     """Condition SQL « ce compte peut LIRE ce fichier » : sert aux listes, à la recherche vectorielle et au chat.
-    Reprend exactement role_sur_document (fichiers de sa division selon son rôle ; le super administrateur lit tout, en lecture)."""
+    Reprend exactement role_sur_document : fichiers de sa division selon son rôle ; le chef de division voit sa
+    division, le chef de service toutes les divisions de son service ; le super administrateur ne lit rien
+    (il n'administre pas le contenu — ni fichiers, ni IA)."""
     clauses: list[ColumnElement[bool]] = []
     if principal.niveau == NIVEAU_SERVICE and principal.service_id is not None:
         clauses.append(
@@ -264,8 +267,6 @@ def condition_acces_fichiers(db: Session, principal: Principal) -> ColumnElement
                 )
             )
             clauses.append(and_(Document.division_id == division_id, or_(*sous)))
-    if principal.niveau == NIVEAU_ROOT:
-        clauses.append(true())  # le super administrateur consulte toutes les divisions (lecture seule)
     return or_(*clauses) if clauses else false()
 
 
@@ -279,20 +280,27 @@ def ids_documents_accessibles(db: Session, principal: Principal, ids: list[int])
 # --- Dossiers ---------------------------------------------------------------------------------------------------------
 
 def exiger_acces_dossier(db: Session, principal: Principal, dossier_id: int | None, action: str) -> Dossier:
-    """404 hors périmètre, 403 action non permise, 409 archivé / division désactivée."""
+    """404 hors périmètre, 403 action non permise, 409 archivé / division désactivée.
+    La gestion du dossier lui-même (DOSSIER_GERER) est réservée au super administrateur ; les membres
+    de la division voient le dossier et y déposent des fichiers (DOSSIER_CREER)."""
     dossier = db.get(Dossier, dossier_id) if dossier_id is not None else None
     if dossier is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dossier introuvable.")
     division = _division(db, dossier.division_id)
+    if action == DOSSIER_GERER:
+        if not principal.is_admin:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul le super administrateur gère les dossiers.")
+        exiger_ecriture_division(division)
+        return dossier
     membre = est_membre(principal, division.id) or est_chef_nominal(db, principal, division.id)
-    if not membre and not est_superieur(principal, division):
+    if not membre and not principal.is_admin:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dossier introuvable.")
     if not membre:
+        # le super administrateur voit le dossier (administration : renommer, archiver, supprimer),
+        # jamais son contenu — l'action autre que VOIR lui reste refusée
         if action != DOSSIER_VOIR:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Un administrateur supérieur consulte sans modifier.")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Le super administrateur administre sans déposer.")
         return dossier
-    if action == DOSSIER_MODIFIER and not (est_chef_nominal(db, principal, division.id) or dossier.cree_par == principal.user.id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul le créateur du dossier ou le chef peut le modifier.")
     if action != DOSSIER_VOIR:
         exiger_ecriture_division(division)
         if dossier.archive and action == DOSSIER_CREER:
@@ -301,15 +309,15 @@ def exiger_acces_dossier(db: Session, principal: Principal, dossier_id: int | No
 
 
 def exiger_acces_division(db: Session, principal: Principal, division_id: int, *, ecriture: bool = False) -> Division:
-    """Accès à la RACINE d'une division (liste de ses dossiers)."""
+    """Accès à la RACINE d'une division (liste de ses dossiers) : membres, chefs — et le super administrateur
+    pour l'administration des dossiers (noms et comptages, jamais le contenu des fichiers)."""
     division = _division(db, division_id)
     membre = est_membre(principal, division_id) or est_chef_nominal(db, principal, division_id)
-    if not membre and not est_superieur(principal, division):
+    if not membre and not principal.is_admin:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
-    if not membre:
-        if ecriture:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Un administrateur supérieur consulte sans modifier.")
-    elif ecriture:
+    if not membre and ecriture:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Le super administrateur administre sans déposer.")
+    if membre and ecriture:
         exiger_ecriture_division(division)
     return division
 

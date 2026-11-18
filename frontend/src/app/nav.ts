@@ -12,7 +12,8 @@ export const MAIN_NAV: NavItem[] = [
 ]
 
 export const INTERMEDIATE_NAV: NavItem[] = [
-  { to: '/historique', label: 'Historique', icon: History, any: ['document.lister'] },
+  // l'historique est de l'administration : le super administrateur l'a aussi, alors qu'il ne liste pas les fichiers
+  { to: '/historique', label: 'Historique', icon: History, any: ['document.lister', 'audit.consulter'] },
 ]
 
 export const ADMIN_NAV: NavItem[] = [

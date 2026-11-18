@@ -8,7 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.permissions import Principal, construire_principal
-from app.core.security import read_token, token_matches_password
+from app.core.security import empreinte_session, read_token, token_matches_password
 from app.db.metier import SessionLocal, User
 
 _bearer = HTTPBearer(auto_error=False)
@@ -41,7 +41,7 @@ def get_principal(
     if payload is None:
         raise unauthorized
     user = db.get(User, int(payload["sub"]))
-    if user is None or not user.actif or not token_matches_password(payload, user.mot_de_passe_hash):
+    if user is None or not user.actif or not token_matches_password(payload, empreinte_session(user.mot_de_passe_hash)):
         raise unauthorized
     if user.agent is not None and not user.agent.actif:
         # un agent désactivé perd tout accès immédiatement, même avec un jeton encore valide

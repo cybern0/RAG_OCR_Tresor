@@ -1,4 +1,5 @@
-// Liste des dossiers accessibles : cartes avec rôle, nombre de fichiers et état.
+// Liste des dossiers d'une division (un seul niveau) : cartes avec nombre de fichiers et état.
+// Aucun bouton de création : les dossiers naissent automatiquement du modèle configuré à la création de la division.
 import { Archive, FileText, FolderOpen, Search } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -23,7 +24,7 @@ export function Component() {
   // Le serveur doit renvoyer un tableau ; si une version déployée renvoie autre chose (objet, enveloppe), on ignore
   // au lieu de planter la page (`.filter is not a function`).
   const donnees = Array.isArray(dossiers.data) ? dossiers.data : []
-  const list = donnees.filter((d) => d.parent_id === null).filter((d) => `${d.nom} ${d.description ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()))
+  const list = donnees.filter((d) => `${d.nom} ${d.description ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()))
 
   return (
     <>
@@ -54,7 +55,7 @@ export function Component() {
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-32" />)}</div>
           ) : list.length === 0 ? (
             <EmptyState icon={<FolderOpen className="h-8 w-8" />} title={search ? 'Aucun dossier ne correspond' : 'Aucun dossier disponible'}>
-              {search ? 'Essayez un autre terme de recherche.' : 'Aucun dossier dans votre division pour le moment.'}
+              {search ? 'Essayez un autre terme de recherche.' : 'Les dossiers par défaut seront créés automatiquement à la création de la division.'}
             </EmptyState>
           ) : (
             <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -78,6 +79,12 @@ export function Component() {
                 </li>
               ))}
             </ul>
+          )}
+          {canChooseDivision && (
+            <p className="mt-4 text-xs text-cream-300">
+              Les dossiers sont créés automatiquement à la création d’une division, d’après le modèle fixe configuré côté serveur
+              (DOSSIERS_DEFAUT) ; aucun dossier ne se crée à la main.
+            </p>
           )}
         </>
       )}

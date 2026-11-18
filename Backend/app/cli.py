@@ -64,6 +64,9 @@ def set_password(username: str) -> int:
         if user is None:
             print(f"Compte introuvable : {username}", file=sys.stderr)
             return 1
+        if user.mot_de_passe_hash is None:
+            print("Ce compte n'a pas de mot de passe (compte dégradé) : recréer le compte via l'interface.", file=sys.stderr)
+            return 1
         password = _saisir_mot_de_passe("Nouveau mot de passe")
         if password is None:
             return 1

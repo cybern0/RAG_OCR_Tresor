@@ -19,10 +19,12 @@ from app.core.permissions import (
     TITRE_CHEF_SERVICE,
     Principal,
 )
+from app.config import get_settings
 from app.db.metier import (
     Agent,
     Direction,
     Division,
+    Dossier,
     RoleDivision,
     Service,
     User,
@@ -47,6 +49,7 @@ from app.schemas.structure import (
     ServiceUpdate,
     UniteArbreOut,
 )
+from app.services import stockage
 from app.services.audit import log_action
 from app.services.historique import ecrire_historique
 from app.services.notifications import notifier, super_admins_actifs, users_de_agent
@@ -175,6 +178,24 @@ def _get_division(db: Session, division_id: int) -> Division:
     return obj
 
 
+def _dossiers_defaut(db: Session, division: Division, acteur: User | None, ip: str | None) -> None:
+    """Crée le jeu de dossiers par défaut d'une division, depuis le modèle configuré (le même pour toutes).
+    Pas de création manuelle de dossier : c'est ici (et seulement ici) que les dossiers naissent."""
+    vus: set[str] = set()
+    for nom in get_settings().dossiers_defaut:
+        nom = nom.strip()
+        if not nom or nom.lower() in vus:  # modèle mal renseigné : on ignore les vides et les doublons
+            continue
+        vus.add(nom.lower())
+        dossier = Dossier(division_id=division.id, nom=nom, cree_par=acteur.id if acteur else None)
+        db.add(dossier)
+        db.flush()
+        log_action(db, acteur.id if acteur else None, "dossier.creer", "dossier", dossier.id,
+                   {"nom": nom, "division_id": division.id, "auto": True}, ip)
+        ecrire_historique(db, acteur=acteur, cible_type="dossier", cible_id=dossier.id,
+                          action="dossier_cree", apres=nom, service_id=division.service_id, division_id=division.id)
+
+
 def create_division(db: Session, actor_id: int, data: DivisionIn, ip: str | None) -> Division:
     service = db.get(Service, data.service_id)
     if service is None or not service.actif:
@@ -186,6 +207,7 @@ def create_division(db: Session, actor_id: int, data: DivisionIn, ip: str | None
     except IntegrityError:
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "Cette division existe déjà (nom ou code).") from None
+    _dossiers_defaut(db, obj, db.get(User, actor_id) if actor_id is not None else None, ip)
     log_action(db, actor_id, "structure.division.creer", "division", obj.id, {"nom": obj.nom}, ip)
     db.commit()
     return _get_division(db, obj.id)

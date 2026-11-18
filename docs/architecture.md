@@ -1,11 +1,11 @@
 # Architecture
 
-> **Note (novembre 2026)** : ce document décrit un modèle antérieur de l'application (rôles de dossier
-> `dossier_membre` / `dossier_service`, aujourd'hui abandonnés). Le modèle actuel — GED hiérarchique
-> Direction → Service → Division avec rôles de division, chefs de division, demandes d'accès et mots de
-> passe de dossier — est décrit dans `docs/paln.md` et, comme code, dans `Backend/app/core/acces.py`
-> (la source de vérité des droits). La suppression du poste « chef de service » et le regroupement de
-> toutes ses responsabilités sur le super administrateur sont documentés dans `docs/refonte_super_admin.md`.
+> **Note (novembre 2026)** : ce document décrit des couches transverses toujours valables (jetons,
+> ingestion, vecteurs, aperçu). Le modèle courant — authentification **gérée par l'application** (aucun
+> compte du système, ni PAM ni pywin32), GED hiérarchique Direction → Service → Division, **classes de
+> fichiers = rôles de division**, super administrateur qui **administre sans consulter les fichiers ni
+> l'IA**, stockage **à plat** dans `storage/uploads/` — est décrit dans `docs/refonte_classes.md` et,
+> comme code, dans `Backend/app/core/acces.py` (la source de vérité des droits).
 
 ## Rôles et droits
 Deux niveaux (tables `_role`, `permission`, `role_permission` pour le global ; `dossier_membre`, `dossier_service` pour les dossiers).
@@ -102,9 +102,12 @@ Au redémarrage de l'API, les versions restées `pending` ou `processing` sont r
 - `workers/` : tâches lentes en arrière-plan
 - `cli.py` : définition du mot de passe d'un compte (`python -m app.cli set-password`)
 
-## Migrations
-Schéma : `database/01` à `05` (voir `docs/migration_05.md`). `05_dossiers_versions.sql` installe ou migre ; `05_retour_arriere.sql` défait ; `05_verification.sql` contrôle.
-`06` : classement et statistiques ; `08` : commentaires ; `09` : nettoyage des tables du partage abandonné (bases existantes seulement).
+## Schéma
+Schéma : `database/01_schema.sql` (tout le schéma, base neuve uniquement) → `02_donnees_reference.sql`
+(rôles globaux et permissions) → `03_verification.sql` (invariants) → `seed.sql` / `delete_seed.sql`
+(démonstration DEMO) → `verif_vecteurs_normalises.sql` (contrôle). Aucun script de migration : les
+changements sont fusionnés dans les scripts de base et une base existante est recréée — ordre complet :
+`docs/ordre_execution_sql.md`.
 
 ## Interface
 Thème : fonds vert végétal, texte blanc cassé, composants (boutons, bordures, badges, éléments actifs) jaune doré ;

@@ -10,7 +10,6 @@ dossier archivé ou division désactivée : 409. Toute modification est tracée 
 
 import hashlib
 import re
-import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -34,6 +33,7 @@ from app.services.documents import apercu
 from app.services.historique import ecrire_historique
 from app.services.ingestion.parser import ALLOWED_EXT, apply_flags, forced_flags
 from app.services.notifications import destinataires_gestion, notifier
+from app.services import stockage
 from app.services.roles_division import valider_roles
 from app.workers import ingestion_worker
 
@@ -211,14 +211,15 @@ def apply_document_filters(
 
 
 def _role_pour_liste(db: Session, principal: Principal, doc: Document, cache: dict[int, str]) -> str:
-    """Rôle effectif d'un fichier déjà retenu par condition_acces_fichiers (aucune requête par fichier)."""
+    """Rôle effectif d'un fichier déjà retenu par condition_acces_fichiers (aucune requête par fichier).
+    La condition ne retient que les chefs et les membres de la division ; ce repli est défensif."""
     if est_chef_nominal(db, principal, doc.division_id):
         return acces.GERANT
     if acces.est_membre(principal, doc.division_id):
         return acces.AUTEUR if doc.cree_par == principal.user.id else acces.LECTEUR
     if doc.division_id not in cache:
         division = db.get(Division, doc.division_id)
-        cache[doc.division_id] = acces.GERANT if acces.peut_gerer_division(db, principal, division) else acces.SUPERIEUR
+        cache[doc.division_id] = acces.GERANT if acces.peut_gerer_division(db, principal, division) else acces.LECTEUR
     return cache[doc.division_id]
 
 
@@ -290,7 +291,8 @@ def _clean_name(name: str | None) -> str:
 
 def _save_upload(upload: UploadFile) -> tuple[Path, str, int, str]:
     """Écrit le fichier sous un nom généré (jamais le nom fourni par le client) en limitant sa taille.
-    Renvoie (chemin, sha256, taille, nom d'affichage)."""
+    Renvoie (chemin, sha256, taille, nom d'affichage). Le fichier vit à plat dans upload_dir —
+    un seul emplacement géré par l'application (voir services/stockage.py)."""
     settings = get_settings()
     name = _clean_name(upload.filename)
     ext = Path(name).suffix.lower()
@@ -299,8 +301,7 @@ def _save_upload(upload: UploadFile) -> tuple[Path, str, int, str]:
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             f"Type de fichier non accepté ({ext or 'sans extension'}). Acceptés : {', '.join(sorted(ALLOWED_EXT))}.",
         )
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
-    dest = settings.upload_dir / f"{uuid.uuid4().hex}{ext}"
+    dest = stockage.chemin(ext)
     digest, size = hashlib.sha256(), 0
     try:
         with dest.open("wb") as out:
@@ -360,7 +361,7 @@ def create_document(
     dossier = exiger_acces_dossier(db, principal, dossier_id, DOSSIER_CREER)  # membres de la division seulement
     division = db.get(Division, dossier.division_id)
     roles = _roles_au_depot(db, principal, division, role_ids, roles_explicites)
-    path, sha, size, name = _save_upload(upload)
+    path, sha, size, name = _save_upload(upload)  # à plat dans upload_dir (services/stockage.py)
     duplicate = db.scalar(
         select(Document.titre).join(DocumentVersion, DocumentVersion.document_id == Document.id)
         .where(Document.dossier_id == dossier.id, DocumentVersion.hash_sha256 == sha).limit(1)
@@ -447,7 +448,7 @@ def add_version(
 ) -> DocumentOut:
     """Ajoute une version : l'ancienne reste, indexée et téléchargeable."""
     doc, role = get_document(db, principal, document_id, AJOUTER_VERSION)
-    path, sha, size, name = _save_upload(upload)
+    path, sha, size, name = _save_upload(upload)  # à plat dans upload_dir (services/stockage.py)
     latest = doc.versions[-1]
     if sha == latest.hash_sha256:
         _remove_file(path)

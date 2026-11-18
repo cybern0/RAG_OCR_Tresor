@@ -146,18 +146,20 @@ export function Component() {
         )}
       </div>
 
-      <div className="fixed bottom-5 left-5 z-50">
-        <NavLink
-          to="/chat"
-          className="flex h-14 w-14 items-center justify-center rounded-full border border-gold-500/40 bg-gold-500 text-leaf-950 shadow-2xl transition hover:scale-105 hover:shadow-[0_0_30px_rgba(221,168,77,0.35)]"
-          style={{ position: 'fixed', left: chatFab.position.x, top: chatFab.position.y, zIndex: 60 }}
-          onPointerDown={chatFab.handlePointerDown}
-          aria-label="Ouvrir le chat"
-          title="Assistant"
-        >
-          <MessageSquare className="h-6 w-6" aria-hidden />
-        </NavLink>
-      </div>
+      {can('chat.utiliser') && (
+        <div className="fixed bottom-5 left-5 z-50">
+          <NavLink
+            to="/chat"
+            className="flex h-14 w-14 items-center justify-center rounded-full border border-gold-500/40 bg-gold-500 text-leaf-950 shadow-2xl transition hover:scale-105 hover:shadow-[0_0_30px_rgba(221,168,77,0.35)]"
+            style={{ position: 'fixed', left: chatFab.position.x, top: chatFab.position.y, zIndex: 60 }}
+            onPointerDown={chatFab.handlePointerDown}
+            aria-label="Ouvrir le chat"
+            title="Assistant"
+          >
+            <MessageSquare className="h-6 w-6" aria-hidden />
+          </NavLink>
+        </div>
+      )}
 
       <main className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8"><Outlet /></main>
     </div>

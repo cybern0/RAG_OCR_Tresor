@@ -119,17 +119,18 @@ def set_roles(client, h, user_id, role_ids):
     assert r.status_code == 200, r.text
 
 
-def mk_dossier(client, h, nom, **extra):
-    r = client.post("/dossiers", json={"nom": nom, **extra}, headers=h)
-    assert r.status_code == 201, r.text
-    return r.json()
+def dossier_par_defaut(client, h, division_id, nom="Courrier entrant"):
+    """Premier dossier du modèle créé automatiquement à la création de la division (pas de création manuelle)."""
+    rows = client.get("/dossiers", headers=h, params={"division_id": division_id}).json()
+    return next(d for d in rows if d["nom"] == nom)
 
 
 @pytest.fixture(scope="module")
 def world(client):
     """Une direction, deux services (s1, s2), trois divisions (v1 et v2 dans s1, v3 dans s2) avec leurs chefs.
     Agents : a (v1, rôle COMPTA), lect (v1, COMPTA + AUDIT), mix (v1, rôle PUBLIC), b (v3, rôle RH),
-    cs (chef de service de s1, sans division). Dossiers : A (racine de v1) et B (racine de v3)."""
+    cs (chef de service de s1, sans division). Dossiers créés automatiquement à la création des divisions :
+    A = « Courrier entrant » de v1, B = « Courrier entrant » de v3."""
     tag = uuid.uuid4().hex[:6]
     h = auth(client, ADMIN)
     d = client.post("/structure/directions", json={"code": f"D{tag}", "nom": "Direction test"}, headers=h).json()
@@ -160,8 +161,8 @@ def world(client):
     set_roles(client, out["cd3"]["h"], out["b"]["user"]["id"], [R["RH"]["id"]])
     for k in ("a", "lect", "mix", "b"):
         out[k]["h"] = auth(client, out[k]["name"])
-    out["A"] = mk_dossier(client, out["a"]["h"], f"Dossier A {tag}")
-    out["B"] = mk_dossier(client, out["b"]["h"], f"Dossier B {tag}")
+    out["A"] = dossier_par_defaut(client, h, div["v1"]["id"])  # dossiers posés automatiquement à la création des divisions
+    out["B"] = dossier_par_defaut(client, h, div["v3"]["id"])
     return out
 
 
@@ -225,7 +226,11 @@ def test_connexion_et_me(client, world):
     assert "chat.utiliser" in me["permissions"] and me["divisions_gerees"] == []
     chef = client.get("/auth/me", headers=world["cd1"]["h"]).json()
     assert chef["niveau"] == "DIVISION" and "utilisateur.creer" in chef["permissions"] and [d["id"] for d in chef["divisions_gerees"]] == [world["div"]["v1"]["id"]]
-    assert client.get("/auth/me", headers=world["admin"]).json()["niveau"] == "ROOT"
+    adm_me = client.get("/auth/me", headers=world["admin"]).json()
+    assert adm_me["niveau"] == "ROOT"
+    # le super administrateur ne fait qu'administrer : ni fichiers, ni IA
+    assert "document.lister" not in adm_me["permissions"] and "chat.utiliser" not in adm_me["permissions"]
+    assert "structure.gerer" in adm_me["permissions"] and "audit.consulter" in adm_me["permissions"]
     assert client.get("/auth/me").status_code == 401
     assert client.get("/auth/me", headers={"Authorization": "Bearer faux.jeton"}).status_code == 401
 
@@ -481,10 +486,11 @@ def test_chat_limite_aux_fichiers_lisibles(client, world):
     src = sources_of(ev)
     assert any(s["titre"] == "Procédure coffre" and s["dossier_id"] == world["A"]["id"] and s["version"] == 1 and s["date"] for s in src)
     assert "30 jours" in answer_text(ev)
-    # l'agent d'une autre division n'a aucun accès
+    # l'agent d'une autre division n'a aucun accès au fichier de a : l'IA ne voit que SES fichiers
+    ready_doc(client, b, world["B"]["id"], f"Note interne de la division B, indicateur {world['tag']}, sans rapport avec le coffre.")
     assert not any(s["document_id"] == doc["id"] for s in sources_of(ask(client, b, f"Quel est le code {secret} du coffre ?")))
-    # le super administrateur consulte toutes les divisions : les sources lui sont visibles
-    assert any(s["document_id"] == doc["id"] for s in sources_of(ask(client, adm, f"Quel est le code {secret} du coffre ?")))
+    # le super administrateur ne fait qu'administrer : l'IA lui est refusée (garde de permission)
+    assert client.post("/chat", headers=adm, json={"question": f"Quel est le code {secret} du coffre ?"}).status_code == 403
     # un agent qui n'a aucun fichier lisible : refus net (mix : rôle PUBLIC, aucun fichier déposé ni classé PUBLIC)
     assert client.post("/chat", headers=world["mix"]["h"], json={"question": "x"}).status_code == 403
     assert client.post("/chat", json={"question": "x"}).status_code == 401
