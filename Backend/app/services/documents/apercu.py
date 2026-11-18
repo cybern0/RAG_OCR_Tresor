@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 
 from app.config import get_settings
 from app.db.vecteur import DocumentVersion
+from app.services import stockage
 from app.services.conversion_office import (
     ConversionImpossibleError, ConversionTropLongueError, OfficeIndisponibleError, convertir_vers_pdf,
 )
@@ -59,29 +60,10 @@ def _content_disposition(kind: str, name: str) -> str:
 
 
 def _stored(version: DocumentVersion) -> Path:
-    raw = Path(version.chemin_stockage)
-    candidates: list[Path] = []
-    root = get_settings().upload_dir.resolve()
-    if raw.is_absolute():
-        candidates.append(raw)
-    else:
-        candidates.extend([
-            (root / raw).resolve(strict=False),
-            (Path.cwd() / raw).resolve(strict=False),
-            (root.parent / raw).resolve(strict=False),
-        ])
-    for candidate in candidates:
-        try:
-            resolved = candidate.resolve(strict=False)
-        except OSError:
-            continue
-        try:
-            resolved.relative_to(root)
-        except ValueError:
-            continue
-        if resolved.is_file():
-            return resolved
-    raise HTTPException(status.HTTP_410_GONE, "Le fichier de cette version est introuvable sur le serveur.")
+    trouve = stockage.trouver(version.chemin_stockage)
+    if trouve is None:
+        raise HTTPException(status.HTTP_410_GONE, "Le fichier de cette version est introuvable sur le serveur.")
+    return trouve
 
 
 def cache_path(version_id: int) -> Path:

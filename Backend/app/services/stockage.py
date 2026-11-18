@@ -19,3 +19,29 @@ def chemin(extension: str) -> Path:
     rep = get_settings().upload_dir
     rep.mkdir(parents=True, exist_ok=True)
     return rep / f"{uuid.uuid4().hex}{extension}"
+
+
+def trouver(chemin_enregistre: str | Path) -> Path | None:
+    """Retrouve sur le disque le fichier dont le chemin est enregistré en base, ou None s'il est introuvable.
+
+    Un chemin relatif est cherché sous upload_dir. En dernier recours, le NOM du fichier est cherché à plat dans
+    upload_dir : cela couvre une base importée d'une autre machine ou un projet déplacé (chemin absolu périmé).
+    Le résultat reste toujours sous upload_dir : aucun chemin extérieur n'est jamais renvoyé.
+    """
+    brut = Path(chemin_enregistre)
+    racine = get_settings().upload_dir.resolve()
+    candidats: list[Path] = [brut] if brut.is_absolute() else [
+        racine / brut, Path.cwd() / brut, racine.parent / brut,
+    ]
+    nom = str(chemin_enregistre).replace("\\", "/").rsplit("/", 1)[-1]
+    if nom:
+        candidats.append(racine / nom)
+    for candidat in candidats:
+        try:
+            resolu = candidat.resolve(strict=False)
+            resolu.relative_to(racine)
+        except (OSError, ValueError):
+            continue
+        if resolu.is_file():
+            return resolu
+    return None

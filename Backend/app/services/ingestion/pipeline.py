@@ -6,7 +6,6 @@ n'en supprime aucun.
 """
 
 import logging
-from pathlib import Path
 
 import httpx
 from sqlalchemy import delete
@@ -14,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.metier import SessionLocal
 from app.db.vecteur import Chunk, DocumentVersion
+from app.services import stockage
 from app.services.classement import appliquer
 from app.services.ingestion.chunking import chunk_documents
 from app.services.ingestion.embedding import EmbeddingError, embed_documents
@@ -51,8 +51,14 @@ def run_ingestion(version_id: int) -> None:
             version.message_erreur = None
             db.commit()
 
+            chemin = stockage.trouver(version.chemin_stockage)
+            if chemin is None:
+                raise IngestionError(
+                    f"Le fichier « {version.nom_fichier} » est introuvable sur le serveur (supprimé ou déplacé). "
+                    "Le redéposer comme nouvelle version."
+                )
             # has_tabular / has_image sont les cases du fichier : cochées par l'utilisateur ou imposées par le type
-            parsed = parse_file(Path(version.chemin_stockage), force_tabular=doc.has_tabular, force_images=doc.has_image)
+            parsed = parse_file(chemin, force_tabular=doc.has_tabular, force_images=doc.has_image)
             chunks = chunk_documents(parsed.documents, doc.id, version.nom_fichier)
             if not chunks:
                 raise IngestionError("Aucun passage exploitable n'a été extrait de ce fichier.")
@@ -85,6 +91,9 @@ def run_ingestion(version_id: int) -> None:
             logger.info("Version %s (document %s) indexée : %s passages", version_id, doc.id, len(chunks))
     except IntegrityError:
         logger.info("Version %s supprimée pendant son indexation", version_id)
+    except (IngestionError, EmbeddingError) as exc:  # cause attendue et déjà expliquée : pas de trace complète
+        logger.warning("Indexation impossible pour la version %s : %s", version_id, exc)
+        _mark_error(version_id, str(exc))
     except Exception as exc:  # noqa: BLE001 - le worker ne doit jamais s'arrêter
         logger.exception("Échec de l'indexation de la version %s", version_id)
         _mark_error(version_id, _error_message(exc))
