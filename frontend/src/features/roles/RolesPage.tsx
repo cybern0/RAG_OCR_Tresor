@@ -36,7 +36,9 @@ export function Component() {
   const { user } = useAuth()
   const toast = useToast()
   const qc = useQueryClient()
-  const peutChoisir = user?.niveau === 'ROOT'
+  // le super administrateur choisit parmi toutes les divisions ; le chef de service parmi celles de SON
+  // service (le serveur renvoie déjà la liste scopée) ; le chef de division voit la sienne, fixe.
+  const peutChoisir = user?.niveau === 'ROOT' || user?.niveau === 'SERVICE'
   const divisions = useQuery({ queryKey: ['divisions'], queryFn: listDivisions, enabled: peutChoisir })
   const [choix, setChoix] = useState<number | null>(null)
   const [libelle, setLibelle] = useState('')
@@ -45,7 +47,11 @@ export function Component() {
   const refresh = () => qc.invalidateQueries({ queryKey: ['roles-division', divisionId] })
   const add = useMutation({ mutationFn: () => creerRole(divisionId!, { libelle: libelle.trim() }), onSuccess: () => { setLibelle(''); return refresh() } })
 
-  if (divisionId === null) return divisions.isLoading ? <Loading /> : <EmptyState icon={<Shield className="h-8 w-8" />} title="Aucune division à gérer" />
+  if (divisionId === null) {
+    // divisions du service pas encore chargées : attendre avant de conclure à « aucune division »
+    if (divisions.isLoading || divisions.isError) return divisions.isError ? <ErreurAcces error={divisions.error} /> : <Loading />
+    return <EmptyState icon={<Shield className="h-8 w-8" />} title="Aucune division à gérer" />
+  }
   return (
     <div className="space-y-4">
       <PageHeader title="Rôles et classement" description="Le dictionnaire de rôles de la division : la même référence sert aux agents et aux fichiers — un fichier peut recevoir plusieurs classes, un agent peut en porter plusieurs."

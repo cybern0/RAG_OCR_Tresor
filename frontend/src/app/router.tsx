@@ -3,7 +3,7 @@
 import { createBrowserRouter, redirect } from 'react-router'
 import type { RouteObject } from 'react-router'
 import { Component as NotFound, ErrorPage } from './ErrorPage'
-import { RequireAuth, RequireIntermediateAdmin, RequirePermission } from './guards'
+import { RequireAuth, RequireIntermediateAdmin, RequirePermission, RequireRoot } from './guards'
 
 const guarded = (any: string[], children: RouteObject[]): RouteObject => ({
   element: <RequirePermission any={any} />,
@@ -28,7 +28,8 @@ export const router = createBrowserRouter([
                 element: <RequireIntermediateAdmin />,
                 children: [{ index: true, lazy: () => import('../features/historique/HistoriquePage') }],
               },
-              { path: 'profil', lazy: () => import('../features/auth/ProfilePage') },              guarded(['document.lister'], [
+              { path: 'profil', lazy: () => import('../features/auth/ProfilePage') },
+              guarded(['document.lister'], [
                 { path: 'fichiers', lazy: () => import('../features/fichiers/FichiersPage') },
                 { path: 'fichiers/:documentId', lazy: () => import('../features/documents/DocumentPage') },
                 // anciens liens /dossiers (marque-pages) : redirigés vers la liste à plat
@@ -45,10 +46,10 @@ export const router = createBrowserRouter([
                 { path: 'admin/utilisateurs', lazy: () => import('../features/admin/users/UsersPage') },
                 { path: 'admin/utilisateurs/:userId', lazy: () => import('../features/admin/users/UserDetailPage') },
               ]),
-              guarded(['structure.gerer'], [
-                { path: 'admin/agents', lazy: () => import('../features/admin/structure/AgentsPage') },
-                { path: 'admin/structure', lazy: () => import('../features/admin/structure/StructurePage') },
-              ]),
+              // agents (personnes) et structure : super administrateur seulement — le chef de service a les
+              // mêmes menus que le chef de division (il gère comptes et rôles via /admin/utilisateurs et /roles)
+              { path: 'admin/agents', element: <RequireRoot />, children: [{ index: true, lazy: () => import('../features/admin/structure/AgentsPage') }] },
+              { path: 'admin/structure', element: <RequireRoot />, children: [{ index: true, lazy: () => import('../features/admin/structure/StructurePage') }] },
               guarded(['utilisateur.lister', 'classement.gerer'], [{ path: 'admin/classement', loader: () => redirect('/roles') }]),
               guarded(['audit.consulter'], [{ path: 'admin/audit', loader: () => redirect('/historique') }]),
               { path: '*', Component: NotFound },

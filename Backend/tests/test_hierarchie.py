@@ -268,7 +268,9 @@ def test_demande_de_role_et_demande_d_acces_ponctuel(client, world):
 
 def test_dictionnaire_de_roles_par_division(client, world):
     cd1, a, mix, cd3, tag, v1 = world["cd1"]["h"], world["a"]["h"], world["mix"]["h"], world["cd3"]["h"], world["tag"], world["div"]["v1"]["id"]
-    # lecture : les membres ; écriture : le chef de division
+    # lecture : les membres ET les chefs — le chef de service (divisions de son service), pas le service voisin
+    assert [r["code"] for r in client.get(f"/divisions/{v1}/roles", headers=world["cs"]["h"]).json()] == ["AUDIT", "COMPTA", "PUBLIC"]
+    assert client.get(f"/divisions/{world['div']['v3']['id']}/roles", headers=world["cs"]["h"]).status_code == 404
     assert [r["code"] for r in client.get(f"/divisions/{v1}/roles", headers=a).json()] == ["AUDIT", "COMPTA", "PUBLIC"]
     assert client.post(f"/divisions/{v1}/roles", headers=a, json={"code": "PIRATE", "libelle": "Pirate"}).status_code == 403
     assert client.post(f"/divisions/{v1}/roles", headers=cd3, json={"code": "PIRATE", "libelle": "Pirate"}).status_code == 404

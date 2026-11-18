@@ -12,7 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.acces import est_membre, exiger_gestion_division
+from app.core.acces import est_chef_nominal, est_membre, exiger_gestion_division
 from app.core.permissions import Principal
 from app.db.metier import Agent, Division, DocumentRole, RoleDivision, User, UserRoleDivision
 from app.schemas.roles_division import RoleDivisionIn, RoleDivisionOut, RoleDivisionUpdate
@@ -42,10 +42,12 @@ def _out(db: Session, role: RoleDivision) -> RoleDivisionOut:
 
 
 def lister_roles(db: Session, principal: Principal, division_id: int, *, inclure_inactifs: bool = True) -> list[RoleDivisionOut]:
-    """Lisible par les membres de la division et par le super administrateur (ce sont des noms de rôles,
-    des métadonnées d'administration — jamais du contenu de fichier)."""
+    """Lisible par les membres de la division, par les chefs (de la division, ou du service qui la couvre)
+    et par le super administrateur : ce sont des noms de rôles, des métadonnées d'administration — jamais
+    du contenu de fichier. Même seuil que la création (exiger_gestion_division), sinon un chef pourrait
+    créer un rôle sans pouvoir lister le dictionnaire."""
     division = _division(db, division_id)
-    if not (est_membre(principal, division_id) or principal.is_admin):
+    if not (est_membre(principal, division_id) or est_chef_nominal(db, principal, division_id) or principal.is_admin):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
     stmt = select(RoleDivision).where(RoleDivision.division_id == division_id).order_by(RoleDivision.libelle)
     if not inclure_inactifs:

@@ -24,10 +24,17 @@ export function RequireIntermediateAdmin() {
   return <Outlet />
 }
 
+/** Réservé au super administrateur (gestion des agents et de la structure). */
+export function RequireRoot() {
+  const { user } = useAuth()
+  if (!user || user.niveau !== 'ROOT') return <Navigate to="/" replace />
+  return <Outlet />
+}
+
 /** Page d'accueil : première page accessible au compte. */
 export function Home() {
-  const { can } = useAuth()
-  const target = homePath(can)
+  const { user, can } = useAuth()
+  const target = homePath(can, user?.niveau)
   if (!target) return <p className="card p-8 text-center text-cream-300">Votre compte n’a accès à aucune fonctionnalité.</p>
   return <Navigate to={target} replace />
 }

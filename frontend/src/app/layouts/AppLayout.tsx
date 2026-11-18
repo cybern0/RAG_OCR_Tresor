@@ -75,9 +75,10 @@ export function Component() {
     { minX: 12, minY: 56, maxX: Math.max(12, viewport.width - 120), maxY: Math.max(56, viewport.height - 120) },
   )
 
-  const main = MAIN_NAV.filter((i) => allowed(i, can))
+  const main = MAIN_NAV.filter((i) => allowed(i, can, user?.niveau))
   const intermediate = isIntermediateAdmin(user) ? INTERMEDIATE_NAV : []
-  const admin = ADMIN_NAV.filter((i) => allowed(i, can))
+  // rootOnly : la gestion des agents et de la structure ne se montre qu'au super administrateur
+  const admin = ADMIN_NAV.filter((i) => allowed(i, can, user?.niveau))
 
   const sidebar = (
     <div className="flex h-full flex-col">

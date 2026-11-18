@@ -111,10 +111,11 @@ Quatre niveaux de gestion (voir `docs/retour_chef_service.md` et `docs/refonte_c
   ni interrogation IA. Il ne peut pas être membre d'une division.
 - **Chef de service (titre d'agent `CHEF_SERVICE`, niveau SERVICE)** : le **même rôle que le chef de division**,
   étendu à **toutes les divisions de son service** — gérant des fichiers, **classement des fichiers**,
-  demandes —, y compris l'intérim local des divisions vacantes. Il **gère la structure de son service**
-  (agents, affectations, postes de chef de division) et **les comptes de son service, y compris les chefs
-  de division** : création de compte, réinitialisation du mot de passe, rôles — il peut donc créer l'admin
-  de chaque division si le super administrateur ne l'a pas fait. Il appartient à son service **sans division
+  demandes —, y compris l'intérim local des divisions vacantes. Il **gère les comptes de son service,
+  y compris les chefs de division** : création de compte et affectation d'agent, réinitialisation du mot
+  de passe, rôles — il peut donc créer le compte de l'admin de chaque division si le super administrateur
+  ne l'a pas fait. **Mêmes menus que le chef de division** (Rôles et classement, Utilisateurs) : la gestion
+  des agents et de la structure reste au super administrateur. Il appartient à son service **sans division
   propre**. L'IA lui répond depuis tous les fichiers d'une division ou de toutes les divisions de son service.
 - **Chef de division (titre d'agent `CHEF_DIVISION`, niveau DIVISION)** : gérant de sa division — définit
   le dictionnaire des rôles, **assigne les classes des fichiers**, traite les demandes

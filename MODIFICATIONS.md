@@ -2,6 +2,13 @@
 
 (11/2026, suite de la refonte « classes de fichiers » ; détails : `docs/refonte_fichiers.md`)
 
+**Correction (même jour)** : le chef de service a désormais **exactement les mêmes menus que le chef de
+division** — ni `/admin/agents` ni `/admin/structure` (navigation et routes réservées au super administrateur ;
+les droits serveur scopés sont conservés pour alimenter `/admin/utilisateurs`). Son `/roles` ne dit plus
+« Aucune division à gérer » : il choisit parmi les divisions de SON service, et `lister_roles` accepte les
+chefs (de division ou de service) au même titre que la création de rôles — ce qui répare aussi le chargement
+des rôles dans le dépôt de fichiers, le classement et la fiche utilisateur pour un chef de service.
+
 1. **Suppression des dossiers** : plus d'arborescence du tout — les fichiers se déposent DIRECTEMENT dans
    une division (`POST /documents` avec `division_id`), la page **Fichiers** liste à plat tout ce qui est
    accessible avec recherche, filtres de classes, **filtre par rôle** et (chef de service) **filtre par

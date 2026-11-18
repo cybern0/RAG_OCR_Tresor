@@ -4,7 +4,7 @@
 import { BarChart3, Building2, FileText, History, Home, Shield, MessageSquare, Users, UserSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-export interface NavItem { to: string; label: string; icon: LucideIcon; any: string[]; end?: boolean }
+export interface NavItem { to: string; label: string; icon: LucideIcon; any: string[]; end?: boolean; rootOnly?: boolean }
 
 export const MAIN_NAV: NavItem[] = [
   // pas de statistiques.globales ici : le super administrateur n'a pas d'Accueil, il arrive sur /admin
@@ -22,11 +22,15 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'Tableau de bord', icon: BarChart3, any: ['statistiques.globales'], end: true },
   { to: '/roles', label: 'Rôles et classement', icon: Shield, any: ['utilisateur.lister', 'classement.gerer'] },
   { to: '/admin/utilisateurs', label: 'Utilisateurs', icon: Users, any: ['utilisateur.lister'] },
-  { to: '/admin/agents', label: 'Agents', icon: UserSquare, any: ['structure.gerer'] },
-  { to: '/admin/structure', label: 'Directions, services et divisions', icon: Building2, any: ['structure.gerer'] },
+  // la gestion des agents (personnes) et de la structure (directions, services, divisions) reste au
+  // super administrateur : le chef de service a les MÊMES menus que le chef de division — il gère les
+  // comptes et les rôles via /admin/utilisateurs et /roles
+  { to: '/admin/agents', label: 'Agents', icon: UserSquare, any: ['structure.gerer'], rootOnly: true },
+  { to: '/admin/structure', label: 'Directions, services et divisions', icon: Building2, any: ['structure.gerer'], rootOnly: true },
 ]
 
-export const allowed = (item: NavItem, can: (p: string) => boolean) => item.any.some(can)
+export const allowed = (item: NavItem, can: (p: string) => boolean, niveau?: string | null) =>
+  item.any.some(can) && (!item.rootOnly || niveau === 'ROOT')
 
 export const isIntermediateAdmin = (user: { niveau?: string | null; role?: string | null } | null): boolean => {
   if (!user) return false
@@ -34,6 +38,6 @@ export const isIntermediateAdmin = (user: { niveau?: string | null; role?: strin
 }
 
 /** Première page accessible au compte (page d'accueil). Le super administrateur arrive sur /admin. */
-export function homePath(can: (p: string) => boolean): string | null {
-  return [...MAIN_NAV.filter((i) => i.to !== '/'), ...ADMIN_NAV].find((i) => allowed(i, can))?.to ?? null
+export function homePath(can: (p: string) => boolean, niveau?: string | null): string | null {
+  return [...MAIN_NAV.filter((i) => i.to !== '/'), ...ADMIN_NAV].find((i) => allowed(i, can, niveau))?.to ?? null
 }
