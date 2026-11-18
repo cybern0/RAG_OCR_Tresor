@@ -39,12 +39,15 @@ export const useVersions = (id: number) =>
 
 export const useReferentiel = () => useQuery({ queryKey: docKeys.referentiel, queryFn: api.getReferentiel, staleTime: 60_000 })
 
+/** Options des filtres (rôles, divisions, dépôt) selon le périmètre du compte. */
+export const useFiltres = () => useQuery({ queryKey: ['documents', 'filtres'], queryFn: api.getFiltres, staleTime: 60_000 })
+
 export const useComments = (id: number, enabled: boolean) => useQuery({ queryKey: docKeys.comments(id), queryFn: () => api.listComments(id), enabled })
 
-/** Après une écriture : les listes de fichiers, la fiche et les compteurs des dossiers sont à relire. */
+/** Après une écriture : les listes de fichiers et la fiche sont à relire. */
 export function useRefreshDocuments() {
   const qc = useQueryClient()
-  return () => Promise.all([qc.invalidateQueries({ queryKey: ['documents'] }), qc.invalidateQueries({ queryKey: ['dossiers'] })])
+  return () => Promise.all([qc.invalidateQueries({ queryKey: ['documents'] }), qc.invalidateQueries({ queryKey: ['tableau-de-bord'] })])
 }
 
 export function useDocumentMutations() {

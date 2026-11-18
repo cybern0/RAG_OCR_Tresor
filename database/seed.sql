@@ -50,16 +50,4 @@ INSERT INTO user_role_division (user_id, role_division_id)
 SELECT u.id, rd.id FROM _user u, role_division rd JOIN division dv ON dv.id = rd.division_id
 WHERE u.nom_utilisateur = 'demo_agenta1' AND dv.code = 'DEMO-DIV-A1' AND rd.code = 'LECTEUR';
 
--- Dossiers : chaque division reçoit le jeu du modèle (DOSSIERS_DEFAUT) — le backend le crée
--- automatiquement pour toute division créée via l'API ; le seed le reproduit ici pour ses divisions
--- créées par SQL — puis les dossiers de démonstration.
-INSERT INTO dossier (division_id, nom)
-SELECT dv.id, m.nom FROM division dv CROSS JOIN
-     (VALUES ('Courrier entrant', 1), ('Courrier sortant', 2), ('Notes de service', 3), ('Rapports', 4), ('Archives', 5)) m(nom, rang)
-ORDER BY dv.id, m.rang;
-INSERT INTO dossier (division_id, nom, description)
-SELECT dv.id, v.nom, 'DEMO' FROM division dv JOIN
-     (VALUES ('DEMO-DIV-A1', 'DEMO - Budget 2026'), ('DEMO-DIV-A2', 'DEMO - Factures'), ('DEMO-DIV-B1', 'DEMO - Offres d''emploi')) v(div, nom)
-     ON v.div = dv.code;
-
 COMMIT;

@@ -21,8 +21,8 @@ export interface VersionMeta {
 export interface DocumentMeta {
   id: number
   titre: string
-  dossier_id: number
-  dossier_nom: string
+  division_id: number
+  division_nom: string
   has_tabular: boolean
   has_image: boolean
   tableaux_imposes: boolean
@@ -47,16 +47,18 @@ export interface DocumentMeta {
 export interface DocumentPage { items: DocumentMeta[]; total: number; page: number; taille: number }
 
 export interface DocumentFilters {
-  dossier_id?: number
   q?: string
   categorie_id?: number
   type_id?: number
   confidentialite?: string
   statut?: string
+  role_id?: number
+  division_id?: number
   tri?: 'date_desc' | 'titre_asc' | 'titre_desc'
   page: number
   taille: number
   corbeille?: boolean
+  a_classer?: boolean
 }
 
 export interface Referentiel {
@@ -64,6 +66,13 @@ export interface Referentiel {
   types: { id: number; nom: string; actif: boolean }[]
   tags: { id: number; nom: string }[]
   confidentialites: Confidentialite[]
+}
+
+/** Options des filtres de la liste des fichiers, selon le périmètre du compte connecté. */
+export interface FiltresListe {
+  roles: { id: number; code: string; libelle: string; division_id: number; division_nom: string | null }[]
+  divisions: { id: number; nom: string }[]
+  depot_divisions: number[]
 }
 
 export const isIndexing = (s: Statut) => s === 'pending' || s === 'processing'

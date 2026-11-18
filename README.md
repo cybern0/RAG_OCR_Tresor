@@ -1,10 +1,10 @@
 # RAG_OCR_Tresor
 
 Assistant RAG 100 % local en français, sur CPU, organisé en **GED hiérarchique** :
-Direction → Service → Division → agents. Des **divisions** possèdent des **dossiers** (un seul niveau,
-sans sous-dossiers, posés automatiquement à la création de la division d'après un modèle fixe),
-des **fichiers versionnés** (OCR inclus, aperçu et téléchargement), des **rôles de division** pour le
-classement et l'accès, et un **chatbot** qui ne répond qu'à partir des fichiers auxquels on a accès.
+Direction → Service → Division → agents. Chaque **division** reçoit des **fichiers versionnés** déposés
+directement (plus de dossiers ni d'arborescence — OCR inclus, aperçu et téléchargement), des **rôles de
+division** pour le classement et l'accès (un fichier peut porter plusieurs classes, un agent en porter
+plusieurs), et un **assistant** qui ne répond qu'à partir des fichiers auxquels on a accès.
 
 ## Arborescence
 
@@ -20,7 +20,8 @@ RAG_OCR_Tresor/
 
 ### Documentation complémentaire
 
-- [docs/retour_chef_service.md](docs/retour_chef_service.md) : **évolution 11/2026** — le chef de service est rétabli (même rôle que le chef de division, sur toutes les divisions de son service) et les dossiers protégés existent par division uniquement.
+- [docs/refonte_fichiers.md](docs/refonte_fichiers.md) : **refonte 11/2026** — `/fichiers` remplace `/dossiers` (dépôt direct dans la division, sans arborescence), filtres par rôle et par division, droits étendus du chef de service (agents et chefs de division de son service) et traçage des erreurs d'indexation dans les tableaux de bord.
+- [docs/retour_chef_service.md](docs/retour_chef_service.md) : **évolution 11/2026** — le chef de service est rétabli (même rôle que le chef de division, sur toutes les divisions de son service).
 - [docs/refonte_super_admin.md](docs/refonte_super_admin.md) : **refonte 11/2026** — regroupement des responsabilités sur le super administrateur (partiellement remplacée par l'évolution ci-dessus : le chef de service est rétabli).
 - [docs/architecture.md](docs/architecture.md) : architecture applicative et règles de sécurité.
 - [docs/paln.md](docs/paln.md) : plan de la GED hiérarchique (le poste « chef de service » décrit dans ce plan est supprimé par la refonte).
@@ -48,12 +49,13 @@ psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/seed.sql   # facultatif :
 `01` crée tout le schéma en une seule transaction (base NEUVE uniquement) ; `02` insère les rôles globaux
 et les permissions ; `03` contrôle les invariants (`verification_invariants`, chaque ligne attendue à 0).
 
-**Base existante antérieure aux refontes** (chefs de service, sous-dossiers, dossiers créés à la main) :
-il n'y a plus de script de migration — les changements sont fusionnés dans les scripts de base
-(`01_schema.sql`, `seed.sql`). Recréer la base : `DROP DATABASE`, puis exécuter la chaîne ci-dessus
-(ordre complet et précautions : `docs/ordre_execution_sql.md`). Les agents titrés `CHEF_SERVICE`
-n'existent plus ; les dossiers reviennent avec la restauration des données et, pour toute division
-créée ensuite via l'API, le backend pose automatiquement le jeu du modèle.
+**Base existante antérieure aux refontes** : deux cas.
+
+- **Mise à jour sans perte de données** : la refonte « fichiers à plat » (suppression des dossiers) fournit
+  un script de migration à appliquer UNE fois : `psql -U postgres -d rag -v ON_ERROR_STOP=1 -f
+  database/migration_suppression_dossiers.sql` (aucun fichier du disque à manipuler, aucun accès perdu).
+- **Base ancienne (avant les refontes)** : recréer la base — `DROP DATABASE`, puis la chaîne ci-dessus
+  (ordre complet et précautions : `docs/ordre_execution_sql.md`).
 
 Pour contrôler que les embeddings sont bien normalisés : `psql -U postgres -d rag -f database/verif_vecteurs_normalises.sql` (attendu : 0 non normalisé).
 
@@ -108,18 +110,20 @@ Quatre niveaux de gestion (voir `docs/retour_chef_service.md` et `docs/refonte_c
   voit le tableau de bord par service. **Il ne fait qu'administrer** : ni consultation des fichiers,
   ni interrogation IA. Il ne peut pas être membre d'une division.
 - **Chef de service (titre d'agent `CHEF_SERVICE`, niveau SERVICE)** : le **même rôle que le chef de division**,
-  étendu à **toutes les divisions de son service** — gérant des fichiers, dossiers, **classement des fichiers**,
-  demandes et comptes des agents sans titre —, y compris l'intérim local des divisions vacantes.
-  Il appartient à son service **sans division propre**. L'IA lui répond depuis tous les fichiers
-  d'une division ou de toutes les divisions de son service.
+  étendu à **toutes les divisions de son service** — gérant des fichiers, **classement des fichiers**,
+  demandes —, y compris l'intérim local des divisions vacantes. Il **gère la structure de son service**
+  (agents, affectations, postes de chef de division) et **les comptes de son service, y compris les chefs
+  de division** : création de compte, réinitialisation du mot de passe, rôles — il peut donc créer l'admin
+  de chaque division si le super administrateur ne l'a pas fait. Il appartient à son service **sans division
+  propre**. L'IA lui répond depuis tous les fichiers d'une division ou de toutes les divisions de son service.
 - **Chef de division (titre d'agent `CHEF_DIVISION`, niveau DIVISION)** : gérant de sa division — définit
   le dictionnaire des rôles, **assigne les classes des fichiers**, traite les demandes
   d'accès et les exceptions ponctuelles, crée les comptes des agents de sa division. Lecture et écriture
   de tous les fichiers de sa division ; l'IA couvre sa division entière.
-- **Agent (niveau AGENT)** : dépose des fichiers dans les dossiers de sa division (il en devient AUTEUR,
+- **Agent (niveau AGENT)** : dépose des fichiers **directement dans sa division** (il en devient AUTEUR,
   classés automatiquement à ses rôles), voit **uniquement les fichiers de sa division classés selon ses
   rôles**, commente, demande un accès ponctuel
-  (`demande_acces`). Hors de sa division : 404 ; rôle insuffisant : 403 ; dossier archivé : écritures refusées (409).
+  (`demande_acces`). Hors de sa division : 404 ; rôle insuffisant : 403 ; division désactivée : écritures refusées (409).
 
 Rôles effectifs sur un fichier (recalculés à chaque requête, matrice `MATRICE` de `core/acces.py`) :
 
@@ -130,12 +134,15 @@ Rôles effectifs sur un fichier (recalculés à chaque requête, matrice `MATRIC
 | Corbeille, restauration | non | oui | oui | non |
 | Purge définitive, rôles du fichier | non | non | oui | non |
 
-Dossiers : à un seul niveau, créés **automatiquement** à la création d'une division d'après le modèle
-configuré (`DOSSIERS_DEFAUT`, le même jeu pour toutes les divisions — aucune création manuelle) ;
-visibles de tous les agents de la division (ils n'ont pas de rôle) ; renommer/archiver/supprimer :
-super administrateur. **Stockage à plat** (refonte, `docs/refonte_classes.md`) : tous les fichiers
-vivent dans le seul `storage/uploads/` sous un nom généré — plus de répertoires par division ni par
-dossier sur le disque, l'accès est entièrement contrôlé par l'application. Les dépôts anciens
-(`<division>/<dossier>/…` ou déjà à plat) restent lisibles : c'est le chemin enregistré en base qui fait foi.
-La traçabilité complète est dans `historique_modification`
+**Plus de dossiers** (refonte `/fichiers`, `docs/refonte_fichiers.md`) : la page **Fichiers** liste à plat
+tous les fichiers accessibles, avec recherche, filtres de classe (catégorie, type, confidentialité), **filtre
+par rôle** (les fichiers des admins portent plusieurs rôles, un agent peut en porter plusieurs) et, pour le
+chef de service, **filtre par division** ; dépôt direct dans la division (choix de la division s'il en gère
+plusieurs). **Stockage à plat** (`docs/refonte_classes.md`) : tous les fichiers vivent dans le seul
+`storage/uploads/` sous un nom généré — l'accès est entièrement contrôlé par l'application. Les dépôts
+anciens (`<division>/<dossier>/…` ou déjà à plat) restent lisibles : c'est le chemin enregistré en base
+qui fait foi. Le **tableau de bord du super administrateur (`/admin`, sa première page — il n'a pas d'Accueil)**
+trace les **erreurs d'indexation** par service, par division et par rôle ; les Accueils du chef de service,
+du chef de division et de l'agent reprennent la même traçabilité dans leur périmètre (l'agent : ses fichiers
+seulement). La traçabilité complète est dans `historique_modification`
 (en ajout seul, chaîné par hash, vérifiable via `/api/historique/verification`).

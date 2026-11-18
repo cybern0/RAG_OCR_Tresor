@@ -6,11 +6,14 @@ Deux sources, évaluées à CHAQUE requête (aucun cache : un retrait de droit o
 2. Le NIVEAU, déduit du TITRE de l'agent (une seule source de vérité) :
    ROOT (rôle ADMIN) > SERVICE (CHEF_SERVICE) > DIVISION (CHEF_DIVISION) > AGENT.
    Le chef de service a le MÊME rôle que le chef de division, étendu à toutes les divisions de son service.
-   Les niveaux SERVICE et DIVISION ajoutent les permissions utilisateur.* ; leur PÉRIMÈTRE est appliqué par core/portee.py.
+   Les niveaux SERVICE et DIVISION ajoutent les permissions utilisateur.* ; le SERVICE ajoute structure.gerer,
+   limité à SON service (agents, divisions et postes de chef de division — le périmètre est appliqué par
+   core/portee.py et services/structure). Le chef de service peut aussi créer les comptes des chefs de division
+   et réinitialiser leur mot de passe (un agent sans chef s'adresse à l'un ou à l'autre).
    Le super administrateur ADMINISTRE SEULEMENT : document.lister et chat.utiliser lui sont retirés
-   (structure, comptes, dictionnaires de rôles, dossiers, audit — ni fichiers ni IA).
+   (structure, comptes, dictionnaires de rôles, audit — ni fichiers ni IA).
 
-La règle d'accès aux dossiers et aux fichiers est dans core/acces.py.
+La règle d'accès aux fichiers est dans core/acces.py.
 """
 
 from dataclasses import dataclass
@@ -46,7 +49,8 @@ AUDIT_CONSULTER = "audit.consulter"
 _GESTION_COMPTES = frozenset({UTILISATEUR_LISTER, UTILISATEUR_CREER, UTILISATEUR_MODIFIER})
 PERMISSIONS_DU_NIVEAU: dict[str, frozenset[str]] = {
     NIVEAU_ROOT: frozenset(),  # tout vient déjà du rôle ADMIN
-    NIVEAU_SERVICE: _GESTION_COMPTES,  # même rôle que le chef de division, sur plusieurs divisions
+    # le chef de service gère aussi les agents de son service (création, affectation, postes de chef de division)
+    NIVEAU_SERVICE: _GESTION_COMPTES | {STRUCTURE_GERER},
     NIVEAU_DIVISION: _GESTION_COMPTES,
     NIVEAU_AGENT: frozenset(),
 }

@@ -2,7 +2,7 @@
 
 Toutes les routes métier vivent sous le préfixe API_PREFIX (« /api » par défaut) : les autres chemins appartiennent au
 routage de l'application monopage (SPA). Si le build du frontend existe (frontend/dist), il est servi par l'API elle-même,
-avec repli sur index.html pour les liens profonds (/dossiers/12, /admin/utilisateurs...).
+avec repli sur index.html pour les liens profonds (/fichiers/12, /admin/utilisateurs...).
 Lancement : uv run uvicorn app.main:app --reload --port 8000
 """
 
@@ -23,7 +23,6 @@ from app.api.routes import (
     commentaires,
     demandes,
     documents,
-    dossiers,
     health,
     historique,
     notifications,
@@ -81,9 +80,8 @@ def create_app() -> FastAPI:
         health,
         auth,
         users,
-            structure,
+        structure,
         roles_division,
-        dossiers,
         documents,
         classement,
         commentaires,

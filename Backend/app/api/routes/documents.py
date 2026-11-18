@@ -1,4 +1,4 @@
-"""Routes des fichiers (documents) rangés dans les dossiers d'une division, et de leurs versions.
+"""Routes des fichiers déposés directement dans les divisions, et de leurs versions.
 
 Les droits se vérifient dans services/documents avec le rôle effectif (core/acces.py) : GERANT, AUTEUR, LECTEUR.
 Hors périmètre : 404 ; sans rôle sur le fichier : 403 (« Demander l'accès »).
@@ -15,7 +15,9 @@ from app.api.deps import client_ip, get_db, get_principal
 from app.core.acces import APERCU, MODIFIER, TELECHARGER, VOIR, exiger_acces_document
 from app.core.permissions import Principal
 from app.db.vecteur import Document
-from app.schemas.document import ClasserLotIn, ClasserLotOut, DocumentOut, DocumentPageOut, RolesDocumentIn, VersionOut
+from app.schemas.document import (
+    ClasserLotIn, ClasserLotOut, DocumentOut, DocumentPageOut, FiltresOut, RolesDocumentIn, VersionOut,
+)
 from app.schemas.historique import HistoriqueOut
 from app.services.historique import to_out as historique_to_out
 from app.services.classement import definir_classement_manuel
@@ -24,9 +26,14 @@ from app.services.documents import apercu, crud
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
+@router.get("/filtres", response_model=FiltresOut)
+def filtres(principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    """Options des filtres de la liste des fichiers (rôles, divisions) et divisions de dépôt, selon le périmètre."""
+    return crud.filtres_liste(db, principal)
+
+
 @router.get("", response_model=list[DocumentOut] | DocumentPageOut)
 def list_documents(
-    dossier_id: int | None = None,
     q: str | None = None,
     categorie_id: int | None = Query(default=None),
     type_id: int | None = Query(default=None),
@@ -37,6 +44,8 @@ def list_documents(
     du: datetime | None = None,
     au: datetime | None = None,
     auteur_id: int | None = None,
+    role_id: int | None = None,
+    division_id: int | None = None,
     tri: str = "date_desc",
     page: int | None = Query(default=None),
     taille: int | None = Query(default=None),
@@ -48,7 +57,6 @@ def list_documents(
     return crud.list_documents(
         db,
         principal,
-        dossier_id,
         q=q,
         categorie_id=categorie_id,
         type_id=type_id,
@@ -64,13 +72,15 @@ def list_documents(
         taille=taille,
         corbeille=corbeille,
         a_classer=a_classer,
+        role_id=role_id,
+        division_id=division_id,
     )
 
 
 @router.post("", response_model=DocumentOut, status_code=201)
 def create_document(
     request: Request,
-    dossier_id: int = Form(...),
+    division_id: int = Form(...),
     fichier: UploadFile = File(...),
     titre: str = Form(""),
     contient_tableaux: bool = Form(False),
@@ -79,10 +89,10 @@ def create_document(
     roles_explicites: bool = Form(False),
     principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
 ):
-    """Dépose un fichier. Classement par rôle : un agent reçoit ses rôles par défaut (il peut en retirer) ;
-    le chef de division choisit, sans choix le fichier est « à classer » (accès refusé par défaut)."""
+    """Dépose un fichier directement dans une division. Classement par rôle : un agent reçoit ses rôles par
+    défaut (il peut en retirer) ; le chef de division choisit, sans choix le fichier est « à classer »."""
     return crud.create_document(
-        db, principal, fichier, titre, dossier_id, contient_tableaux, contient_images, client_ip(request),
+        db, principal, fichier, titre, division_id, contient_tableaux, contient_images, client_ip(request),
         role_ids=role_ids, roles_explicites=roles_explicites,
     )
 

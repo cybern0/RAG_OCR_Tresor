@@ -1,7 +1,7 @@
 """Schémas Pydantic des fichiers (documents) et de leurs versions : métadonnées, historique daté, statut d'ingestion.
 
 Le contenu d'un fichier n'est jamais renvoyé par ces schémas : il passe par les routes d'aperçu et de téléchargement,
-protégées par le rôle de dossier.
+protégées par les rôles de classement du fichier.
 """
 
 from datetime import datetime
@@ -18,6 +18,22 @@ class RoleBrief(BaseModel):
     id: int
     code: str
     libelle: str
+
+
+class RoleFiltreOut(RoleBrief):
+    """Rôle proposé dans le filtre de la liste des fichiers, avec sa division (un chef de service
+    filtre parmi les rôles de plusieurs divisions)."""
+
+    division_id: int
+    division_nom: str | None
+
+
+class FiltresOut(BaseModel):
+    """Options des filtres de la liste des fichiers selon le périmètre du compte."""
+
+    roles: list[RoleFiltreOut] = []
+    divisions: list[dict] = []  # {id, nom}
+    depot_divisions: list[int] = []
 
 
 class RolesDocumentIn(BaseModel):
@@ -43,9 +59,8 @@ class VersionOut(BaseModel):
 class DocumentOut(BaseModel):
     id: int
     titre: str
-    dossier_id: int
-    dossier_nom: str
     division_id: int
+    division_nom: str
     has_tabular: bool
     has_image: bool
     # cases imposées par le type de la version la plus récente (cochées et non modifiables dans l'interface)

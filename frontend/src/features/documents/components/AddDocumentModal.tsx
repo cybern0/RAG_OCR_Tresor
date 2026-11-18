@@ -11,12 +11,13 @@ import { PreviewLocal } from '../../../shared/ui/FilePreview'
 import FlagsFields from '../../../shared/ui/FlagsFields'
 import Modal from '../../../shared/ui/Modal'
 import { useToast } from '../../../shared/hooks/useToast'
-import type { Dossier } from '../../dossiers/types'
 import { useAuth } from '../../auth/session'
 import { listRoles, rolesDeUser } from '../../roles/api'
 import { useDocumentMutations } from '../queries'
 
-export default function AddDocumentModal({ dossier, onClose }: { dossier: Dossier; onClose: () => void }) {
+/** Dépose un fichier directement dans une division (plus de dossiers).
+ * divisions : là où le compte peut déposer (une seule -> champ fixe, plusieurs -> sélecteur). */
+export default function AddDocumentModal({ divisions, onClose }: { divisions: { id: number; nom: string }[]; onClose: () => void }) {
   const { add } = useDocumentMutations()
   const toast = useToast()
   const [file, setFile] = useState<File | null>(null)
@@ -24,20 +25,26 @@ export default function AddDocumentModal({ dossier, onClose }: { dossier: Dossie
   const [tableaux, setTableaux] = useState(false)
   const [images, setImages] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [divisionId, setDivisionId] = useState<number | ''>(divisions[0]?.id ?? '')
   const { user } = useAuth()
   const chef = user?.titre === 'CHEF_DIVISION' || user?.niveau !== 'AGENT'
   // agent : ses propres rôles (tous cochés par défaut, il peut en retirer) ; chef : les rôles actifs de la division (aucun par défaut = « à classer »)
-  const dispo = useQuery({ queryKey: ['roles-depot', dossier.division_id, user?.id, chef], queryFn: async () => chef ? (await listRoles(dossier.division_id)).filter((r) => r.actif) : rolesDeUser(user!.id) })
+  const dispo = useQuery({
+    queryKey: ['roles-depot', divisionId, user?.id, chef],
+    queryFn: async () => divisionId === '' ? [] : chef ? (await listRoles(divisionId)).filter((r) => r.actif) : rolesDeUser(user!.id),
+    enabled: divisionId !== '',
+  })
   const [choix, setChoix] = useState<Set<number> | null>(null)
   const roles = dispo.data ?? []
   const coches = choix ?? new Set(chef ? [] : roles.map((r) => r.id))
+  const divisionNom = divisions.find((d) => d.id === divisionId)?.nom ?? ''
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (!file) return
+    if (!file || divisionId === '') return
     setError(null)
     try {
-      await add.mutateAsync({ fichier: file, titre, dossierId: dossier.id, contientTableaux: tableaux, contientImages: images, roleIds: [...coches] })
+      await add.mutateAsync({ fichier: file, titre, divisionId, contientTableaux: tableaux, contientImages: images, roleIds: [...coches] })
       toast.success('Fichier ajouté : indexation en cours.')
       onClose()
     } catch (err) {
@@ -49,7 +56,15 @@ export default function AddDocumentModal({ dossier, onClose }: { dossier: Dossie
     <Modal title="Ajouter un fichier" onClose={onClose} size="lg">
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-cream-300">Dossier : <span className="font-medium text-gold-300">{dossier.nom}</span></p>
+          {divisions.length > 1 ? (
+            <label className="flex flex-1 items-center gap-2 text-sm text-cream-300">Division
+              <select className="input w-auto" aria-label="Division de dépôt" value={divisionId} onChange={(e) => { setDivisionId(e.target.value ? Number(e.target.value) : ''); setChoix(null) }}>
+                {divisions.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}
+              </select>
+            </label>
+          ) : (
+            <p className="text-sm text-cream-300">Division : <span className="font-medium text-gold-300">{divisionNom}</span></p>
+          )}
           <ExampleButton onFill={() => { setFile(exempleFichier()); setTitre(exempleTitreFichier()); setTableaux(false); setImages(false) }} />
         </div>
         <Field label="Fichier" hint="PDF, Word, PowerPoint, Excel, CSV, texte, images (scans). Maximum 50 Mo.">
@@ -78,7 +93,7 @@ export default function AddDocumentModal({ dossier, onClose }: { dossier: Dossie
         <ErrorBox message={error} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>
-          <button className="btn" disabled={add.isPending || !file}>{add.isPending ? 'Envoi…' : 'Ajouter'}</button>
+          <button className="btn" disabled={add.isPending || !file || divisionId === ''}>{add.isPending ? 'Envoi…' : 'Ajouter'}</button>
         </div>
       </form>
     </Modal>

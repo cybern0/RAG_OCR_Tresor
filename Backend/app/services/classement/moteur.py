@@ -1,7 +1,7 @@
 """Moteur de règles de classement déterministe.
 
 Le moteur est purement fonctionnel : il n'écrit ni ne lit la base, et il s'appuie sur
-un contexte de document déjà connu (nom, extension, texte, dossier, etc.).
+un contexte de document déjà connu (nom, extension, texte, etc.).
 """
 
 from __future__ import annotations

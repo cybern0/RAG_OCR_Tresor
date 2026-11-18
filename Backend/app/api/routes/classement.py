@@ -291,7 +291,7 @@ def stats_dashboard(
 
     rows = db.execute(
         text(
-            "SELECT document_id, dossier_id, categorie_id, type_document_id, confidentialite, statut, extension, service_id, direction_id, corbeille_le, taille_octets, nb_versions FROM rag_sys.vue_document_stats"
+            "SELECT document_id, division_id, categorie_id, type_document_id, confidentialite, statut, extension, service_id, direction_id, corbeille_le, taille_octets, nb_versions FROM rag_sys.vue_document_stats"
         )
     ).mappings().all()
     return build_dashboard_stats([dict(item) for item in rows], charger_noms(db))

@@ -1,6 +1,6 @@
 """Connexion à la base métier (schéma rag_sys) : engine SQLAlchemy, session, modèles des tables
 direction, _service, agent, _role, permission, role_permission, _user, journal_audit, conversation, message,
-division, dossier, role_division, demandes, secrets, historique, notification, preference_utilisateur, memoire_chat.
+division, role_division, demandes, secrets, historique, notification, preference_utilisateur, memoire_chat.
 
 Les modèles document, document_version et chunk sont dans db/vecteur.py (même base, même schéma).
 """
@@ -84,7 +84,6 @@ class Division(Base):
 
     service: Mapped[Service] = relationship(back_populates="divisions")
     agents: Mapped[list["Agent"]] = relationship(back_populates="division")
-    dossiers: Mapped[list["Dossier"]] = relationship(back_populates="division")
     roles: Mapped[list["RoleDivision"]] = relationship(back_populates="division")
 
 
@@ -183,25 +182,7 @@ class Message(Base):
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-# --- Dossiers, rôles de division, demandes, secrets, historique, notifications --------------------------------------------
-
-class Dossier(Base):
-    """Dossier à un seul niveau d'UNE division, créé par le super administrateur. Sans login ni rôle :
-    visible de toute la division."""
-
-    __tablename__ = "dossier"
-
-    id: Mapped[int] = _pk()
-    division_id: Mapped[int] = mapped_column(ForeignKey("division.id"))
-    nom: Mapped[str] = mapped_column(String(150))
-    description: Mapped[str | None] = mapped_column(Text)
-    archive: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
-    cree_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
-    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    modifie_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    division: Mapped[Division] = relationship(back_populates="dossiers")
-
+# --- Rôles de division, demandes, secrets, historique, notifications ------------------------------------------------------
 
 class RoleDivision(Base):
     __tablename__ = "role_division"

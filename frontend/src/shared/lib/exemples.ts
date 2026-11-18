@@ -31,7 +31,7 @@ export const exempleCode = (prefixe: string) => `${prefixe}-${nombre(100, 999)}`
 export const exempleNomService = () => `${pick(SERVICES)} (exemple ${nombre(1, 99)})`
 export const exempleNomDirection = () => `${pick(DIRECTIONS)} (exemple ${nombre(1, 99)})`
 export const exempleNomDossier = () => `Dossier ${exempleTheme()} ${nombre(2024, 2026)} (exemple)`
-export const exempleDescription = () => `Documents relatifs aux ${exempleTheme()} : exemple de description de dossier.`
+export const exempleDescription = () => `Documents relatifs aux ${exempleTheme()} : exemple de description de division.`
 export const exempleTitreFichier = () => `Note sur les ${exempleTheme()} (exemple)`
 
 /** Faux fichier texte avec un contenu plausible, pour remplir un champ fichier. */
@@ -41,7 +41,7 @@ export function exempleFichier(): File {
   const texte =
     `Note interne sur les ${theme}\n\n` +
     `Article 1. Le délai de traitement est de ${jours} jours à compter de la réception de la demande.\n\n` +
-    `Article 2. Le responsable du dossier est ${exemplePrenom()} ${exempleNom()}, qui valide chaque étape.\n\n` +
+    `Article 2. Le responsable du marché est ${exemplePrenom()} ${exempleNom()}, qui valide chaque étape.\n\n` +
     `Article 3. Le montant maximal autorisé est de ${nombre(5, 90) * 100000} Ar par dossier.\n` +
     `Référence : EX-${nombre(1000, 9999)}\n`
   return new File([texte], `note_exemple_${nombre(100, 999)}.txt`, { type: 'text/plain' })

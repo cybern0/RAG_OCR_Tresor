@@ -1,3 +1,32 @@
+# Fichiers à plat : `/fichiers` remplace `/dossiers` — droits étendus du chef de service — erreurs d'indexation
+
+(11/2026, suite de la refonte « classes de fichiers » ; détails : `docs/refonte_fichiers.md`)
+
+1. **Suppression des dossiers** : plus d'arborescence du tout — les fichiers se déposent DIRECTEMENT dans
+   une division (`POST /documents` avec `division_id`), la page **Fichiers** liste à plat tout ce qui est
+   accessible avec recherche, filtres de classes, **filtre par rôle** et (chef de service) **filtre par
+   division**, onglets Corbeille et « À classer ». Table `dossier`, route `/dossiers`, pages
+   DossiersPage/DossierPage, `DOSSIERS_DEFAUT` et `par_dossier` supprimés ; dédoublonnage par division.
+2. **Filtres côté serveur** : `GET /documents/filtres` renvoie les rôles filtrables (les siens ou ceux de
+   ses divisions), les divisions du périmètre et les divisions de dépôt ; `GET /documents` accepte
+   `role_id` et `division_id` (toujours borné par la condition d'accès unique).
+3. **Chef de service** : `structure.gerer` sur SON service (listes, agents, affectations, postes de chef
+   de division) et gestion des comptes **y compris les chefs de division** (création, mot de passe,
+   rôles) — il peut créer l'admin de chaque division si le super administrateur ne l'a pas fait ;
+   directions, services, divisions et poste de chef de service restent ROOT.
+4. **Tableau de bord ROOT (`/admin`, première page — plus d'Accueil)** : section **Erreurs d'indexation**
+   (total, regroupements par service / division / rôle, cas à corriger avec le message du worker) ;
+   les Accueils SERVICE / DIVISION reprennent la section dans leur périmètre, l'AGENT voit seulement
+   SES fichiers en échec (très restreint). Indicateur « Erreurs d'indexation » à chaque niveau.
+5. **`/roles`** : l'onglet descriptif « Classement par rôle » est retiré (dictionnaire seul) ;
+   `admin/classement` redirige vers `/roles`.
+6. **SQL** : `01_schema.sql` sans table `dossier` ni colonne `document.dossier_id` ; nouvelle
+   `database/migration_suppression_dossiers.sql` pour les bases existantes (une fois, sans perte).
+7. Tests : 112 verts (nouveaux : traçage des erreurs par niveau, structure et comptes du chef de
+   service, `/documents/filtres`, dépôt direct et division désactivée).
+
+---
+
 # Dossiers à un seul niveau, créés automatiquement depuis un modèle
 
 Refonte en deux étapes :

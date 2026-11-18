@@ -41,12 +41,11 @@ class Prepared:
         return bool(self.chunks)
 
     def sources(self) -> list[dict]:
-        """Une entrée par passage cité : ref, fichier, dossier, version, date, page, court extrait."""
+        """Une entrée par passage cité : ref, fichier, version, date, page, court extrait."""
         return [
             {
                 "ref": i,
                 "document_id": c.document_id,
-                "dossier_id": c.dossier_id,
                 "titre": c.titre,
                 "version": c.version,
                 "date": c.date_version.isoformat() if c.date_version else None,

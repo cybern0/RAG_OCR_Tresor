@@ -1,9 +1,9 @@
 """Accès à la base vectorielle (pgvector) : tables document, document_version et chunk.
 
 Choix : même base et même schéma que le métier, donc SQLAlchemy partout (type Vector du paquet pgvector),
-ce qui permet de filtrer les chunks par dossier avec de simples jointures chunk -> document.
+ce qui permet de filtrer les chunks par division avec de simples jointures chunk -> document.
 
-- document : le fichier « logique », rangé dans un dossier (titre, options tableaux/images) ;
+- document : le fichier « logique », déposé directement dans UNE division (titre, options tableaux/images) ;
 - document_version : chaque dépôt du fichier, daté et numéroté, avec son statut d'ingestion ;
 - chunk : un extrait d'une version, avec son embedding et son texte indexé pour la recherche plein texte.
 """
@@ -28,7 +28,7 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import get_settings
-from app.db.metier import Base, Categorie, Dossier, DocumentTag, TypeDocument, User
+from app.db.metier import Base, Categorie, Division, DocumentTag, TypeDocument, User
 
 STATUTS = ("pending", "processing", "ready", "error")
 
@@ -37,7 +37,6 @@ class Document(Base):
     __tablename__ = "document"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    dossier_id: Mapped[int] = mapped_column(ForeignKey("dossier.id"))
     division_id: Mapped[int] = mapped_column(ForeignKey("division.id"))
     titre: Mapped[str] = mapped_column(String(250))
     categorie_id: Mapped[int | None] = mapped_column(ForeignKey("categorie.id", ondelete="SET NULL"))
@@ -55,7 +54,7 @@ class Document(Base):
     modifie_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
     modifie_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    dossier: Mapped[Dossier] = relationship()
+    division: Mapped[Division] = relationship()
     categorie: Mapped[Categorie | None] = relationship()
     type_document: Mapped[TypeDocument | None] = relationship()
     # lecture seule : les étiquettes s'écrivent via services/classement (requêtes directes sur DocumentTag)

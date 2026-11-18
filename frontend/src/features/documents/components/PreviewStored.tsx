@@ -1,4 +1,4 @@
-// Aperçu d'une version enregistrée : le serveur renvoie le fichier (ou son PDF converti), selon le rôle de dossier.
+// Aperçu d'une version enregistrée : le serveur renvoie le fichier (ou son PDF converti), selon les rôles du fichier.
 import { useQuery } from '@tanstack/react-query'
 import { errorMessage } from '../../../shared/api/client'
 import { ErrorBox, Loading } from '../../../shared/ui/Feedback'

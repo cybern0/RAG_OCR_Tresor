@@ -1,17 +1,18 @@
 import { api, query, rawFetch } from '../../shared/api/client'
-import type { DocumentFilters, DocumentMeta, DocumentPage, Referentiel, VersionMeta } from './types'
+import type { DocumentFilters, DocumentMeta, DocumentPage, FiltresListe, Referentiel, VersionMeta } from './types'
 
 export const listDocuments = (f: DocumentFilters) => api<DocumentPage>(`/documents${query({ ...f })}`)
 export const getDocument = (id: number) => api<DocumentMeta>(`/documents/${id}`)
+export const getFiltres = () => api<FiltresListe>('/documents/filtres')
 export const getReferentiel = () => api<Referentiel>('/classement/referentiel')
 
-export interface AddDocumentInput { fichier: File; titre: string; dossierId: number; contientTableaux: boolean; contientImages: boolean; roleIds?: number[] }
+export interface AddDocumentInput { fichier: File; titre: string; divisionId: number; contientTableaux: boolean; contientImages: boolean; roleIds?: number[] }
 
 export function addDocument(input: AddDocumentInput) {
   const form = new FormData()
   form.append('fichier', input.fichier)
   form.append('titre', input.titre)
-  form.append('dossier_id', String(input.dossierId))
+  form.append('division_id', String(input.divisionId))
   form.append('contient_tableaux', String(input.contientTableaux))
   form.append('contient_images', String(input.contientImages))
   if (input.roleIds) { form.append('roles_explicites', 'true'); input.roleIds.forEach((r) => form.append('role_ids', String(r))) }

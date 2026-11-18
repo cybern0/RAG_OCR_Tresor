@@ -1,8 +1,8 @@
 """Recherche des chunks les plus proches dans pgvector, filtrée par les FICHIERS que le compte peut lire.
 
 Isolation : un seul index partagé ; chaque requête est limitée par la condition SQL core.acces.condition_acces_fichiers (rôles
-de la division, auteur, exceptions valides ; le super administrateur lit tout), recalculée à chaque requête. C'est le point de sécurité
-principal du RAG : sans condition, aucun résultat. Les fichiers en corbeille et les dossiers archivés ne sont jamais interrogés.
+de la division, auteur, exceptions valides), recalculée à chaque requête. C'est le point de sécurité principal du RAG :
+sans condition, aucun résultat. Les fichiers en corbeille ne sont jamais interrogés.
 
 Similarité : produit scalaire via l'opérateur <#> (qui renvoie le produit scalaire NÉGATIF, donc ORDER BY croissant),
 servi par l'index HNSW vector_ip_ops. Les embeddings étant tous normalisés (norme 1), le produit scalaire donne
@@ -28,7 +28,6 @@ from sqlalchemy import ColumnElement, func, select, text
 from sqlalchemy.orm import Session, aliased
 
 from app.config import get_settings
-from app.db.metier import Dossier
 from app.db.vecteur import Chunk, Document, DocumentVersion
 from app.services.ingestion.embedding import assert_unit
 
@@ -45,7 +44,6 @@ class RetrievedChunk:
     page: int | None
     contenu: str
     est_tableau: bool
-    dossier_id: int | None = None
     version: int | None = None
     date_version: datetime | None = None
     est_derniere: bool = True
@@ -74,14 +72,13 @@ def _base(acces: ColumnElement[bool], derniere_version_seulement: bool):
     stmt = (
         select(
             Chunk.id, Chunk.document_id, Document.titre, Chunk.page, Chunk.contenu, Chunk.est_tableau,
-            Document.dossier_id, DocumentVersion.numero, DocumentVersion.cree_le,
+            DocumentVersion.numero, DocumentVersion.cree_le,
             (DocumentVersion.numero == last_ready).label("est_derniere"), Chunk.taille_ref,
         )
         .join(Document, Document.id == Chunk.document_id)
         .join(DocumentVersion, DocumentVersion.id == Chunk.document_version_id)
-        .join(Dossier, Dossier.id == Document.dossier_id)
         .where(
-            DocumentVersion.statut == "ready", acces, Document.corbeille_le.is_(None), Dossier.archive.is_(False),
+            DocumentVersion.statut == "ready", acces, Document.corbeille_le.is_(None),
         )
     )
     if derniere_version_seulement:
@@ -106,7 +103,7 @@ def search_chunks(
     k_max = k if k is not None else settings.retrieval_k_max
     pool = max(k_max * 4, 20)
 
-    db.execute(text("SET LOCAL hnsw.ef_search = 100"))  # meilleur rappel quand le filtre par dossier est sélectif
+    db.execute(text("SET LOCAL hnsw.ef_search = 100"))  # meilleur rappel quand le filtre d'accès est sélectif
 
     vec_stmt = _base(acces, derniere_version_seulement).order_by(
         Chunk.embedding.max_inner_product(query_embedding)
@@ -145,7 +142,7 @@ def search_chunks(
     return [
         RetrievedChunk(
             r.id, r.document_id, r.titre, r.page, r.contenu, r.est_tableau,
-            dossier_id=r.dossier_id, version=r.numero, date_version=r.cree_le,
+            version=r.numero, date_version=r.cree_le,
             est_derniere=bool(r.est_derniere), taille_ref=r.taille_ref,
         )
         for r in (rows_by_id[i] for i in ranked[:k])

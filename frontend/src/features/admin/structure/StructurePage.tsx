@@ -102,7 +102,7 @@ export function Component() {
 
   return (
     <>
-      <PageHeader title="Directions, services et divisions" description="La hiérarchie de la structure. Les agents appartiennent à un service, les dossiers sont rattachés à une division, et les rôles métier vivent au niveau division." />
+      <PageHeader title="Directions, services et divisions" description="La hiérarchie de la structure. Les agents appartiennent à un service et à une division, les fichiers sont déposés directement dans la division, et les rôles métier vivent au niveau division." />
       <ErrorBox message={directions.error ? errorMessage(directions.error) : services.error ? errorMessage(services.error) : divisions.error ? errorMessage(divisions.error) : null} />
       <div className="grid gap-5 xl:grid-cols-3">
         <section>

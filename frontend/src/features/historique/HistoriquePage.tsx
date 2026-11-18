@@ -9,7 +9,7 @@ import PageHeader from '../../shared/ui/PageHeader'
 import { listHistorique, verifierHistorique } from './api'
 
 const PAR_PAGE = 50
-const TYPES = ['', 'document', 'dossier', 'user', 'role_division', 'demande', 'agent', 'service', 'division']
+const TYPES = ['', 'document', 'user', 'role_division', 'demande', 'agent', 'service', 'division']
 
 export function Component() {
   const [type, setType] = useState('')

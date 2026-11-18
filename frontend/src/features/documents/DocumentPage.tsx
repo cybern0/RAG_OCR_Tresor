@@ -5,11 +5,11 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { errorMessage } from '../../shared/api/client'
 import { formatDate, formatSize, plural } from '../../shared/lib/format'
 import ConfirmDialog from '../../shared/ui/ConfirmDialog'
+import Badge from '../../shared/ui/Badge'
 import ErreurAcces from '../demandes/ErreurAcces'
 import { ErrorBox, Loading } from '../../shared/ui/Feedback'
 import PageHeader from '../../shared/ui/PageHeader'
 import { useToast } from '../../shared/hooks/useToast'
-import { useDossier } from '../dossiers/queries'
 import { downloadVersion } from './api'
 import { ClassementBadges } from './components/ClassementBadges'
 import ClassifyModal from './components/ClassifyModal'
@@ -24,11 +24,10 @@ import { useDocument, useDocumentMutations, useVersions } from './queries'
 type Dialog = 'edit' | 'version' | 'classify' | 'delete' | null
 
 export function Component() {
-  const { dossierId, documentId } = useParams()
-  const id = Number(documentId)
+  const documentId = Number(useParams().documentId)
+  const id = documentId
   const doc = useDocument(id)
   const versions = useVersions(id)
-  const dossier = useDossier(Number(dossierId))
   const navigate = useNavigate()
   const toast = useToast()
   const { remove } = useDocumentMutations()
@@ -41,16 +40,16 @@ export function Component() {
   const d = doc.data
   const list = versions.data ?? []
   const current = list.find((v) => v.numero === selected) ?? list.find((v) => v.est_courante) ?? list[0] ?? null
-  const writable = !(dossier.data?.archive ?? false) && !d.corbeille_le
+  const writable = !d.corbeille_le
   const mayAdd = d.droits.includes('ajouter_version') && writable
   const mayDelete = d.droits.includes('purger') && writable
 
   return (
     <>
       <PageHeader
-        back={<Link to={`/dossiers/${d.dossier_id}`} className="mb-2 inline-flex items-center gap-1 text-sm text-cream-300 hover:text-gold-300"><ArrowLeft className="h-4 w-4" /> {d.dossier_nom}</Link>}
+        back={<Link to="/fichiers" className="mb-2 inline-flex items-center gap-1 text-sm text-cream-300 hover:text-gold-300"><ArrowLeft className="h-4 w-4" /> Tous les fichiers</Link>}
         title={d.titre}
-        description={<span className="flex flex-wrap items-center gap-2"><StatusBadge statut={d.version.statut} /> {plural(d.nb_versions, 'version')} · modifié le {formatDate(d.modifie_le)}</span>}
+        description={<span className="flex flex-wrap items-center gap-2"><Badge tone="gray">{d.division_nom}</Badge> <StatusBadge statut={d.version.statut} /> {plural(d.nb_versions, 'version')} · modifié le {formatDate(d.modifie_le)}</span>}
         actions={(
           <>
             {current && <button className="btn-ghost" onClick={() => void downloadVersion(d.id, current.numero, current.nom_fichier).catch((e) => toast.error(errorMessage(e)))}><Download className="h-4 w-4" /> Télécharger v{current.numero}</button>}
@@ -106,7 +105,7 @@ export function Component() {
       {dialog === 'classify' && <ClassifyModal docs={[d]} onClose={() => setDialog(null)} />}
       {dialog === 'delete' && (
         <ConfirmDialog title="Mettre à la corbeille" confirmLabel="Mettre à la corbeille" onClose={() => setDialog(null)}
-          onConfirm={async () => { await remove.mutateAsync(d.id); toast.success('Fichier placé dans la corbeille.'); navigate(`/dossiers/${d.dossier_id}`, { replace: true }) }}>
+          onConfirm={async () => { await remove.mutateAsync(d.id); toast.success('Fichier placé dans la corbeille.'); navigate('/fichiers', { replace: true }) }}>
           Mettre <span className="font-semibold text-gold-300">« {d.titre} »</span> dans la corbeille ?
         </ConfirmDialog>
       )}

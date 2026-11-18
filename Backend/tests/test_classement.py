@@ -50,14 +50,14 @@ def test_tags_s_ajoutent_et_la_main_l_emporte():
             "categorie_id": 2,
             "type_document_id": 3,
             "tags": ["urgent"],
-            "criteres": [{"champ": "dossier_id", "op": "=", "valeur": 42}],
+            "criteres": [{"champ": "extension", "op": "=", "valeur": "csv"}],
         },
     ]
 
-    res = evaluer_regles(regles, {"nom_fichier": "FACTURE-2024-01.pdf", "dossier_id": 42, "classement_source": "regle"})
+    res = evaluer_regles(regles, {"nom_fichier": "FACTURE-2024-01.csv", "extension": "csv", "classement_source": "regle"})
     assert set(res["tags"]) == {"automatique", "urgent"}
 
-    manual = evaluer_regles(regles, {"nom_fichier": "FACTURE-2024-01.pdf", "dossier_id": 42, "classement_source": "manuel"})
+    manual = evaluer_regles(regles, {"nom_fichier": "FACTURE-2024-01.csv", "extension": "csv", "classement_source": "manuel"})
     assert manual == {"categorie_id": None, "type_document_id": None, "tags": [], "confidentialite": None}
 
 

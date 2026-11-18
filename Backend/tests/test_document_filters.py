@@ -12,10 +12,10 @@ class DummyVersion:
 
 
 class DummyDoc:
-    def __init__(self, id, titre, dossier_id, cree_par, cree_le, versions):
+    def __init__(self, id, titre, division_id, cree_par, cree_le, versions):
         self.id = id
         self.titre = titre
-        self.dossier_id = dossier_id
+        self.division_id = division_id
         self.cree_par = cree_par
         self.cree_le = cree_le
         self.versions = versions

@@ -5,7 +5,8 @@
 > compte du système, ni PAM ni pywin32), GED hiérarchique Direction → Service → Division, **classes de
 > fichiers = rôles de division**, super administrateur qui **administre sans consulter les fichiers ni
 > l'IA**, stockage **à plat** dans `storage/uploads/` — est décrit dans `docs/refonte_classes.md` et,
-> comme code, dans `Backend/app/core/acces.py` (la source de vérité des droits).
+> comme code, dans `Backend/app/core/acces.py` (la source de vérité des droits) ; les fichiers
+> sont déposés **directement dans les divisions** (plus de dossiers) : voir `docs/refonte_fichiers.md`.
 
 ## Rôles et droits
 Deux niveaux (tables `_role`, `permission`, `role_permission` pour le global ; `dossier_membre`, `dossier_service` pour les dossiers).

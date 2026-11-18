@@ -38,7 +38,7 @@ export function Component() {
         <div className="text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gold-500 text-leaf-950"><Leaf className="h-6 w-6" /></div>
           <h1 className="text-2xl font-bold text-gold-400">Trésor RAG</h1>
-          <p className="mt-1 text-sm text-cream-300">Assistant documentaire de vos dossiers</p>
+          <p className="mt-1 text-sm text-cream-300">Assistant documentaire de vos fichiers</p>
         </div>
         <div className="flex justify-end">
           <ExampleButton onFill={() => { setUsername(exempleIdentifiant()); setPassword(exempleMotDePasse()) }} />

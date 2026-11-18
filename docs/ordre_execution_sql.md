@@ -1,16 +1,16 @@
 # Ordre d'exécution des scripts SQL (`database/`)
 
-La base naît **directement conforme** aux refontes : poste « chef de service » supprimé, dossiers à un
-seul niveau créés **automatiquement** depuis le modèle (`DOSSIERS_DEFAUT`). Tous les changements
-autrefois portés par des scripts de migration (`10_suppression_chef_service.sql`,
-`migration_suppression_sous_dossiers.sql`, `migration_dossiers_defaut.sql`) sont fusionnés dans les
-scripts de base : **les migrations ont été supprimées**. Aucun fichier des scripts de base ne contient
-d'`ALTER` et aucune migration n'est nécessaire pour une installation neuve — une base existante est
-simplement recréée (voir « Base existante » plus bas). Six scripts de base subsistent :
+La base naît **directement conforme** aux refontes : comptes gérés par l'application, super administrateur
+qui n'administre que, chef de service rétabli, et **fichiers déposés directement dans les divisions**
+(suppression des dossiers — voir `docs/refonte_fichiers.md`). Tous les changements autrefois portés par
+des scripts de migration (`10_suppression_chef_service.sql`, `migration_suppression_sous_dossiers.sql`,
+`migration_dossiers_defaut.sql`) sont fusionnés dans les scripts de base. Une migration subsiste, pour les
+bases **existantes** seulement : `migration_suppression_dossiers.sql` (suppression de la table `dossier`
+sans perte de données). Pour une installation neuve, aucune migration n'est nécessaire :
 
 | # | Script | Rôle | Transaction | Répétition |
 |---|---|---|---|---|
-| 1 | `01_schema.sql` | Schéma complet : organisation, comptes, audit, chat, dossiers à un seul niveau, documents, versions, chunks vectoriels, classement, demandes d'accès, mots de passe de dossier, historique chaîné, notifications, vue des statistiques | Oui (tout ou rien) | Non — base NEUVE uniquement |
+| 1 | `01_schema.sql` | Schéma complet : organisation, comptes, audit, chat, documents déposés directement dans les divisions (sans dossiers), versions, chunks vectoriels, classement, demandes d'accès, historique chaîné, notifications, vue des statistiques | Oui (tout ou rien) | Non — base NEUVE uniquement |
 | 2 | `02_donnees_reference.sql` | Rôles globaux `ADMIN` / `UTILISATEUR` et permissions (aucun compte, aucune organisation) | Non (insertions `ON CONFLICT`) | Oui (idempotent) |
 | 3 | `03_verification.sql` | Contrôle des invariants : vue `verification_invariants` (chaque ligne attendue à 0) + avertissements | Non (lecture seule) | Oui, à tout moment |
 | 4 | `seed.sql` | Données de DÉMONSTRATION `DEMO` / `demo_*` (organisation, agents, comptes, rôles, dossiers du modèle + dossiers de démo ; pas de fichiers) | Oui | Après `delete_seed.sql` seulement |

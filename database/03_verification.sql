@@ -28,8 +28,8 @@ JOIN _user u ON u.id = urd.user_id
 LEFT JOIN agent a ON a.id = u.agent_id
 WHERE a.division_id IS DISTINCT FROM rd.division_id
 UNION ALL
-SELECT 'document_hors_de_la_division_de_son_dossier', count(*)
-FROM document d JOIN dossier f ON f.id = d.dossier_id WHERE f.division_id <> d.division_id
+SELECT 'role_de_fichier_hors_de_la_division_du_fichier', count(*)
+FROM document_role dr JOIN document d ON d.id = dr.document_id WHERE dr.division_id <> d.division_id
 UNION ALL
 SELECT 'historique_chaine_alteree', CASE WHEN (SELECT ok FROM verifier_historique()) THEN 0 ELSE 1 END
 UNION ALL

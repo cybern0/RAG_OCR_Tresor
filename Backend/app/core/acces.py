@@ -1,4 +1,4 @@
-"""Règle d'accès hiérarchique aux dossiers et aux fichiers (la seule source de vérité des droits).
+"""Règle d'accès hiérarchique aux fichiers (la seule source de vérité des droits).
 
 Pour un fichier, le rôle effectif est calculé à chaque requête :
 
@@ -9,14 +9,13 @@ Pour un fichier, le rôle effectif est calculé à chaque requête :
       LECTEUR  un rôle commun avec le fichier, ou une exception ponctuelle valide -> lecture, commentaires
       sinon    403 (« Demander l'accès »)
   * tout le reste : 404 (l'existence n'est pas révélée) — y compris le super administrateur : il ne fait
-    qu'administrer (structure, comptes, dictionnaires de rôles, dossiers, audit) et n'accède ni aux fichiers
-    ni à l'IA ; il n'assure l'intérim que d'une division sans chef pour sa gestion, pas pour son contenu.
+    qu'administrer (structure, comptes, dictionnaires de rôles, audit) et n'accède ni aux fichiers ni à l'IA ;
+    il n'assure l'intérim que d'une division sans chef pour sa gestion, pas pour son contenu.
   * Si la division n'a plus de chef, le super administrateur assure l'intérim de sa GESTION (rôles, classement
     du référentiel), sans jamais consulter les fichiers ni utiliser l'IA.
 
-Dossiers (un seul niveau, sans sous-dossiers) : créés automatiquement à la création de la division (modèle
-configuré), visibles de tous les agents de la division (ils n'ont pas de rôle) ; les renommer, les archiver
-ou les supprimer est réservé au super administrateur (administration, sans consultation du contenu).
+Les fichiers sont déposés DIRECTEMENT dans une division (plus de dossiers) : la division est la seule
+frontière d'accès, et les rôles (les « classes ») décident qui lit quoi.
 """
 
 from datetime import datetime, timezone
@@ -31,7 +30,6 @@ from app.db.metier import (
     AccesException,
     Agent,
     Division,
-    Dossier,
     DocumentRole,
 )
 from app.db.vecteur import Document
@@ -64,12 +62,6 @@ MATRICE: dict[str, frozenset[str]] = {
     LECTEUR: _LECTURE | {COMMENTER},
     SUPERIEUR: _LECTURE,
 }
-
-# Actions sur un dossier
-DOSSIER_VOIR = "dossier_voir"
-DOSSIER_CREER = "dossier_creer"  # déposer un fichier dans un dossier : réservé aux membres de la division
-DOSSIER_GERER = "dossier_gerer"  # renommer, archiver, supprimer un dossier : réservé au super administrateur
-# (la création n'est pas une action d'API : les dossiers naissent du modèle configuré à la création de la division)
 
 
 def _maintenant() -> datetime:
@@ -228,10 +220,7 @@ def exiger_acces_document(db: Session, principal: Principal, document: Document 
     if action not in MATRICE[role]:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Action non autorisée pour votre rôle sur ce fichier.")
     if action in ACTIONS_ECRITURE:
-        exiger_ecriture_division(division)
-        dossier = db.get(Dossier, document.dossier_id)
-        if dossier is not None and dossier.archive:
-            raise HTTPException(status.HTTP_409_CONFLICT, "Ce dossier est archivé : il est en lecture seule.")
+        exiger_ecriture_division(division)  # division désactivée : lecture seule
     return document, role
 
 
@@ -277,48 +266,13 @@ def ids_documents_accessibles(db: Session, principal: Principal, ids: list[int])
     return set(db.scalars(select(Document.id).where(Document.id.in_(ids), condition_acces_fichiers(db, principal))))
 
 
-# --- Dossiers ---------------------------------------------------------------------------------------------------------
-
-def exiger_acces_dossier(db: Session, principal: Principal, dossier_id: int | None, action: str) -> Dossier:
-    """404 hors périmètre, 403 action non permise, 409 archivé / division désactivée.
-    La gestion du dossier lui-même (DOSSIER_GERER) est réservée au super administrateur ; les membres
-    de la division voient le dossier et y déposent des fichiers (DOSSIER_CREER)."""
-    dossier = db.get(Dossier, dossier_id) if dossier_id is not None else None
-    if dossier is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dossier introuvable.")
-    division = _division(db, dossier.division_id)
-    if action == DOSSIER_GERER:
-        if not principal.is_admin:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul le super administrateur gère les dossiers.")
-        exiger_ecriture_division(division)
-        return dossier
-    membre = est_membre(principal, division.id) or est_chef_nominal(db, principal, division.id)
-    if not membre and not principal.is_admin:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dossier introuvable.")
-    if not membre:
-        # le super administrateur voit le dossier (administration : renommer, archiver, supprimer),
-        # jamais son contenu — l'action autre que VOIR lui reste refusée
-        if action != DOSSIER_VOIR:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Le super administrateur administre sans déposer.")
-        return dossier
-    if action != DOSSIER_VOIR:
-        exiger_ecriture_division(division)
-        if dossier.archive and action == DOSSIER_CREER:
-            raise HTTPException(status.HTTP_409_CONFLICT, "Ce dossier est archivé : il est en lecture seule.")
-    return dossier
-
-
-def exiger_acces_division(db: Session, principal: Principal, division_id: int, *, ecriture: bool = False) -> Division:
-    """Accès à la RACINE d'une division (liste de ses dossiers) : membres, chefs — et le super administrateur
-    pour l'administration des dossiers (noms et comptages, jamais le contenu des fichiers)."""
+def exiger_depot_division(db: Session, principal: Principal, division_id: int) -> Division:
+    """Déposer un fichier dans une division : membre de la division ou chef (de division ou de service).
+    404 hors périmètre, 409 division désactivée."""
     division = _division(db, division_id)
-    membre = est_membre(principal, division_id) or est_chef_nominal(db, principal, division_id)
-    if not membre and not principal.is_admin:
+    if not (est_membre(principal, division.id) or est_chef_nominal(db, principal, division.id)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
-    if not membre and ecriture:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Le super administrateur administre sans déposer.")
-    if membre and ecriture:
-        exiger_ecriture_division(division)
+    exiger_ecriture_division(division)
     return division
 
 

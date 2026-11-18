@@ -28,11 +28,13 @@ export const router = createBrowserRouter([
                 element: <RequireIntermediateAdmin />,
                 children: [{ index: true, lazy: () => import('../features/historique/HistoriquePage') }],
               },
-              { path: 'profil', lazy: () => import('../features/auth/ProfilePage') },
-              guarded(['document.lister'], [
-                { path: 'dossiers', lazy: () => import('../features/dossiers/DossiersPage') },
-                { path: 'dossiers/:dossierId', lazy: () => import('../features/dossiers/DossierPage') },
-                { path: 'dossiers/:dossierId/fichiers/:documentId', lazy: () => import('../features/documents/DocumentPage') },
+              { path: 'profil', lazy: () => import('../features/auth/ProfilePage') },              guarded(['document.lister'], [
+                { path: 'fichiers', lazy: () => import('../features/fichiers/FichiersPage') },
+                { path: 'fichiers/:documentId', lazy: () => import('../features/documents/DocumentPage') },
+                // anciens liens /dossiers (marque-pages) : redirigés vers la liste à plat
+                { path: 'dossiers', loader: () => redirect('/fichiers') },
+                { path: 'dossiers/:dossierId', loader: () => redirect('/fichiers') },
+                { path: 'dossiers/:dossierId/fichiers/:documentId', loader: ({ params }) => redirect(`/fichiers/${params.documentId}`) },
               ]),
               guarded(['chat.utiliser'], [
                 // un seul objet de route : passer de /chat à /chat/12 ne démonte pas la page (le flux en cours continue)
@@ -47,7 +49,7 @@ export const router = createBrowserRouter([
                 { path: 'admin/agents', lazy: () => import('../features/admin/structure/AgentsPage') },
                 { path: 'admin/structure', lazy: () => import('../features/admin/structure/StructurePage') },
               ]),
-              guarded(['utilisateur.lister', 'classement.gerer'], [{ path: 'admin/classement', loader: () => redirect('/roles?tab=classement') }]),
+              guarded(['utilisateur.lister', 'classement.gerer'], [{ path: 'admin/classement', loader: () => redirect('/roles') }]),
               guarded(['audit.consulter'], [{ path: 'admin/audit', loader: () => redirect('/historique') }]),
               { path: '*', Component: NotFound },
             ],

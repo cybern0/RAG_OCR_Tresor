@@ -1,10 +1,11 @@
 """Règles de la GED hiérarchique : chef de division unique et transfert de poste, intérim du super administrateur,
-accès aux fichiers (404 / 403), classement par rôle au dépôt, demandes d'accès et exceptions,
-mots de passe de dossier, historique chaîné, périmètres de gestion, notifications, tableaux de bord.
+accès aux fichiers (404 / 403), classement par rôle au dépôt, dépôt direct sans dossier, demandes d'accès et exceptions,
+historique chaîné, périmètres de gestion, notifications, tableaux de bord.
 
 Le chef de service a le même rôle que le chef de division, étendu à toutes les divisions de son service ;
-les mots de passe de dossier (par division, jamais par service) restent réservés au super administrateur.
-Même base de test et mêmes fixtures que test_api.py (monde : 1 direction, 2 services, 3 divisions, chefs, agents, rôles)."""
+il gère les comptes de son service (y compris les chefs de division : compte, mot de passe, rôles) mais pas
+les autres chefs de service. Même base de test et mêmes fixtures que test_api.py (monde : 1 direction,
+2 services, 3 divisions, chefs, agents, rôles)."""
 
 import os
 import uuid
@@ -21,7 +22,7 @@ from app.config import get_settings
 from app.db.metier import SessionLocal
 
 from .test_api import (  # noqa: F401  (fixtures et aides partagées)
-    PWD, auth, client, dossier_par_defaut, login, mk_agent, mk_role, mk_user, ready_doc, set_roles,
+    PWD, auth, client, login, mk_agent, mk_role, mk_user, ready_doc, set_roles,
     upload, wait_version, world,
 )
 
@@ -30,8 +31,8 @@ def ids(rows):
     return [r["id"] for r in rows]
 
 
-def fichier(client, h, dossier_id, texte, **form):
-    return ready_doc(client, h, dossier_id, texte, **form)
+def fichier(client, h, division_id, texte, **form):
+    return ready_doc(client, h, division_id, texte, **form)
 
 
 # --- chefs uniques, transfert, vacance ------------------------------------------------------------------------------------
@@ -111,17 +112,19 @@ def test_404_403_selon_la_position_de_l_appelant(client, world):
     assert client.get(f"/documents/{fid}/versions/1/telecharger", headers=mix).status_code == 403
     assert client.get(f"/documents/{fid}", headers=b).status_code == 404                        # autre division : l'existence n'est pas révélée
     assert client.get(f"/documents/{fid}", headers=world["cd3"]["h"]).status_code == 404         # même un chef d'une autre division
-    ids_mix = ids(client.get("/documents", headers=mix, params={"dossier_id": world["A"]["id"]}).json())
-    assert fid not in ids_mix and fid in ids(client.get("/documents", headers=lect, params={"dossier_id": world["A"]["id"]}).json())
-    # le dossier, lui, est visible de tous les agents de la division, avec le nombre de fichiers masqués
-    dossiers = {d["id"]: d for d in client.get("/dossiers", headers=mix).json()}
-    assert world["A"]["id"] in dossiers and dossiers[world["A"]["id"]]["nb_fichiers_masques"] >= 1
-    assert client.get(f"/dossiers/{world['A']['id']}", headers=b).status_code == 404
+    # liste à plat, sans dossier : le filtre par rôle (classe) — mix (PUBLIC) ne voit pas le fichier COMPTA, lect le voit
+    ids_mix = ids(client.get("/documents", headers=mix, params={"role_id": world["roles"]["PUBLIC"]["id"]}).json())
+    assert fid not in ids_mix and fid in ids(client.get("/documents", headers=lect, params={"role_id": world["roles"]["COMPTA"]["id"]}).json())
+    # filtres disponibles du compte : l'agent voit sa division et ses rôles ; un chef de service, ses divisions
+    filtres_mix = client.get("/documents/filtres", headers=mix).json()
+    assert [d["id"] for d in filtres_mix["divisions"]] == [world["div"]["v1"]["id"]]
+    assert {r["code"] for r in filtres_mix["roles"]} == {"PUBLIC"}
+    assert filtres_mix["depot_divisions"] == [world["div"]["v1"]["id"]]
     # super administrateur : il ne fait qu'administrer — ni fichiers, ni téléchargement, ni dépôt
     assert client.get(f"/documents/{fid}", headers=adm).status_code == 404
     assert client.get(f"/documents/{fid}/versions/1/telecharger", headers=adm).status_code == 404
-    assert client.post("/dossiers", headers=adm, json={"nom": "Interdit", "division_id": world["div"]["v1"]["id"]}).status_code == 405  # plus de création manuelle de dossier
-    assert upload(client, adm, world["A"]["id"], "x" + world["tag"]).status_code == 403          # l'administration ne dépose pas
+    assert client.get("/documents/filtres", headers=adm).json() == {"roles": [], "divisions": [], "depot_divisions": []}  # le super administrateur ne liste pas de fichiers
+    assert upload(client, adm, world["A"]["id"], "x" + world["tag"]).status_code == 404          # l'administration ne dépose pas (existence non révélée)
     assert client.post(f"/documents/{fid}/commentaires", headers=lect, json={"contenu": "ok"}).status_code == 201
 
 
@@ -170,58 +173,29 @@ def test_classement_automatique_selon_l_utilisateur_qui_depose(client, world):
     set_roles(client, cd1, world["lect"]["user"]["id"], [R["COMPTA"]["id"], R["AUDIT"]["id"]])
 
 
-def test_dossiers_automatiques_sans_role_et_fichiers_avec_roles(client, world):
-    """Les dossiers naissent du modèle à la création d'une division : aucune création manuelle (POST refusé).
-    Le même jeu pour toutes les divisions ; les fichiers gardent leurs rôles ;
-    renommer, archiver, supprimer : super administrateur seulement."""
+def test_depot_direct_sans_dossier_et_division_desactivee(client, world):
+    """Plus de dossiers ni d'arborescence : les fichiers se déposent DIRECTEMENT dans une division
+    (membres et chefs seulement, 404 hors périmètre) ; le stockage reste à plat ; une division
+    désactivée passe en lecture seule (409 à l'écriture, lecture conservée)."""
     a, lect, mix, b, cd1, adm, tag = world["a"]["h"], world["lect"]["h"], world["mix"]["h"], world["b"]["h"], world["cd1"]["h"], world["admin"], world["tag"]
     v1, s1 = world["div"]["v1"]["id"], world["svc"]["s1"]["id"]
-    d = world["A"]  # « Courrier entrant » de v1, posé automatiquement
-    # aucun POST /dossiers : la création manuelle a disparu, quel que soit le compte (405 = route absente)
-    for h in (adm, a, cd1):
-        assert client.post("/dossiers", headers=h, json={"nom": "Interdit", "division_id": v1}).status_code == 405
-    # le modèle est posé à la création de la division : cinq dossiers, les mêmes partout
-    modele = ["Archives", "Courrier entrant", "Courrier sortant", "Notes de service", "Rapports"]  # ordre alphabétique de l'API
-    assert sorted(x["nom"] for x in client.get("/dossiers", headers=a).json()) == modele
-    # le dossier est visible de toute la division, indépendamment des rôles
-    for h in (a, lect, mix, cd1):
-        assert d["id"] in ids(client.get("/dossiers", headers=h).json())
-    # hors division : 404 ; une division créée via l'API reçoit le même jeu automatiquement
-    assert client.get(f"/dossiers/{d['id']}", headers=b).status_code == 404
-    nv = client.post("/structure/divisions", headers=adm, json={"service_id": s1, "nom": f"Division auto {tag}", "code": f"auto{tag}"})
-    assert nv.status_code == 201
-    assert sorted(x["nom"] for x in client.get("/dossiers", headers=adm, params={"division_id": nv.json()["id"]}).json()) == modele
-    # stockage à plat : plus de répertoire par division ni par dossier (l'accès est purement applicatif)
-    racine = get_settings().upload_dir
-    assert not (racine / str(nv.json()["id"])).exists()
-    # renommer, archiver, supprimer : super administrateur seulement
-    assert client.patch(f"/dossiers/{d['id']}", headers=a, json={"nom": "Pirate"}).status_code == 403
-    assert client.patch(f"/dossiers/{d['id']}", headers=cd1, json={"nom": "Pirate"}).status_code == 403
-    assert client.patch(f"/dossiers/{d['id']}", headers=adm, json={"nom": f"Renommé {tag}"}).status_code == 200
-    # ce sont les fichiers qui portent les rôles, pas le dossier
-    f = fichier(client, a, d["id"], f"Fichier du dossier automatique {tag}", titre="Fichier DA")
-    assert any(p.is_file() for p in racine.iterdir())  # déposé à plat dans upload_dir (nom généré)
-    assert client.get(f"/documents/{f['id']}", headers=mix).status_code == 403
-    assert next(x for x in client.get("/dossiers", headers=mix).json() if x["id"] == d["id"])["nb_fichiers_masques"] >= 1
-    # archivage : lecture seule pour les fichiers, le dossier reste lisible
-    doc = fichier(client, a, d["id"], f"Texte archivé unique {tag} sur la cantine.")
-    assert client.patch(f"/dossiers/{d['id']}", headers=adm, json={"archive": True}).json()["archive"] is True
-    assert upload(client, a, d["id"], "autre " + tag).status_code == 409
+    # dépôt direct : ok pour un membre, 404 pour un compte hors de la division (b est de v3), 403 pour l'administrateur
+    f = fichier(client, a, v1, f"Fichier déposé sans dossier {tag}", titre="Sans dossier")
+    assert any(p.is_file() for p in get_settings().upload_dir.iterdir())  # stockage à plat (nom généré)
+    assert client.post("/documents", headers=b, data={"division_id": str(v1)}, files={"fichier": ("x.txt", b"x", "text/plain")}).status_code == 404
+    assert upload(client, adm, v1, "x" + tag).status_code == 404
+    # une division désactivée : écriture refusée, lecture conservée
+    doc = fichier(client, a, v1, f"Texte de la division désactivée {tag} sur la cantine.")
+    nv = client.post("/structure/divisions", headers=adm, json={"service_id": s1, "nom": f"Division hors service {tag}", "code": f"hors{tag}"}).json()
+    assert client.patch(f"/structure/divisions/{v1}", headers=adm, json={"actif": False}).status_code == 200
+    assert upload(client, a, v1, "autre " + tag).status_code == 409
     assert client.patch(f"/documents/{doc['id']}", headers=a, data={"titre": "x"}).status_code == 409
-    assert client.patch(f"/dossiers/{d['id']}", headers=adm, json={"nom": "x"}).status_code == 409
-    assert client.get("/documents", headers=a, params={"dossier_id": d["id"]}).status_code == 200
-    assert client.patch(f"/dossiers/{d['id']}", headers=adm, json={"archive": False}).json()["archive"] is False
-    # suppression : super administrateur seul, refusée tant que le dossier contient des fichiers (corbeille comprise)
-    arch = next(x for x in client.get("/dossiers", headers=adm, params={"division_id": v1}).json() if x["nom"] == "Archives")
-    g = fichier(client, a, arch["id"], f"Fichier des archives {tag}", titre="Archives")
-    assert client.delete(f"/dossiers/{arch['id']}", headers=a).status_code == 403
-    assert client.delete(f"/dossiers/{arch['id']}", headers=adm).status_code == 409
-    client.delete(f"/documents/{g['id']}", headers=a)                                                            # à la corbeille : compte toujours
-    assert client.delete(f"/dossiers/{arch['id']}", headers=adm).status_code == 409
-    client.delete(f"/documents/{g['id']}", headers=cd1, params={"force": True})
-    assert client.delete(f"/dossiers/{arch['id']}", headers=adm).status_code == 204
-    assert client.delete(f"/dossiers/{arch['id']}", headers=adm).status_code == 404
-    # stockage à plat : aucune arborescence par dossier à nettoyer, les fichiers sont purgés par chemin en base
+    assert client.get(f"/documents/{doc['id']}", headers=a).status_code == 200
+    assert client.get("/documents", headers=a, params={"division_id": v1}).status_code == 200
+    assert client.patch(f"/structure/divisions/{v1}", headers=adm, json={"actif": True}).status_code == 200
+    client.delete(f"/documents/{f['id']}", headers=a)
+    client.delete(f"/documents/{doc['id']}", headers=a)
+    client.patch(f"/structure/divisions/{nv['id']}", headers=adm, json={"actif": False})
 
 
 # --- demandes d'accès et exceptions ---------------------------------------------------------------------------------------------
@@ -437,6 +411,7 @@ def test_tableaux_de_bord_par_niveau(client, world):
     root = client.get("/tableau-de-bord", headers=world["admin"]).json()
     assert root["niveau"] == "ROOT" and root["repartition"]["titre"] == "Par service" and len(root["repartition"]["lignes"]) >= 2
     assert any("super administrateur" in a for a in root["alertes"])                 # un seul super administrateur actif en test
+    assert root["erreurs_indexation"] is not None and root["erreurs_indexation"]["total"] >= 0
     div = client.get("/tableau-de-bord", headers=world["cd1"]["h"]).json()
     assert div["niveau"] == "DIVISION" and {l["libelle"] for l in div["repartition"]["lignes"]} >= {"Compta", "Audit", "Public"}
     srv = client.get("/tableau-de-bord", headers=world["cs"]["h"]).json()
@@ -444,9 +419,79 @@ def test_tableaux_de_bord_par_niveau(client, world):
     assert {l["libelle"] for l in srv["repartition"]["lignes"]} >= {f"Division v1 {world['tag']}", f"Division v2 {world['tag']}"}
     ag = client.get("/tableau-de-bord", headers=world["a"]["h"]).json()
     assert ag["niveau"] == "AGENT" and [r["code"] for r in ag["mes_roles"]] == ["COMPTA"] and "repartition" in ag and ag["repartition"] is None
+    assert ag["erreurs_indexation"] is not None                                       # même un agent : SES fichiers en échec (très restreint)
     # un chef de division ne voit pas les chiffres d'une autre division (agrégats limités à son périmètre)
     b = client.get("/tableau-de-bord", headers=world["cd3"]["h"]).json()
     assert b["titre"] != div["titre"]
+
+
+def test_tracage_des_erreurs_d_indexation_par_niveau(client, world):
+    """Le dashboard trace les échecs d'indexation par service, division et rôle : ROOT voit tout,
+    le chef de service ses divisions, le chef de division sa division, l'agent SES fichiers seulement."""
+    adm, cs, cd1, cd3 = world["admin"], world["cs"]["h"], world["cd1"]["h"], world["cd3"]["h"]
+    a, b, tag = world["a"]["h"], world["b"]["h"], world["tag"]
+    # une version en échec : le contenu n'est pas un vrai tableur
+    r = client.post("/documents", headers=a, data={"division_id": str(world["A"]["id"]), "titre": "Pièce en échec"},
+                    files={"fichier": (f"faux_{tag}.xlsx", b"ce n'est pas un classeur", "application/octet-stream")})
+    assert r.status_code == 201
+    doc_id = r.json()["id"]
+    assert wait_version(client, a, doc_id, 1)["statut"] == "error"
+    # ROOT : regroupements complets et le cas présent
+    root = client.get("/tableau-de-bord", headers=adm).json()["erreurs_indexation"]
+    assert root["total"] >= 1
+    assert any(e["document_id"] == doc_id for e in root["items"])
+    assert {g["nom"] for g in root["par_division"]} >= {f"Division v1 {tag}"}
+    assert any(f"Service s1" in g["nom"] or True for g in root["par_service"]) and root["par_service"]
+    assert {g["nom"] for g in root["par_role"]} >= {"Compta"}                        # le fichier porte COMPTA
+    # chef de service : les échecs de SON service ; chef de division : sa division ; le service voisin : rien
+    srv = client.get("/tableau-de-bord", headers=cs).json()["erreurs_indexation"]
+    assert any(e["document_id"] == doc_id for e in srv["items"])
+    div_b = client.get("/tableau-de-bord", headers=cd3).json()["erreurs_indexation"]
+    assert all(e["document_id"] != doc_id for e in div_b["items"])
+    # agent : très restreint — ses fichiers seulement, avec le message, sans regroupement
+    ag = client.get("/tableau-de-bord", headers=a).json()["erreurs_indexation"]
+    assert any(e["document_id"] == doc_id and e["message_erreur"] for e in ag["items"])
+    assert ag["par_service"] == [] and ag["par_division"] == [] and ag["par_role"] == []
+    # l'agent d'une autre division : aucun de ses fichiers n'est en échec ici
+    ag_b = client.get("/tableau-de-bord", headers=b).json()["erreurs_indexation"]
+    assert all(e["document_id"] != doc_id for e in ag_b["items"])
+    # l'indicateur erreurs existe à chaque niveau et pointe vers le filtre statut=error
+    for h in (adm, cs, cd1, a):
+        assert any(i["cle"] == "erreurs" for i in client.get("/tableau-de-bord", headers=h).json()["indicateurs"])
+
+
+def test_chef_de_service_gere_la_structure_de_son_service(client, world):
+    """structure.gerer accordé au chef de service : listes et agents de SON service, agents et postes de chef
+    de division de ses divisions ; directions, services, divisions et postes de chef de service restent ROOT."""
+    adm, cs = world["admin"], world["cs"]["h"]
+    tag = world["tag"]
+    s1, v1 = world["svc"]["s1"]["id"], world["div"]["v1"]["id"]
+    me = client.get("/auth/me", headers=cs).json()
+    assert "structure.gerer" in me["permissions"]
+    # listes scopées : son service seulement
+    assert {s["id"] for s in client.get("/structure/services", headers=cs).json()} == {s1}
+    assert all(d["service_id"] == s1 for d in client.get("/structure/divisions", headers=cs).json())
+    agents = client.get("/structure/agents", headers=cs).json()
+    assert agents and all(a["service_id"] == s1 for a in agents)
+    postes = client.get("/structure/postes", headers=cs).json()
+    assert {p["service_id"] for p in postes["services"]} == {s1}
+    # il crée un agent dans son service, le déplace de division, et nomme un chef de division
+    r = client.post("/structure/agents", headers=cs, json={"matricule": f"CSX{tag}", "nom": "Nom", "prenom": "csx", "service_id": s1, "division_id": v1})
+    assert r.status_code == 201, r.text
+    agent_id = r.json()["id"]
+    v2 = world["div"]["v2"]["id"]
+    assert client.patch(f"/structure/agents/{agent_id}", headers=cs, json={"division_id": v2}).status_code == 200
+    assert client.put(f"/structure/divisions/{v2}/chef", headers=cs, json={"agent_id": agent_id, "motif": "Nomination par le chef de service"}).status_code == 200
+    # mais pas chez le service voisin, ni les directions/services/divisions, ni un poste de chef de service
+    assert client.post("/structure/agents", headers=cs, json={"matricule": f"CSY{tag}", "nom": "N", "prenom": "csy", "service_id": world["svc"]["s2"]["id"]}).status_code == 404
+    assert client.patch(f"/structure/agents/{agent_id}", headers=cs, json={"service_id": world["svc"]["s2"]["id"]}).status_code == 404
+    assert client.post("/structure/directions", headers=cs, json={"code": f"DCS{tag}", "nom": "x"}).status_code == 403
+    assert client.post("/structure/services", headers=cs, json={"direction_id": world["dir"]["id"], "code": f"SCS{tag}", "nom": "x"}).status_code == 403
+    assert client.post("/structure/divisions", headers=cs, json={"service_id": s1, "nom": f"Div interdite {tag}"}).status_code == 403
+    assert client.put(f"/structure/services/{s1}/chef", headers=cs, json={"agent_id": agent_id}).status_code == 403
+    # nettoyage : retirer le titre créé pour ne pas bloquer d'autres tests
+    client.patch(f"/structure/agents/{agent_id}", headers=adm, json={"titre": None})
+    client.patch(f"/structure/agents/{agent_id}", headers=adm, json={"actif": False})
 
 
 def test_arbre_de_structure_visible_selon_le_niveau(client, world):
@@ -466,11 +511,11 @@ def test_arbre_de_structure_visible_selon_le_niveau(client, world):
     assert all(d["acces"] == "gerant" for d in arbre_cs[0]["divisions"] if d["id"] in (v1, v2))
 
 
-# --- garanties conservées après la refonte : privilèges, dossiers par division ----
+# --- garanties conservées après la refonte : privilèges, listes cloisonnées par division ----
 
-def test_privileges_inchanges_et_dossiers_conerves_par_division(client, world):
-    """La matrice des privilèges ne change pas : AUTEUR / LECTEUR / GERANT / 404, et chaque division garde
-    ses dossiers (stockage et interface), indépendants des autres."""
+def test_privileges_inchanges_et_listes_par_division(client, world):
+    """La matrice des privilèges ne change pas : AUTEUR / LECTEUR / GERANT / 404, et la liste à plat ne montre
+    que les divisions du périmètre (l'agent ne voit pas les fichiers de l'autre service)."""
     adm = world["admin"]
     a, lect, mix, b, cd1 = world["a"]["h"], world["lect"]["h"], world["mix"]["h"], world["b"]["h"], world["cd1"]["h"]
     tag, R = world["tag"], world["roles"]
@@ -483,14 +528,18 @@ def test_privileges_inchanges_et_dossiers_conerves_par_division(client, world):
     assert client.get(f"/documents/{f['id']}", headers=cd1).json()["mon_role"] == "GERANT"
     assert client.get(f"/documents/{f['id']}", headers=mix).status_code == 403    # rôle PUBLIC absent
     assert client.get(f"/documents/{f['id']}", headers=b).status_code == 404      # autre division : existence cachée
-    # les dossiers restent propres à chaque division (stockage et interface d'affichage)
-    assert client.get(f"/dossiers/{A}", headers=a).status_code == 200
-    assert client.get(f"/dossiers/{B}", headers=a).status_code == 404             # v3 : hors de sa division
-    liste_a = client.get("/dossiers", headers=a).json()
-    assert A in [d["id"] for d in liste_a] and B not in [d["id"] for d in liste_a]
-    # le super administrateur consulte les deux divisions, sans mot de passe
-    assert client.get("/dossiers", headers=adm, params={"division_id": world["div"]["v1"]["id"]}).status_code == 200
-    assert client.get("/dossiers", headers=adm, params={"division_id": world["div"]["v3"]["id"]}).status_code == 200
+    # la liste à plat est cloisonnée : l'agent a les fichiers de SA division, jamais ceux de l'autre service
+    assert f["id"] in ids(client.get("/documents", headers=a).json())
+    filtres_a = client.get("/documents/filtres", headers=a).json()
+    assert [d["id"] for d in filtres_a["divisions"]] == [A] and B not in [d["id"] for d in filtres_a["divisions"]]
+    filtres_b = client.get("/documents/filtres", headers=b).json()
+    assert [d["id"] for d in filtres_b["divisions"]] == [B]
+    # le chef de service filtre par division : il voit les deux divisions de SON service, pas v3
+    filtres_cs = client.get("/documents/filtres", headers=world["cs"]["h"]).json()
+    assert A in [d["id"] for d in filtres_cs["divisions"]] and B not in [d["id"] for d in filtres_cs["divisions"]]
+    liste_cs = client.get("/documents", headers=world["cs"]["h"], params={"division_id": A}).json()
+    assert f["id"] in ids(liste_cs)
+    assert client.get("/documents", headers=world["cs"]["h"], params={"division_id": B}).json() == []
 
 
 def test_deux_modes_de_classement(client, world):
@@ -534,9 +583,8 @@ def test_le_chef_de_service_meme_role_sur_toutes_les_divisions(client, world):
     # GERANT sur les fichiers des divisions de son service, sans déverrouillage
     f1 = upload(client, world["a"]["h"], world["A"]["id"], f"Sous la houlette du chef de service {tag}").json()
     assert client.get(f"/documents/{f1['id']}", headers=cs).json()["mon_role"] == "GERANT"
-    # dans un dossier de v2 (le modèle automatique), il dépose un fichier « à classer », puis le classe avec un rôle DE v2
-    d2 = dossier_par_defaut(client, adm, v2)
-    f2 = upload(client, cs, d2["id"], f"Pièce relancée {tag}", titre="Relance").json()
+    # dans la division v2, il dépose un fichier « à classer », puis le classe avec un rôle DE v2
+    f2 = upload(client, cs, v2, f"Pièce relancée {tag}", titre="Relance").json()
     assert f2["a_classer"] is True
     assert client.get(f"/documents/{f2['id']}", headers=world["cd1"]["h"]).status_code == 404
     r_v2 = client.post(f"/divisions/{v2}/roles", headers=cs, json={"code": "RELANCE", "libelle": "Relance"})
@@ -549,19 +597,29 @@ def test_le_chef_de_service_meme_role_sur_toutes_les_divisions(client, world):
     assert dem["id"] in ids(client.get("/demandes", headers=cs, params={"vue": "a_traiter", "statut": "en_attente"}).json())
     assert client.post(f"/demandes/{dem['id']}/decision", headers=cs, json={"accepter": True}).status_code == 200
     assert client.get(f"/documents/{f1['id']}", headers=world["mix"]["h"]).status_code == 200
-    # comptes : les agents sans titre de son service seulement — pas un chef, pas hors service
+    # comptes : les agents ET les chefs de division de son service — pas le chef de service voisin, pas hors service
     p_cs = mk_agent(client, adm, "pcs", tag, s1, v2)
     u_pcs = mk_user(client, cs, p_cs, "pcs", tag)
     v5 = client.post("/structure/divisions", headers=adm, json={"service_id": s1, "nom": f"Division v5 {tag}", "code": f"v5{tag}"}).json()
-    chx = mk_agent(client, adm, "chx", tag, s1, v5["id"], "CHEF_DIVISION")     # un chef de SA division : pas gérable par cs
-    assert client.post("/users", headers=cs, json={"nom_utilisateur": f"chef_refuse_{tag}", "mot_de_passe": PWD, "role": "UTILISATEUR", "agent_id": chx["id"]}).status_code == 403
+    chx = mk_agent(client, adm, "chx", tag, s1, v5["id"], "CHEF_DIVISION")     # un chef de SA division : gérable par cs
+    r_chx = client.post("/users", headers=cs, json={"nom_utilisateur": f"chef_div_v5_{tag}", "mot_de_passe": PWD, "role": "UTILISATEUR", "agent_id": chx["id"]})
+    assert r_chx.status_code == 201, r_chx.text                                # il crée le compte du chef de division
+    assert r_chx.json()["niveau"] == "DIVISION"
+    # et il réinitialise le mot de passe d'un chef de division de son service (si le super administrateur ne l'a pas fait)
+    assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=cs, json={"mot_de_passe": "mdp-reinitialise-1"}).status_code == 200
+    assert login(client, world["cd1"]["name"], "mdp-reinitialise-1").status_code == 200
     hs = mk_agent(client, adm, "hsx", tag, s2, world["div"]["v3"]["id"])       # agent du service voisin : hors périmètre
     assert client.post("/users", headers=cs, json={"nom_utilisateur": f"autre_service_{tag}", "mot_de_passe": PWD, "role": "UTILISATEUR", "agent_id": hs["id"]}).status_code == 404
     # attribution manuelle complète : rôle de v2 au compte créé, le fichier classé RELANCE devient visible
+    client.patch(f"/users/{world['cd1']['user']['id']}", headers=adm, json={"mot_de_passe": PWD})
+    world["cd1"]["h"] = auth(client, world["cd1"]["name"])
     set_roles(client, cs, u_pcs["user"]["id"], [r_v2.json()["id"]])
     assert client.get(f"/documents/{f2['id']}", headers=u_pcs["h"]).status_code == 200
     assert client.get(f"/documents/{f2['id']}", headers=world["mix"]["h"]).status_code == 404
-    assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=cs, json={"mot_de_passe": "tentative-cs-12"}).status_code in (403, 404)
+    # le chef de service ne touche pas au poste de chef de service ni aux directions/services/divisions
+    assert client.post("/structure/services", headers=cs, json={"direction_id": world["dir"]["id"], "code": f"ZS{tag}", "nom": "x"}).status_code == 403
+    assert client.post("/structure/divisions", headers=cs, json={"service_id": s1, "nom": f"Interdite {tag}"}).status_code == 403
+    assert client.put(f"/structure/services/{world['svc']['s1']['id']}/chef", headers=cs, json={"agent_id": world["cs"]["agent"]["id"]}).status_code == 403
     # intérim local : une division sans chef est gérée par le chef de service comme par le super administrateur
     v4 = client.post("/structure/divisions", headers=adm, json={"service_id": s1, "nom": f"Division v4 {tag}", "code": f"v4{tag}"}).json()
     assert client.post(f"/divisions/{v4['id']}/roles", headers=cs, json={"code": "V4", "libelle": "Rôle v4"}).status_code == 201

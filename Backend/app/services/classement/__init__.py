@@ -98,7 +98,7 @@ def appliquer(db, doc, version, texte: str) -> None:
 
     L’algorithme suit la stratégie du plan GED :
     - on récupère les règles actives triées par priorité ;
-    - on évalue le contexte (nom, extension, texte, dossier, service, taille, pages, OCR) ;
+    - on évalue le contexte (nom, extension, texte, service, taille, pages, OCR) ;
     - on met à jour le document et ses tags auto ;
     - on laisse le flag `classement_source = 'manuel'` empêcher toute écriture automatique.
     """
@@ -106,7 +106,6 @@ def appliquer(db, doc, version, texte: str) -> None:
         return
 
     contexte = {
-        "dossier_id": getattr(doc, "dossier_id", None),
         "service_createur_id": getattr(doc, "cree_par_service_id", None),
         "extension": (Path(getattr(version, "nom_fichier", "")).suffix or "").lstrip("."),
         "nom_fichier": getattr(version, "nom_fichier", ""),
@@ -192,7 +191,7 @@ def charger_noms(db) -> dict[str, dict[int, dict[str, Any]]]:
     """Noms (et couleurs) des entités citées par les statistiques, pour que l'interface affiche des libellés et non des numéros."""
     from sqlalchemy import select
 
-    from app.db.metier import Categorie, Direction, Dossier, Service, TypeDocument
+    from app.db.metier import Categorie, Direction, Service, TypeDocument
 
     def table(*columns):
         return {row[0]: {"nom": row[1], "couleur": row[2] if len(row) > 2 else None} for row in db.execute(select(*columns)).all()}
@@ -202,7 +201,6 @@ def charger_noms(db) -> dict[str, dict[int, dict[str, Any]]]:
         "type": table(TypeDocument.id, TypeDocument.nom),
         "service": table(Service.id, Service.nom),
         "direction": table(Direction.id, Direction.nom),
-        "dossier": table(Dossier.id, Dossier.nom),
     }
 
 
@@ -213,7 +211,7 @@ def build_dashboard_stats(rows: list[dict[str, Any]], noms: dict[str, dict[int, 
     """
     noms = noms or {}
     statut = {"pending": 0, "processing": 0, "ready": 0, "error": 0}
-    groupes: dict[str, defaultdict[int, int]] = {k: defaultdict(int) for k in ("categorie", "type", "service", "direction", "dossier")}
+    groupes: dict[str, defaultdict[int, int]] = {k: defaultdict(int) for k in ("categorie", "type", "service", "direction")}
     par_confidentialite: defaultdict[str, int] = defaultdict(int)
     par_extension: defaultdict[str, int] = defaultdict(int)
     total_documents = actifs = corbeille = sans_classement = 0
@@ -233,7 +231,7 @@ def build_dashboard_stats(rows: list[dict[str, Any]], noms: dict[str, dict[int, 
         versions += int(row.get("nb_versions") or 1)
 
         for groupe, champ in (("categorie", "categorie_id"), ("type", "type_document_id"), ("service", "service_id"),
-                              ("direction", "direction_id"), ("dossier", "dossier_id")):
+                              ("direction", "direction_id")):
             valeur = row.get(champ)
             if valeur is not None:
                 groupes[groupe][int(valeur)] += 1
@@ -267,5 +265,4 @@ def build_dashboard_stats(rows: list[dict[str, Any]], noms: dict[str, dict[int, 
         "par_extension": dict(sorted(par_extension.items())),
         "par_service": lignes("service", "service_id"),
         "par_direction": lignes("direction", "direction_id"),
-        "par_dossier": lignes("dossier", "dossier_id"),
     }

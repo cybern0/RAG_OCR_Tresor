@@ -1,14 +1,17 @@
-// Tableau de bord d'accueil : le contenu dépend du niveau du compte (ROOT, SERVICE, DIVISION, AGENT) ; tout vient du serveur.
+// Tableau de bord d'accueil : le contenu dépend du niveau du compte (SERVICE, DIVISION, AGENT) ; tout vient du serveur.
+// Le super administrateur n'a pas d'Accueil : il est redirigé vers son tableau de bord /admin.
+// Chaque niveau reçoit aussi la traçabilité des erreurs d'indexation dans son périmètre (l'agent : ses fichiers seulement).
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import { errorMessage } from '../../shared/api/client'
 import { formatDate } from '../../shared/lib/format'
+import { useAuth } from '../auth/session'
 import Badge from '../../shared/ui/Badge'
 import { ErrorBox, Loading } from '../../shared/ui/Feedback'
 import PageHeader from '../../shared/ui/PageHeader'
 import { cn } from '../../shared/lib/cn'
 import { fetchTableauDeBord } from './api'
-import type { FichierBrief } from './api'
+import type { ErreursIndexation, FichierBrief } from './api'
 
 const TON = { neutre: 'border-gold-500/20', attention: 'border-amber-400/60', alerte: 'border-red-400/70' } as const
 
@@ -18,15 +21,46 @@ function Fichiers({ titre, items }: { titre: string; items: FichierBrief[] }) {
     <section className="card p-4"><h2 className="mb-2 font-semibold text-gold-300">{titre}</h2>
       <ul className="divide-y divide-gold-500/10 text-sm">
         {items.map((f) => (
-          <li key={f.id} className="py-1.5"><Link className="text-gold-300 hover:underline" to={`/dossiers/${f.dossier_id}/fichiers/${f.id}`}>{f.titre}</Link>
-            <span className="text-cream-300"> · {f.dossier_nom}{f.depose_par ? ` · ${f.depose_par}` : ''} · {formatDate(f.depose_le)}</span></li>
+          <li key={f.id} className="py-1.5"><Link className="text-gold-300 hover:underline" to={`/fichiers/${f.id}`}>{f.titre}</Link>
+            <span className="text-cream-300"> · {f.division_nom}{f.depose_par ? ` · ${f.depose_par}` : ''} · {formatDate(f.depose_le)}</span></li>
         ))}
       </ul></section>
   )
 }
 
+function Erreurs({ erreurs, restreint }: { erreurs: ErreursIndexation; restreint: boolean }) {
+  if (erreurs.total === 0) return null
+  const groupes = [erreurs.par_service, erreurs.par_division, erreurs.par_role]
+  return (
+    <section className="card border-red-400/40 p-4" id="erreurs">
+      <h2 className="mb-1 font-semibold text-gold-300">{restreint ? 'Mes fichiers en échec d’indexation' : 'Erreurs d’indexation'}</h2>
+      {!restreint && <p className="mb-2 text-xs text-cream-300">Traçage par service, division et rôle : retrouvez chaque échec d’ingestion et son message.</p>}
+      <p className="mb-3 text-sm text-red-200">{erreurs.total} version(s) en échec{restreint ? '' : ' dans votre périmètre'} — vérifiez le service (OCR, Ollama) puis redéposez comme nouvelle version.</p>
+      {!restreint && groupes.some((g) => g.length > 0) && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {groupes.map((groupe, i) => groupe.slice(0, 6).map((g) => (
+            <Badge key={`${i}-${g.nom}`} tone={i === 0 ? 'amber' : 'gray'}>{g.nom} : {g.total}</Badge>
+          )))}
+        </div>
+      )}
+      <ul className="divide-y divide-gold-500/10 text-sm">
+        {erreurs.items.map((e) => (
+          <li key={`${e.document_id}-${e.version_numero}`} className="py-2">
+            <Link className="text-gold-300 hover:underline" to={`/fichiers/${e.document_id}`}>{e.titre}</Link>
+            <span className="text-cream-300"> · v{e.version_numero} · {e.division_nom}{e.service_nom ? ` (${e.service_nom})` : ''}{e.roles.length ? ` · ${e.roles.join(', ')}` : ''} · {formatDate(e.cree_le)}</span>
+            {e.message_erreur && <p className="mt-0.5 text-xs text-red-200">{e.message_erreur}</p>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 export function Component() {
+  const { user } = useAuth()
   const q = useQuery({ queryKey: ['tableau-de-bord'], queryFn: fetchTableauDeBord, refetchInterval: 60_000 })
+  // le super administrateur n'a pas d'Accueil : première page = son tableau de bord (avant tout rendu de données)
+  if (user?.niveau === 'ROOT') return <Navigate to="/admin" replace />
   if (q.isLoading) return <Loading />
   if (q.error || !q.data) return <ErrorBox message={errorMessage(q.error)} />
   const t = q.data
@@ -50,6 +84,7 @@ export function Component() {
                 {t.repartition!.colonnes.map((c) => <td key={c.cle} className="td text-right">{l.valeurs[c.cle] ?? 0}</td>)}
               </tr>))}</tbody></table></section>
       )}
+      {t.erreurs_indexation && <Erreurs erreurs={t.erreurs_indexation} restreint={t.niveau === 'AGENT'} />}
       <Fichiers titre="Fichiers à classer" items={t.a_classer} />
       <Fichiers titre="Mes fichiers récents" items={t.mes_fichiers} />
       {t.mes_roles.length > 0 && <section className="card p-4"><h2 className="mb-2 font-semibold text-gold-300">Mes rôles</h2><div className="flex flex-wrap gap-2">{t.mes_roles.map((r) => <Badge key={r.id} tone="gold">{r.libelle}</Badge>)}</div></section>}

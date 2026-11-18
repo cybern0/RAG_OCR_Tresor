@@ -35,10 +35,6 @@ class Settings(BaseSettings):
     upload_dir: Path = BASE_DIR / "storage" / "uploads"
     max_upload_mb: int = 50
 
-    # Modèle des dossiers : le même jeu est créé automatiquement dans chaque nouvelle division
-    # (pas de création manuelle). Surchargeable via .env, ex. DOSSIERS_DEFAUT='["Courrier","Archives"]'.
-    dossiers_defaut: list[str] = ["Courrier entrant", "Courrier sortant", "Notes de service", "Rapports", "Archives"]
-
     # Sécurité
     secret_key: str = ""
     token_ttl_minutes: int = 480

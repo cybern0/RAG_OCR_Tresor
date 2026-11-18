@@ -21,11 +21,11 @@ export interface RuleItem {
 export interface SimulationResult { categorie_id: number | null; type_document_id: number | null; tags: string[]; confidentialite: string | null }
 
 /** Ligne groupée des statistiques : le serveur fournit le libellé (nom), jamais seulement un numéro. */
-export interface StatLine { total: number; nom: string | null; couleur?: string | null; categorie_id?: number; type_document_id?: number; service_id?: number; direction_id?: number; dossier_id?: number }
+export interface StatLine { total: number; nom: string | null; couleur?: string | null; categorie_id?: number; type_document_id?: number; service_id?: number; direction_id?: number }
 export interface DashboardStats {
   total_documents: number; actifs: number; corbeille: number; sans_classement: number; stockage_octets: number; nb_versions: number
   statut: Record<string, number>
-  par_categorie: StatLine[]; par_type: StatLine[]; par_service: StatLine[]; par_direction: StatLine[]; par_dossier: StatLine[]
+  par_categorie: StatLine[]; par_type: StatLine[]; par_service: StatLine[]; par_direction: StatLine[]
   par_confidentialite: Record<string, number>; par_extension: Record<string, number>
 }
 

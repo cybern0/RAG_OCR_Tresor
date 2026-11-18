@@ -9,7 +9,7 @@
 SET search_path TO rag_sys, public;
 
 INSERT INTO permission (code, libelle) VALUES
-    ('document.lister', 'Consulter les dossiers et les fichiers accessibles'),
+    ('document.lister', 'Consulter les fichiers accessibles'),
     ('chat.utiliser', 'Interroger l''assistant'),
     ('utilisateur.lister', 'Lister les comptes de son périmètre'),
     ('utilisateur.creer', 'Créer un compte dans son périmètre'),

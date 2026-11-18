@@ -30,7 +30,7 @@ function Sources({ message }: { message: ChatMessage }) {
           <li key={s.ref} className="rounded-lg border border-gold-500/30 bg-leaf-950/50 p-2.5">
             <p className="font-medium text-gold-300">
               [{s.ref}]{' '}
-              {s.dossier_id ? <Link className="underline decoration-dotted underline-offset-2" to={`/dossiers/${s.dossier_id}/fichiers/${s.document_id}`}>{s.titre}</Link> : s.titre}
+              {<Link className="underline decoration-dotted underline-offset-2" to={`/fichiers/${s.document_id}`}>{s.titre}</Link>}
               {s.version ? <span className="text-cream-300"> · version {s.version}{s.date ? ` du ${formatDay(s.date)}` : ''}</span> : null}
               {s.page ? <span className="text-cream-300"> · page {s.page}</span> : null}
             </p>

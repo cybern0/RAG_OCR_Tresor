@@ -2,7 +2,7 @@
 
 Format : Server-Sent Events. Événements, dans l'ordre :
   meta    {conversation_id}
-  sources [{ref, document_id, dossier_id, titre, version, date, page, extrait}, ...]
+  sources [{ref, document_id, titre, version, date, page, extrait}, ...]
   token   {t: "texte"}        (répété)
   done    {message_id}
   error   {detail}            (à la place de done si la génération échoue)

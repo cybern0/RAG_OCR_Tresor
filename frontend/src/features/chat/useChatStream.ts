@@ -13,7 +13,7 @@ export interface ChatMessage {
   role: 'utilisateur' | 'assistant'
   text: string
   sources: Source[]
-  masque?: boolean // réponse masquée : accès perdu à l'un des dossiers cités
+  masque?: boolean // réponse masquée : accès perdu à l'un des fichiers cités
 }
 
 export function useChatStream(conversationId: number | null, onCreated: (id: number) => void) {

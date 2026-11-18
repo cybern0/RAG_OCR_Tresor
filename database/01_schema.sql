@@ -1,4 +1,4 @@
--- 01 - Schéma complet de la GED hiérarchique : Direction -> Service -> Division -> dossiers (un seul niveau) -> fichiers.
+-- 01 - Schéma complet de la GED hiérarchique : Direction -> Service -> Division -> fichiers (déposés à plat, classés par rôles).
 --
 -- Base NEUVE uniquement (aucune migration). Tout ou rien : une seule transaction, arrêt à la première erreur.
 --   psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/01_schema.sql
@@ -9,7 +9,7 @@
 -- Garanties portées par la BASE (et pas seulement par l'API) :
 --   * un seul chef de division actif par division et un seul chef de service actif par service (index uniques partiels) ;
 --   * un agent est toujours d'un service ET d'une division de ce service (clé étrangère composite) ;
---   * un dossier, un fichier et les rôles d'un fichier restent dans UNE division (clés étrangères composites) ;
+--   * un fichier et les rôles d'un fichier restent dans UNE division (clé étrangère sur division) ;
 --   * l'historique de traçabilité est en ajout seul, chaîné par hash calculé par la base (déclencheurs).
 -- La dimension des embeddings (768, EmbeddingGemma) est à changer ici si le modèle change ; ils sont toujours normalisés (norme 1).
 
@@ -59,7 +59,7 @@ CREATE INDEX idx_division_service ON division (service_id);
 -- Un agent appartient à UN service et, sauf s'il est chef de service, à UNE division de ce service.
 -- Le titre vaut rôle d'administration : CHEF_DIVISION (avec division), CHEF_SERVICE (sans division :
 -- le même rôle que le chef de division, étendu à toutes les divisions de son service) ou vide.
--- Les mots de passe de dossier restent réservés au super administrateur (rôle global ADMIN).
+-- Les comptes se créent par le super administrateur, le chef de service (son service) ou le chef de division (sa division).
 CREATE TABLE agent (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     matricule VARCHAR(50) NOT NULL UNIQUE,
@@ -206,28 +206,12 @@ CREATE TABLE regle_classement (
     modifie_le TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 5. Dossiers (un seul niveau), fichiers, versions, passages vectoriels -----------------------------------------------------
+-- 5. Fichiers, versions, passages vectoriels ----------------------------------------------------------------------
 
--- Un dossier appartient à UNE division, à un seul niveau : le backend pose à la création de la division
--- le jeu du modèle configuré (DOSSIERS_DEFAUT) — aucune création manuelle. Il n'a ni login, ni rôle :
--- il est visible de toute la division et ce sont les fichiers qu'il contient qui portent des rôles.
-CREATE TABLE dossier (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    division_id BIGINT NOT NULL REFERENCES division(id),
-    nom VARCHAR(150) NOT NULL,
-    description TEXT,
-    archive BOOLEAN NOT NULL DEFAULT FALSE,
-    cree_par BIGINT REFERENCES _user(id) ON DELETE SET NULL,
-    cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    modifie_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_dossier_id_division UNIQUE (id, division_id)
-);
-CREATE UNIQUE INDEX uq_dossier_nom ON dossier (division_id, lower(nom));
-CREATE TRIGGER trg_dossier_modifie_le BEFORE UPDATE ON dossier FOR EACH ROW EXECUTE FUNCTION maj_modifie_le();
-
+-- Un fichier est déposé DIRECTEMENT dans UNE division (plus de dossiers) : la division est la frontière
+-- d'accès et ce sont les rôles de classement (document_role) qui décident qui lit quoi.
 CREATE TABLE document (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    dossier_id BIGINT NOT NULL,
     division_id BIGINT NOT NULL REFERENCES division(id),
     titre VARCHAR(250) NOT NULL,
     categorie_id BIGINT REFERENCES categorie(id) ON DELETE SET NULL,
@@ -243,10 +227,8 @@ CREATE TABLE document (
     cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     modifie_par BIGINT REFERENCES _user(id) ON DELETE SET NULL,
     modifie_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_document_id_division UNIQUE (id, division_id),
-    CONSTRAINT fk_document_dossier_division FOREIGN KEY (dossier_id, division_id) REFERENCES dossier (id, division_id)
+    CONSTRAINT uq_document_id_division UNIQUE (id, division_id)  -- cible des clés composites de document_role
 );
-CREATE INDEX idx_document_dossier ON document (dossier_id);
 CREATE INDEX idx_document_division ON document (division_id);
 CREATE INDEX idx_document_categorie ON document (categorie_id);
 CREATE INDEX idx_document_type_document ON document (type_document_id);
@@ -310,7 +292,7 @@ CREATE INDEX idx_chunk_embedding ON chunk USING hnsw (embedding vector_ip_ops);
 
 CREATE TABLE commentaire (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    sujet_type VARCHAR(20) NOT NULL CHECK (sujet_type IN ('document', 'dossier')),
+    sujet_type VARCHAR(20) NOT NULL CHECK (sujet_type IN ('document')),
     sujet_id BIGINT NOT NULL,
     auteur_id BIGINT NOT NULL REFERENCES _user(id) ON DELETE CASCADE,
     contenu TEXT NOT NULL,
@@ -500,7 +482,6 @@ CREATE INDEX idx_notification_destinataire ON notification (destinataire_user_id
 CREATE VIEW vue_document_stats AS
 SELECT
     d.id AS document_id,
-    d.dossier_id,
     d.division_id,
     d.categorie_id,
     d.type_document_id,

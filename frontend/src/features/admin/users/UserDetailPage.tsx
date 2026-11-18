@@ -33,7 +33,7 @@ function generatePassword(length = 14): string {
   return out
 }
 
-function AccountForm({ target, canEdit, isSelf }: { target: UserOut; canEdit: boolean; isSelf: boolean }) {
+function AccountForm({ target, canEdit, canChangeRole, isSelf }: { target: UserOut; canEdit: boolean; canChangeRole: boolean; isSelf: boolean }) {
   const toast = useToast()
   const agents = useAgents()
   const [role, setRole] = useState<Role>(target.role)
@@ -60,12 +60,13 @@ function AccountForm({ target, canEdit, isSelf }: { target: UserOut; canEdit: bo
       <h2 className="font-semibold text-gold-400">Compte</h2>
       <Field label="Rôle">
         {(id) => (
-          <select id={id} className="input" disabled={!canEdit || isSelf} value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="UTILISATEUR">Utilisateur (accès par dossiers)</option><option value="ADMIN">Administrateur (tout)</option>
+          <select id={id} className="input" disabled={!canChangeRole || isSelf} value={role} onChange={(e) => setRole(e.target.value as Role)}>
+            <option value="UTILISATEUR">Utilisateur (accès par rôles)</option>
+            {canChangeRole && <option value="ADMIN">Administrateur (tout)</option>}
           </select>
         )}
       </Field>
-      <Field label={`Agent${role === 'UTILISATEUR' ? '' : ' (facultatif)'}`} hint="Son service en découle : il détermine les dossiers accessibles par service.">
+      <Field label={`Agent${role === 'UTILISATEUR' ? '' : ' (facultatif)'}`} hint="Son service et sa division en découlent : ils déterminent les fichiers accessibles.">
         {(id) => (
           <select id={id} className="input" disabled={!canEdit} required={role === 'UTILISATEUR'} value={agentId} onChange={(e) => setAgentId(e.target.value ? Number(e.target.value) : '')}>
             <option value="">— Aucun —</option>
@@ -152,7 +153,7 @@ export function Component() {
         title={u.nom_utilisateur}
         description={<span className="flex flex-wrap items-center gap-2">{u.actif ? <Badge tone="green">Actif</Badge> : <Badge tone="red">Désactivé</Badge>}<Badge tone={u.role === 'ADMIN' ? 'gold' : 'gray'}>{u.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur'}</Badge>{isSelf && <span>(vous)</span>} · dernière connexion : {formatDate(u.derniere_connexion)}</span>} />
       <div className="grid max-w-5xl gap-5 lg:grid-cols-2">
-        <AccountForm key={`${u.role}-${u.agent?.id}-${u.actif}`} target={u} canEdit={canEdit} isSelf={isSelf} />
+        <AccountForm key={`${u.role}-${u.agent?.id}-${u.actif}`} target={u} canEdit={canEdit} canChangeRole={canEdit && me?.niveau === 'ROOT'} isSelf={isSelf} />
         {u.agent?.division_id ? <RolesAgentPanel userId={u.id} divisionId={u.agent.division_id} divisionNom={u.agent.division_nom ?? ''} /> : null}
         {canEdit ? <PasswordReset key={u.id} target={u} isSelf={isSelf} /> : null}
       </div>

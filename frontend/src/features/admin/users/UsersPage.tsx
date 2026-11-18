@@ -23,6 +23,7 @@ import { adminKeys, useAdminMutation, useAgents, useUsers } from '../queries'
 
 function CreateUserModal({ onClose }: { onClose: () => void }) {
   const toast = useToast()
+  const { user: me } = useAuth()
   const navigate = useNavigate()
   const agents = useAgents()
   const [username, setUsername] = useState('')
@@ -64,10 +65,11 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         <Field label="Mot de passe initial" hint="10 caractères minimum. L’utilisateur pourra le changer depuis son profil.">
           {(id) => <input id={id} type="password" className="input" required minLength={10} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />}
         </Field>
-        <Field label="Rôle">
+        <Field label="Rôle" hint={me?.niveau !== 'ROOT' ? 'Seul le super administrateur crée un compte administrateur.' : undefined}>
           {(id) => (
             <select id={id} className="input" value={role} onChange={(e) => setRole(e.target.value as Role)}>
-              <option value="UTILISATEUR">Utilisateur (accès par dossiers)</option><option value="ADMIN">Administrateur (tout)</option>
+              <option value="UTILISATEUR">Utilisateur (accès par rôles)</option>
+              {me?.niveau === 'ROOT' && <option value="ADMIN">Administrateur (tout)</option>}
             </select>
           )}
         </Field>

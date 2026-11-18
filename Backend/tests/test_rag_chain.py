@@ -16,7 +16,7 @@ from app.services.retrieval.similarity_search import RetrievedChunk, dynamic_k
 def _chunk(i=1, page=3, text="Le délai de paiement est de 30 jours."):
     return RetrievedChunk(
         chunk_id=i, document_id=10 + i, titre="Contrat A", page=page, contenu=text, est_tableau=False,
-        dossier_id=7, version=2, date_version=datetime(2026, 11, 12, 9, 0), est_derniere=True, taille_ref=20,
+        version=2, date_version=datetime(2026, 11, 12, 9, 0), est_derniere=True, taille_ref=20,
     )
 
 
@@ -36,7 +36,7 @@ def test_sources_numerotees_et_extrait_court():
     assert sources[0]["titre"] == "Contrat A" and sources[0]["page"] == 3
     assert len(sources[0]["extrait"]) <= rag_chain.EXTRACT_CHARS
     assert sources[1]["page"] is None
-    assert sources[0]["dossier_id"] == 7 and sources[0]["version"] == 2 and sources[0]["date"].startswith("2026-11-12")
+    assert sources[0]["version"] == 2 and sources[0]["date"].startswith("2026-11-12")
 
 
 def test_contexte_du_prompt_contient_refs_et_pages():
@@ -63,8 +63,8 @@ def test_historique_masque_les_reponses_d_un_fichier_perdu(monkeypatch):
     def msg(i, who, sources):
         return SimpleNamespace(id=i, emetteur=who, contenu=f"texte {i}", sources=sources)
 
-    rows = [msg(1, "utilisateur", []), msg(2, "assistant", [{"document_id": 1, "dossier_id": 7}]),
-            msg(3, "assistant", [{"document_id": 2, "dossier_id": 8}]), msg(4, "assistant", [])]
+    rows = [msg(1, "utilisateur", []), msg(2, "assistant", [{"document_id": 1}]),
+            msg(3, "assistant", [{"document_id": 2}]), msg(4, "assistant", [])]
     monkeypatch.setattr(history, "ids_documents_accessibles", lambda db, principal, ids: {1} & set(ids))
     out = filter_visible(None, rows, None)
     assert [v.masque for v in out] == [False, False, True, False]

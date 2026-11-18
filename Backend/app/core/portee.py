@@ -1,8 +1,10 @@
 """Périmètre administratif des COMPTES dans la hiérarchie (lecture et gestion).
 
 Lecture  : ROOT tout ; chef de service les comptes de son service ; chef de division ceux de sa division.
-Gestion  : ROOT tout ; chef de service ou chef de division (ou intérimaire) -> les agents SANS titre de leurs divisions.
-           Les titres (chefs) et les super administrateurs ne se gèrent que par un super administrateur.
+Gestion  : ROOT tout ; chef de service -> les agents de son service, y compris les CHEF DE DIVISION (création
+           de compte, mot de passe, rôles) mais pas l'autre chef de service ; chef de division (ou intérimaire)
+           -> les agents SANS titre de leurs divisions.
+           Les titres de chef et les super administrateurs ne se gèrent que par un super administrateur.
 Gérer un compte relève de l'identité, pas du contenu.
 """
 
@@ -11,7 +13,13 @@ from sqlalchemy import ColumnElement, false
 from sqlalchemy.orm import Session
 
 from app.core.acces import peut_gerer_division
-from app.core.permissions import NIVEAU_DIVISION, NIVEAU_ROOT, NIVEAU_SERVICE, Principal
+from app.core.permissions import (
+    NIVEAU_DIVISION,
+    NIVEAU_ROOT,
+    NIVEAU_SERVICE,
+    TITRE_CHEF_SERVICE,
+    Principal,
+)
 from app.db.metier import Agent, Division, User
 
 
@@ -32,16 +40,23 @@ def voit_agent(principal: Principal, agent: Agent | None) -> bool:
     if agent is None:
         return False
     if principal.niveau == NIVEAU_SERVICE:
-        return agent.division_id is not None and agent.service_id == principal.service_id
+        return agent.service_id == principal.service_id
     if principal.niveau == NIVEAU_DIVISION:
         return agent.division_id is not None and agent.division_id == principal.division_id
     return False
 
 
 def gere_agent(db: Session, principal: Principal, agent: Agent | None) -> bool:
+    """Le chef de service gère les comptes de son service, y compris les chefs de division (création,
+    mot de passe, rôles) — pas l'autre chef de service ; le chef de division gère les agents sans titre
+    de sa division ; les super administrateurs tout."""
     if principal.niveau == NIVEAU_ROOT:
         return True
-    if agent is None or agent.titre is not None:
+    if agent is None:
+        return False
+    if principal.niveau == NIVEAU_SERVICE:
+        return agent.service_id == principal.service_id and agent.titre != TITRE_CHEF_SERVICE
+    if agent.titre is not None:
         return False
     division = db.get(Division, agent.division_id) if agent.division_id is not None else None
     return division is not None and peut_gerer_division(db, principal, division)

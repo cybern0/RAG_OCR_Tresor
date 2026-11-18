@@ -14,7 +14,6 @@ class ChatIn(BaseModel):
 class SourceOut(BaseModel):
     ref: int
     document_id: int
-    dossier_id: int | None = None
     titre: str
     version: int | None = None
     date: datetime | None = None
@@ -27,7 +26,7 @@ class MessageOut(BaseModel):
     emetteur: Literal["utilisateur", "assistant"]
     contenu: str
     sources: list[SourceOut]
-    masque: bool = False  # réponse masquée : accès perdu à l'un des dossiers cités
+    masque: bool = False  # réponse masquée : accès perdu à l'un des fichiers cités
     cree_le: datetime
 
 

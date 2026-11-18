@@ -116,7 +116,6 @@ class ClassementResultOut(BaseModel):
 class SimulerClassementIn(BaseModel):
     nom_fichier: str | None = None
     extension: str | None = None
-    dossier_id: int | None = None
     service_createur_id: int | None = None
     texte: str | None = None
     taille_octets: int | None = None

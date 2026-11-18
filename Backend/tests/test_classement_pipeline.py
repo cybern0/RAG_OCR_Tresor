@@ -93,7 +93,7 @@ def test_appliquer_remplace_les_tags_regles_sans_ecraser_les_tags_manuels():
     session = FakeSession()
     doc = SimpleNamespace(
         id=42,
-        dossier_id=7,
+        service_createur_id=None,
         categorie_id=None,
         type_document_id=None,
         confidentialite="INTERNE",

@@ -119,18 +119,12 @@ def set_roles(client, h, user_id, role_ids):
     assert r.status_code == 200, r.text
 
 
-def dossier_par_defaut(client, h, division_id, nom="Courrier entrant"):
-    """Premier dossier du modèle créé automatiquement à la création de la division (pas de création manuelle)."""
-    rows = client.get("/dossiers", headers=h, params={"division_id": division_id}).json()
-    return next(d for d in rows if d["nom"] == nom)
-
-
 @pytest.fixture(scope="module")
 def world(client):
     """Une direction, deux services (s1, s2), trois divisions (v1 et v2 dans s1, v3 dans s2) avec leurs chefs.
     Agents : a (v1, rôle COMPTA), lect (v1, COMPTA + AUDIT), mix (v1, rôle PUBLIC), b (v3, rôle RH),
-    cs (chef de service de s1, sans division). Dossiers créés automatiquement à la création des divisions :
-    A = « Courrier entrant » de v1, B = « Courrier entrant » de v3."""
+    cs (chef de service de s1, sans division). Plus de dossiers : les fichiers se déposent directement
+    dans les divisions — A = v1, B = v3."""
     tag = uuid.uuid4().hex[:6]
     h = auth(client, ADMIN)
     d = client.post("/structure/directions", json={"code": f"D{tag}", "nom": "Direction test"}, headers=h).json()
@@ -161,13 +155,13 @@ def world(client):
     set_roles(client, out["cd3"]["h"], out["b"]["user"]["id"], [R["RH"]["id"]])
     for k in ("a", "lect", "mix", "b"):
         out[k]["h"] = auth(client, out[k]["name"])
-    out["A"] = dossier_par_defaut(client, h, div["v1"]["id"])  # dossiers posés automatiquement à la création des divisions
-    out["B"] = dossier_par_defaut(client, h, div["v3"]["id"])
+    out["A"] = div["v1"]   # plus de dossier : les fichiers se déposent directement dans la division
+    out["B"] = div["v3"]
     return out
 
 
-def upload(client, headers, dossier_id, content, name="note.txt", **form):
-    data = {"dossier_id": str(dossier_id), **form}
+def upload(client, headers, division_id, content, name="note.txt", **form):
+    data = {"division_id": str(division_id), **form}
     raw = content if isinstance(content, bytes) else content.encode()
     return client.post("/documents", headers=headers, files={"fichier": (name, raw, "text/plain")}, data=data)
 
@@ -188,8 +182,8 @@ def wait_version(client, headers, doc_id, numero, expected="ready", timeout=20):
     raise AssertionError("indexation trop longue")
 
 
-def ready_doc(client, headers, dossier_id, content, name="note.txt", **form):
-    r = upload(client, headers, dossier_id, content, name, **form)
+def ready_doc(client, headers, division_id, content, name="note.txt", **form):
+    r = upload(client, headers, division_id, content, name, **form)
     assert r.status_code == 201, r.text
     assert wait_version(client, headers, r.json()["id"], 1)["statut"] == "ready"
     return r.json()
@@ -237,14 +231,14 @@ def test_connexion_et_me(client, world):
 
 def test_document_corbeille_soft_delete_et_restore(client, world):
     h = world["a"]["h"]  # l'auteur met son fichier à la corbeille et le restaure
-    dossier_id = world["A"]["id"]
-    doc = ready_doc(client, h, dossier_id, "Document de test corbeille")
+    division_id = world["A"]["id"]
+    doc = ready_doc(client, h, division_id, "Document de test corbeille")
     doc_id = doc["id"]
     assert client.delete(f"/documents/{doc_id}", headers=h).status_code == 204
-    assert doc_id not in [item["id"] for item in client.get("/documents", headers=h, params={"dossier_id": dossier_id}).json()]
-    assert doc_id in [item["id"] for item in client.get("/documents", headers=h, params={"dossier_id": dossier_id, "corbeille": True}).json()]
+    assert doc_id not in [item["id"] for item in client.get("/documents", headers=h, params={"division_id": division_id}).json()]
+    assert doc_id in [item["id"] for item in client.get("/documents", headers=h, params={"division_id": division_id, "corbeille": True}).json()]
     assert client.post(f"/documents/{doc_id}/restore", headers=h).status_code == 204
-    assert doc_id in [item["id"] for item in client.get("/documents", headers=h, params={"dossier_id": dossier_id}).json()]
+    assert doc_id in [item["id"] for item in client.get("/documents", headers=h, params={"division_id": division_id}).json()]
     # la purge définitive est réservée au chef de division : l'auteur reçoit 403, le chef 204
     assert client.delete(f"/documents/{doc_id}", headers=h, params={"force": True}).status_code == 403
     assert client.delete(f"/documents/{doc_id}", headers=world["cd1"]["h"], params={"force": True}).status_code == 204
@@ -334,7 +328,7 @@ def test_creation_ajout_de_version_et_historique(client, world):
     a = world["a"]["h"]
     A = world["A"]["id"]
     doc = ready_doc(client, a, A, "Le délai de paiement des factures est de 15 jours.", titre="Contrat fournisseur")
-    assert doc["dossier_id"] == A and doc["titre"] == "Contrat fournisseur" and doc["nb_versions"] == 1
+    assert doc["division_id"] == A and doc["titre"] == "Contrat fournisseur" and doc["nb_versions"] == 1
     assert "contenu" not in doc and doc["version"]["numero"] == 1
     r = add_version(client, a, doc["id"], "Le délai de paiement des factures est de 30 jours.", name="contrat_v2.txt")
     assert r.status_code == 201 and r.json()["nb_versions"] == 2 and r.json()["version"]["numero"] == 2
@@ -384,12 +378,12 @@ def test_validation_des_depots(client, world):
     assert upload(client, a, A, "<html></html>", name="page.html").status_code == 415   # jamais de HTML
     assert upload(client, a, A, "", name="vide.txt").status_code == 422
     assert upload(client, a, A, "pas un pdf", name="faux.pdf").status_code == 422
-    assert client.post("/documents", headers=a, files={"fichier": ("n.txt", b"x", "text/plain")}).status_code == 422  # sans dossier
+    assert client.post("/documents", headers=a, files={"fichier": ("n.txt", b"x", "text/plain")}).status_code == 422  # sans division
     content = "Contenu unique pour le test de doublon " + world["tag"]
     first = upload(client, a, A, content, name="d.txt")
     assert first.status_code == 201
-    assert upload(client, a, A, content, name="copie.txt").status_code == 409            # doublon dans le même dossier
-    assert upload(client, world["b"]["h"], world["B"]["id"], content, name="d.txt").status_code == 201  # autre dossier : accepté
+    assert upload(client, a, A, content, name="copie.txt").status_code == 409            # doublon dans la même division
+    assert upload(client, world["b"]["h"], world["B"]["id"], content, name="d.txt").status_code == 201  # autre division : accepté
     r = upload(client, a, A, "contenu avec un nom piégé " + world["tag"], name="../../etc/passwd.txt")
     assert r.status_code == 201 and r.json()["version"]["nom_fichier"] == "passwd.txt"
     with SessionLocal() as db:
@@ -398,7 +392,7 @@ def test_validation_des_depots(client, world):
 
 def test_document_illisible_passe_en_erreur_avec_message(client, world):
     a = world["a"]["h"]
-    r = client.post("/documents", headers=a, data={"dossier_id": str(world["A"]["id"])}, files={"fichier": ("faux.xlsx", b"ce n'est pas un classeur", "application/octet-stream")})
+    r = client.post("/documents", headers=a, data={"division_id": str(world["A"]["id"])}, files={"fichier": ("faux.xlsx", b"ce n'est pas un classeur", "application/octet-stream")})
     assert r.status_code == 201
     v = wait_version(client, a, r.json()["id"], 1)
     assert v["statut"] == "error" and v["message_erreur"]
@@ -457,7 +451,7 @@ def test_apercu_et_telechargement_sont_surs(client, world, monkeypatch):
     assert client.get(f"/documents/{doc['id']}/versions/1/apercu").status_code == 401
 
     # Office : converti en PDF (Microsoft Office sous Windows, LibreOffice sinon) ; sans aucune suite, message clair (501)
-    word = client.post("/documents", headers=a, data={"dossier_id": str(A)}, files={"fichier": ("lettre.docx", b"PK\x03\x04 pas un vrai docx " + world["tag"].encode(), "application/octet-stream")}).json()
+    word = client.post("/documents", headers=a, data={"division_id": str(A)}, files={"fichier": ("lettre.docx", b"PK\x03\x04 pas un vrai docx " + world["tag"].encode(), "application/octet-stream")}).json()
     assert word["version"]["apercu"] == "pdf_converti"
     monkeypatch.setattr("app.services.conversion_office.shutil.which", lambda _: None)
     assert client.get(f"/documents/{word['id']}/versions/1/apercu", headers=a).status_code == 501
@@ -484,7 +478,7 @@ def test_chat_limite_aux_fichiers_lisibles(client, world):
     ev = ask(client, a, f"Quel est le code {secret} du coffre ?")
     assert {"meta", "sources", "token", "done"} <= set(ev)
     src = sources_of(ev)
-    assert any(s["titre"] == "Procédure coffre" and s["dossier_id"] == world["A"]["id"] and s["version"] == 1 and s["date"] for s in src)
+    assert any(s["titre"] == "Procédure coffre" and s["version"] == 1 and s["date"] for s in src)
     assert "30 jours" in answer_text(ev)
     # l'agent d'une autre division n'a aucun accès au fichier de a : l'IA ne voit que SES fichiers
     ready_doc(client, b, world["B"]["id"], f"Note interne de la division B, indicateur {world['tag']}, sans rapport avec le coffre.")
@@ -619,7 +613,7 @@ def test_audit_trace_les_actions(client, world):
     rows = client.get("/audit", headers=world["admin"], params={"limit": 500}).json()
     actions = {r["action"] for r in rows}
     assert {"connexion.reussie", "connexion.echec", "utilisateur.creer", "document.creer", "document.corbeille",
-            "document.supprimer_definitivement", "document.version_ajouter", "document.version_supprimer", "dossier.creer",
+            "document.supprimer_definitivement", "document.version_ajouter", "document.version_supprimer",
             "structure.agent.creer"} <= actions
     assert all("mot_de_passe" not in str(r["detail"]) or r["detail"].get("mot_de_passe") == "réinitialisé" for r in rows)
 
