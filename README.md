@@ -66,7 +66,11 @@ Le backend peut être déployé sur l'un ou l'autre ; la conversion bureautique 
 - **Windows** : Microsoft Office doit être installé sur le serveur — l'aperçu et l'ingestion convertissent les
   fichiers Office/OpenDocument en PDF via Office piloté en COM/PowerShell (Word, Excel, PowerPoint selon le type) ;
   LibreOffice (`soffice.exe`) sert de repli si Office est indisponible. PowerShell est présent par défaut sur
-  Windows Server, rien à installer.
+  Windows Server, rien à installer. Pour les documents Word, installer aussi LibreOffice est recommandé :
+  l'export PDF de Word piloté par COM peut se bloquer sur un serveur, pour tout document — en réglage
+  `CONVERSION_MOTEUR_WORD=auto` (défaut, voir `.env.example`), Word reçoit un délai court puis LibreOffice
+  termine la conversion ; `libreoffice` contourne Word dès le départ. Diagnostic :
+  `python scripts/diagnostic_conversion.py --temoin` (depuis `Backend/`).
 
 Sans aucune suite bureautique, l'aperçu de ces types répond par un message clair (501) et le téléchargement reste possible.
 

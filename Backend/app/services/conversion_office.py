@@ -7,21 +7,27 @@ L'application doit pouvoir être déployée sur un serveur Linux OU Windows :
   Word pour les documents, Excel pour les tableurs, PowerPoint pour les présentations ;
   si Office est absent, repli sur LibreOffice (soffice.exe) s'il est installé.
 
+Word a en plus son propre réglage (CONVERSION_MOTEUR_WORD, voir .env.example) : son export PDF piloté
+par COM peut se bloquer sur un serveur, pour tout document (diagnostiqué avec scripts/diagnostic_conversion.py,
+qui écarte le document, l'imprimante et une boîte de dialogue). En « auto » (défaut), Word reçoit un délai
+court puis LibreOffice prend le relais au lieu d'attendre le délai complet ; « libreoffice » contourne Word
+dès le départ ; « office » redonne à Word le comportement d'avant.
+
 LiteParse n'a pas de point d'extension : il appelle LibreOffice en interne. Sur Windows,
-l'ingestion pré-convertit donc ici les fichiers Office/OpenDocument en PDF (Microsoft Office)
-avant de les donner à LiteParse, qui les lit nativement. Sous Linux, rien ne change
-(LiteParse + LibreOffice, comportement d'origine).
+l'ingestion pré-convertit donc ici les fichiers Office/OpenDocument en PDF avant de les donner à LiteParse,
+qui les lit nativement. Sous Linux, rien ne change (LiteParse + LibreOffice, comportement d'origine).
 
 Les trois erreurs possibles sont distinctes : suite bureautique absente (OfficeIndisponibleError),
 conversion refusée (ConversionImpossibleError), délai dépassé (ConversionTropLongueError).
 Note : si le délai est dépassé sous Windows, le process PowerShell est tué mais l'application
-Office (WINWORD.EXE...) peut rester en arrière-plan ; elle se refermera à sa prochaine utilisation.
+Office (WINWORD.EXE...) peut rester en arrière-plan ; elle est fermée d'après le PID noté par le script.
 """
 
 import os
 import shutil
 import subprocess
 import threading
+from collections.abc import Callable
 from pathlib import Path
 
 IS_WINDOWS = os.name == "nt"
@@ -137,8 +143,9 @@ function OfficeAbsent {
 }
 # Journal d'étapes lu par Python : en cas de délai dépassé, il dit OÙ la conversion est restée bloquée
 # (démarrage d'Office, ouverture du document, export PDF) et donne le PID d'Office à fermer.
+# -Encoding UTF8 : le nom d'imprimante peut porter un accent (PowerShell 5.1 écrirait sinon en ANSI, lu en utf-8-sig).
 function Etape([string]$Texte) {
-    try { Add-Content -LiteralPath $script:journal -Value ((Get-Date -Format "HH:mm:ss.fff") + " " + $Texte) } catch { }
+    try { Add-Content -LiteralPath $script:journal -Encoding UTF8 -Value ((Get-Date -Format "HH:mm:ss.fff") + " " + $Texte) } catch { }
 }
 
 $source = (Resolve-Path -LiteralPath $Source).Path
@@ -406,11 +413,67 @@ def _convertir_avec_soffice(source: Path, sortie_dir: Path, timeout: int) -> Pat
 
 # --- Point d'entrée --------------------------------------------------------------------------------------------------
 
+_MOTEURS_WORD = ("auto", "office", "libreoffice")  # valeurs acceptées par le réglage conversion_moteur_word
+_Moteur = Callable[[Path, Path, int], Path]
+
+
+def _reglage_moteur_word() -> str:
+    """Mode de conversion des documents Word (réglage conversion_moteur_word) : « auto » par défaut,
+    sinon « libreoffice » ou « office » ; toute autre valeur retombe sur « auto »."""
+    try:
+        from app.config import get_settings
+
+        mode = (get_settings().conversion_moteur_word or "").strip().lower()
+    except Exception:  # noqa: BLE001 - réglages indisponibles : défaut
+        return "auto"
+    return mode if mode in _MOTEURS_WORD else "auto"
+
+
+def _delai_office_word(timeout: int) -> int:
+    """Délai court accordé à Word en « auto » avant de basculer sur LibreOffice (réglage
+    conversion_word_delai_office_s, 35 s par défaut, jamais plus que le délai total) : un blocage de
+    l'export PDF sous COM se voit dès les premières secondes, inutile d'attendre le délai complet."""
+    try:
+        from app.config import get_settings
+
+        court = int(get_settings().conversion_word_delai_office_s)
+    except Exception:  # noqa: BLE001
+        court = 35
+    return max(1, min(timeout, court))
+
+
+def _plan_moteurs(extension: str, timeout: int) -> list[tuple[_Moteur, int, bool]]:
+    """Tentatives ordonnées pour ce fichier : (moteur, délai accordé, poursuivre malgré un délai dépassé).
+
+    - hors Windows : LibreOffice seul ;
+    - documents Word : selon le réglage conversion_moteur_word. « libreoffice » commence par LibreOffice
+      (repli Office s'il manque ou refuse) ; « office » reprend le comportement d'avant (Word d'abord, délai
+      complet, LibreOffice seulement en cas d'absence ou de refus) ; « auto » (défaut) donne à Word un délai
+      court puis bascule sur LibreOffice — sauf si LibreOffice n'est pas installé : Word garde alors le délai
+      complet, puisqu'il n'y a nulle part où basculer ;
+    - Excel et PowerPoint : Office d'abord (plus fidèle), LibreOffice en repli, délai dépassé = échec.
+    """
+    if not IS_WINDOWS:
+        return [(_convertir_avec_soffice, timeout, False)]
+    office = (_convertir_avec_office, timeout, False)
+    soffice = (_convertir_avec_soffice, timeout, False)
+    if extension in WORD_EXT:
+        mode = _reglage_moteur_word()
+        if mode == "libreoffice":
+            return [soffice, office]
+        if mode == "auto" and _soffice() is not None:
+            court = _delai_office_word(timeout)
+            return [(_convertir_avec_office, court, True), (_convertir_avec_soffice, timeout, False)]
+    return [office, soffice]
+
+
 def convertir_vers_pdf(source: Path, sortie_dir: Path, timeout: int | None = None) -> Path:
     """Convertit un fichier Office/OpenDocument en PDF dans sortie_dir (même nom, extension .pdf).
 
-    Sous Windows : Microsoft Office d'abord, LibreOffice en repli (l'un des deux peut manquer,
-    une erreur de l'un tente l'autre). Ailleurs : LibreOffice. Lève OfficeIndisponibleError si
+    Sous Windows : Microsoft Office d'abord, LibreOffice en repli — et, pour les documents Word, l'ordre et
+    les délais suivent le réglage conversion_moteur_word : en « auto » (défaut), Word qui n'a pas terminé
+    dans le délai court est interrompu et LibreOffice reprend avec le délai complet, ce qui contourne le
+    blocage de l'export PDF de Word sous COM. Ailleurs : LibreOffice. Lève OfficeIndisponibleError si
     aucune suite n'est installée, ConversionImpossibleError si le fichier est refusé,
     ConversionTropLongueError en cas de dépassement du délai (par défaut calculé d'après la taille : timeout_pour).
     """
@@ -418,18 +481,24 @@ def convertir_vers_pdf(source: Path, sortie_dir: Path, timeout: int | None = Non
         timeout = timeout_pour(source)
     if source.suffix.lower() not in OFFICE_EXT:
         raise ConversionImpossibleError(f"Type non convertible en PDF : {source.suffix or 'sans extension'}.")
-    moteurs = [_convertir_avec_office, _convertir_avec_soffice] if IS_WINDOWS else [_convertir_avec_soffice]
+    plan = _plan_moteurs(source.suffix.lower(), timeout)
     erreurs: list[str] = []
     tentatives = 0  # moteurs réellement présents et ayant essayé (échec de conversion ≠ absence)
     with _lock:
-        for moteur in moteurs:
+        for moteur, delai, basculer_si_delai in plan:
             try:
-                return moteur(source, sortie_dir, timeout)
+                return moteur(source, sortie_dir, delai)
             except OfficeIndisponibleError as e:
                 erreurs.append(str(e))
             except ConversionImpossibleError as e:
                 tentatives += 1
                 erreurs.append(str(e))
+            except ConversionTropLongueError as e:
+                tentatives += 1
+                erreurs.append(str(e))
+                if basculer_si_delai:  # délai court de Word en « auto » : LibreOffice prend le relais
+                    continue
+                raise
     if tentatives == 0:
         raise OfficeIndisponibleError(" ".join(dict.fromkeys(erreurs)) or _message_indisponible())
     raise ConversionImpossibleError(" ; ".join(erreurs))

@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     # Windows + Word : imprimante imposée à Word pendant la conversion (ex. « Microsoft Print to PDF »). Vide : celle de
     # Windows. Utile quand l'export Word se bloque à cause d'une imprimante réseau hors ligne.
     conversion_word_imprimante: str = ""
+    # Windows + documents Word (WORD_EXT) : moteur utilisé quand Office ET LibreOffice sont installés.
+    # « auto » (défaut) : Word d'abord avec un délai court (conversion_word_delai_office_s), puis LibreOffice si Word
+    # n'a pas terminé — l'export PDF de Word piloté par COM peut se bloquer sur un serveur, pour tout document ;
+    # « libreoffice » : LibreOffice directement ; « office » : Word seul, délai complet (comportement d'avant).
+    conversion_moteur_word: str = "auto"
+    # Délai court (secondes) accordé à Word en « auto » avant de basculer sur LibreOffice : un blocage de l'export
+    # sous COM se voit dès les premières secondes, inutile d'attendre le délai complet calculé d'après la taille.
+    conversion_word_delai_office_s: int = 35
     # Diagnostic uniquement (scripts/diagnostic_conversion.py) : Office visible sur le serveur ; méthode d'export Word
     # « export » (défaut) ou « saveas ».
     conversion_office_visible: bool = False

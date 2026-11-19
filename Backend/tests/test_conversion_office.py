@@ -166,6 +166,197 @@ def test_windows_office_reussit_sans_repli(monkeypatch, tmp_path: Path):
     assert len(appels) == 1  # Office a suffi, LibreOffice jamais appelé
 
 
+# --- Réglage CONVERSION_MOTEUR_WORD : contourner le blocage de l'export PDF de Word sous COM --------------------------
+# Mesuré sur un serveur réel : Word ouvre le document en moins d'une seconde puis se fige pendant l'export PDF,
+# pour tout document (même un témoin minimal), sans boîte de dialogue — alors qu'Excel convertit en 2,5 s.
+# En « auto » (défaut), Word reçoit un délai court puis LibreOffice termine ; « libreoffice » contourne Word ;
+# « office » conserve le comportement d'avant (délai complet, échec en cas de blocage).
+
+def _reglages_stub(monkeypatch, **champs):
+    """Remplace get_settings par un objet léger (les fonctions de conversion lisent les réglages elles-mêmes)."""
+    base = {"conversion_moteur_word": "auto", "conversion_word_delai_office_s": 35}
+    base.update(champs)
+    monkeypatch.setattr("app.config.get_settings", lambda: SimpleNamespace(**base))
+
+
+def _windows_deux_moteurs(monkeypatch, tmp_path: Path):
+    """Windows avec Office et LibreOffice tous deux disponibles (binaires factices)."""
+    _windows_sans_path(monkeypatch, tmp_path)
+    soffice = tmp_path / "soffice.exe"; soffice.write_text("")
+    monkeypatch.setattr(conv, "_LIBREOFFICE_EXE", [soffice])
+
+
+def _nom(cmd) -> str:
+    return Path(cmd[0]).name.lower()
+
+
+def test_word_auto_delai_court_puis_libreoffice(monkeypatch, tmp_path: Path):
+    _windows_deux_moteurs(monkeypatch, tmp_path)
+    _reglages_stub(monkeypatch)                                   # mode par défaut
+    appels: list[tuple[str, int]] = []
+
+    def run(cmd, **kwargs):
+        appels.append((_nom(cmd), kwargs["timeout"]))
+        if "powershell" in _nom(cmd):
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])   # Word bloqué pendant l'export PDF
+        (tmp_path / "rapport.pdf").write_bytes(b"%PDF-1.4")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(conv, "subprocess", _subprocess_stub(run))
+    source = tmp_path / "rapport.docx"; source.write_bytes(b"fake docx")
+    assert convertir_vers_pdf(source, tmp_path, timeout=75) == tmp_path / "rapport.pdf"
+    assert appels == [("powershell.exe", 35), ("soffice.exe", 75)]    # délai court pour Word, complet pour LibreOffice
+
+
+def test_word_delai_court_configurable(monkeypatch, tmp_path: Path):
+    _windows_deux_moteurs(monkeypatch, tmp_path)
+    _reglages_stub(monkeypatch, conversion_word_delai_office_s=40)   # CONVERSION_WORD_DELAI_OFFICE_S=40
+    appels: list[tuple[str, int]] = []
+
+    def run(cmd, **kwargs):
+        appels.append((_nom(cmd), kwargs["timeout"]))
+        if "powershell" in _nom(cmd):
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+        (tmp_path / "rapport.pdf").write_bytes(b"%PDF-1.4")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(conv, "subprocess", _subprocess_stub(run))
+    source = tmp_path / "rapport.docx"; source.write_bytes(b"fake docx")
+    assert convertir_vers_pdf(source, tmp_path, timeout=75) == tmp_path / "rapport.pdf"
+    assert appels == [("powershell.exe", 40), ("soffice.exe", 75)]
+
+
+def test_word_delai_court_jamais_plus_que_le_delai_total(monkeypatch, tmp_path: Path):
+    _windows_deux_moteurs(monkeypatch, tmp_path)
+    _reglages_stub(monkeypatch, conversion_word_delai_office_s=300)  # réglage aberrant : au-delà du délai total
+    vu: list[int] = []
+
+    def run(cmd, **kwargs):
+        vu.append(kwargs["timeout"])
+        if "powershell" in _nom(cmd):
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+        (tmp_path / "rapport.pdf").write_bytes(b"%PDF-1.4")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(conv, "subprocess", _subprocess_stub(run))
+    source = tmp_path / "rapport.docx"; source.write_bytes(b"fake docx")
+    convertir_vers_pdf(source, tmp_path, timeout=75)
+    assert vu[0] == 75  # borné au délai total, pas 300
+
+
+def test_word_reglage_libreoffice_direct(monkeypatch, tmp_path: Path):
+    _windows_deux_moteurs(monkeypatch, tmp_path)
+    _reglages_stub(monkeypatch, conversion_moteur_word="libreoffice")
+    appels: list[str] = []
+
+    def run(cmd, **kwargs):
+        appels.append(_nom(cmd))
+        assert kwargs["timeout"] == 75                                # LibreOffice reçoit le délai complet d'emblée
+        (tmp_path / "rapport.pdf").write_bytes(b"%PDF-1.4")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(conv, "subprocess", _subprocess_stub(run))
+    source = tmp_path / "rapport.docx"; source.write_bytes(b"fake docx")
+    assert convertir_vers_pdf(source, tmp_path, timeout=75) == tmp_path / "rapport.pdf"
+    assert appels == ["soffice.exe"]                                  # Word jamais démarré
+
+
+def test_word_reglage_libreoffice_absent_repli_office(monkeypatch, tmp_path: Path):
+    _windows_sans_path(monkeypatch, tmp_path)
+    monkeypatch.setattr(conv, "_LIBREOFFICE_EXE", [])                 # LibreOffice absent du serveur
+    _reglages_stub(monkeypatch, conversion_moteur_word="libreoffice")
+    appels: list[tuple[str, int]] = []
+
+    def run(cmd, **kwargs):
+        appels.append((_nom(cmd), kwargs["timeout"]))
+        (tmp_path / "rapport.pdf").write_bytes(b"%PDF-1.4")
+        return SimpleNamespace(returncode=0, stderr=b"")
+
+    monkeypatch.setattr(conv, "subprocess", _subprocess_stub(run))
+    source = tmp_path / "rapport.docx"; source.write_bytes(b"fake docx")
+    assert convertir_vers_pdf(source, tmp_path, timeout=75) == tmp_path / "rapport.pdf"
+    assert appels == [("powershell.exe", 75)]                         # Office prend le relais, délai complet
+
+
+def test_word_reglage_office_sans_bascule_si_delai(monkeypatch, tmp_path: Path):
+    _windows_deux_moteurs(monkeypatch, tmp_path)
+    _reglages_stub(monkeypatch, conversion_moteur_word="office")      # comportement d'avant
+    appels: list[str] = []
+
+    def run(cmd, **kwargs):
+        appels.append(_nom(cmd))
+        if "powershell" in _nom(cmd):
+            assert kwargs["timeout"] == 75                            # délai complet, pas le délai court
+            raise subprocess.TimeoutExpired(cmd, 75)                  # le blocage mesuré sur le serveur
+        raise AssertionError("en mode « office », un délai dépassé ne bascule pas sur LibreOffice")
+
+    monkeypatch.setattr(conv, "subprocess", _subprocess_stub(run))
+    source = tmp_path / "rapport.docx"; source.write_bytes(b"fake docx")
+    with pytest.raises(ConversionTropLongueError, match=r"75 s"):
+        convertir_vers_pdf(source, tmp_path, timeout=75)
+    assert appels == ["powershell.exe"]
+
+
+def test_word_auto_sans_libreoffice_delai_complet(monkeypatch, tmp_path: Path):
+    _windows_sans_path(monkeypatch, tmp_path)
+    monkeypatch.setattr(conv, "_LIBREOFFICE_EXE", [])                 # rien où basculer : Word garde le délai complet
+    _reglages_stub(monkeypatch)                                       # « auto » par défaut
+    vu: list[int] = []
+
+    def run(cmd, **kwargs):
+        vu.append(kwargs["timeout"])
+        raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+
+    monkeypatch.setattr(conv, "subprocess", _subprocess_stub(run))
+    source = tmp_path / "rapport.docx"; source.write_bytes(b"fake docx")
+    with pytest.raises(ConversionTropLongueError, match=r"75 s"):
+        convertir_vers_pdf(source, tmp_path, timeout=75)
+    assert vu == [75]
+
+
+def test_word_auto_echec_des_deux_moteurs_message_complet(monkeypatch, tmp_path: Path):
+    _windows_deux_moteurs(monkeypatch, tmp_path)
+    _reglages_stub(monkeypatch)
+
+    def run(cmd, **kwargs):
+        if "powershell" in _nom(cmd):
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])   # Word bloqué (délai court)
+        raise subprocess.CalledProcessError(1, cmd)                   # LibreOffice refuse aussi
+
+    monkeypatch.setattr(conv, "subprocess", _subprocess_stub(run))
+    source = tmp_path / "rapport.docx"; source.write_bytes(b"fake docx")
+    with pytest.raises(ConversionImpossibleError, match="dépassé le délai.*LibreOffice a refusé"):
+        convertir_vers_pdf(source, tmp_path, timeout=75)
+
+
+def test_excel_delai_depasse_ne_bascule_pas(monkeypatch, tmp_path: Path):
+    """Excel fonctionne déjà via Office (mesuré : ~2,5 s) : hors Word, le comportement ne change pas."""
+    _windows_deux_moteurs(monkeypatch, tmp_path)
+    _reglages_stub(monkeypatch)
+    appels: list[str] = []
+
+    def run(cmd, **kwargs):
+        appels.append(_nom(cmd))
+        if "powershell" in _nom(cmd):
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+        raise AssertionError("Excel ne doit pas basculer sur LibreOffice en cas de délai dépassé")
+
+    monkeypatch.setattr(conv, "subprocess", _subprocess_stub(run))
+    source = tmp_path / "budget.xlsx"; source.write_bytes(b"fake xlsx")
+    with pytest.raises(ConversionTropLongueError):
+        convertir_vers_pdf(source, tmp_path, timeout=75)
+    assert appels == ["powershell.exe"]
+
+
+def test_reglage_moteur_word_normalise(monkeypatch):
+    _reglages_stub(monkeypatch, conversion_moteur_word="  LibreOffice ")
+    assert conv._reglage_moteur_word() == "libreoffice"               # casse et espaces tolérées
+    _reglages_stub(monkeypatch, conversion_moteur_word="word")        # valeur inconnue : défaut
+    assert conv._reglage_moteur_word() == "auto"
+    _reglages_stub(monkeypatch, conversion_moteur_word="")
+    assert conv._reglage_moteur_word() == "auto"
+
+
 # --- Ingestion : pré-conversion sous Windows, chemin direct sous Linux ------------------------------------------------
 
 def _liteparse_simule(monkeypatch, parser_mod, markdown="Bonjour la division, voici le compte rendu de la réunion du service."):

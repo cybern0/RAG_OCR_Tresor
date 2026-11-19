@@ -52,7 +52,7 @@ Le jeton devient invalide si le mot de passe change ou si le compte est désacti
 
 ## Aperçu et téléchargement
 `GET /documents/{id}/versions/{n}/apercu` et `/telecharger`, protégés par le rôle de dossier. Types sûrs en « inline » : PDF, PNG/JPEG/WebP/BMP, texte brut (txt, md, csv servis en `text/plain`).
-Word, PowerPoint, Excel, ODF : convertis en PDF avant affichage — **Microsoft Office sous Windows, LibreOffice sous Linux** (repli LibreOffice si Office manque sur Windows ; voir `services/conversion_office.py` ; cache par version). `.tif` : pas d'aperçu. Le type MIME vient de l'extension validée au dépôt, jamais du client ;
+Word, PowerPoint, Excel, ODF : convertis en PDF avant affichage — **Microsoft Office sous Windows, LibreOffice sous Linux** (repli LibreOffice si Office manque sur Windows ; pour les documents Word, réglage `CONVERSION_MOTEUR_WORD` : en « auto » (défaut), Word qui dépasse un délai court est interrompu et LibreOffice termine — son export PDF piloté par COM peut se bloquer sur un serveur ; voir `services/conversion_office.py` ; cache par version). `.tif` : pas d'aperçu. Le type MIME vient de l'extension validée au dépôt, jamais du client ;
 jamais de HTML ni de SVG ; `nosniff` et CSP `sandbox` partout ; téléchargement en `attachment` + `application/octet-stream`. Le frontend récupère un Blob avec le jeton (pas d'URL publique).
 Fichier absent du disque : 410.
 
