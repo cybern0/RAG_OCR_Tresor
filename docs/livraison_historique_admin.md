@@ -7,7 +7,29 @@
 > direction, service et division ; enlever le bouton "Nommer chef de division" et le mettre dans le
 > formulaire de modification, toujours en bouton, sans email ni fonction ; deux boutons : chef de
 > service ou chef de division, par défaut vide (agent). » — et : « /admin/structure et /admin/agents
-> devraient avoir un CRUD complet — /admin/agents ne manque que delete. »
+> devraient avoir un CRUD complet — /admin/agents ne manque que delete. » — enfin : « dans /admin/agents
+> enlever le bouton "retirer le poste", car dans la modification on peut déjà le changer ; puis nettoyer
+> les notifications, il y en a déjà beaucoup et pourtant certaines sont déjà résolues. »
+
+## 0 quater. Compléments du cinquième tour — « Retirer le poste » en moins, notifications nettoyées
+
+- **/admin/agents** : le bouton « Retirer le poste » disparaît de la liste. Le poste se change ou se vide dans
+  la modal « Modifier » (désélectionner « chef de division » / « chef de service » = agent simple, avec le même
+  transfert tracé et notifié). La liste garde la nomination rapide d'un chef de service, Désactiver/Réactiver
+  et Supprimer.
+- **Notifications — la source du désordre traitée à la racine** : quand une demande d'accès est **acceptée,
+  refusée ou annulée**, ses notifications « demande_acces » chez les décideurs (chefs, super administrateurs en
+  intérim) sont **purgées** — la demande n'est plus à traiter ; le demandeur, lui, garde la notification de
+  décision (`purger_demande`, appelée par `decider` et `annuler` dans services/demandes.py).
+- **Nettoyage manuel** : nouveau bouton **« Nettoyer »** dans la cloche de notifications, adossé à la route
+  `POST /notifications/nettoyer` — supprime les notifications **lues** ET celles des demandes **déjà tranchées
+  ou annulées**, puis affiche le compte rendu (« Nettoyage : N notification(s) supprimée(s). »). Le bouton
+  « Tout marquer comme lu » existant est conservé.
+- **Test** : `test_notifications_resolues_purgees_et_nettoyage` (purge à la décision et à l'annulation côté
+  décideur, décision conservée côté demandeur, nettoyage du demandeur). Comme tous les tests d'API, il attend
+  `TEST_DATABASE_URL` : aucun Postgres dans cet environnement, la suite locale reste « 93 réussis,
+  3 ignorés ». Vérifié ici : imports de l'application OK, routes `/notifications` complètes (GET, /lues,
+  /nettoyer, /{id}/lue) enregistrées, `npm run build` OK.
 
 ## 0 ter. Compléments du quatrième tour — CRUD complet : la suppression
 
@@ -113,11 +135,17 @@ Au passage, les modules backend morts qui produisaient les valeurs fantômes son
 
 - `frontend/src/features/historique/HistoriquePage.tsx` (dictionnaire TYPES + libellés, puis retrait de « Demande »)
 - `frontend/src/features/admin/users/UsersPage.tsx` (recherche, filtres, colonne Poste)
-- `frontend/src/features/admin/structure/AgentsPage.tsx` (recherche, filtres, modal « Modifier », suppression)
+- `frontend/src/features/admin/structure/AgentsPage.tsx` (recherche, filtres, modal « Modifier », suppression, retrait du bouton « Retirer le poste »)
 - `frontend/src/features/admin/structure/StructurePage.tsx` (suppression gardée des trois niveaux)
 - `frontend/src/features/admin/api.ts` (`updateAgent` élargie ; `deleteAgent`, `deleteDirection`, `deleteService`, `deleteDivision`)
+- `frontend/src/features/notifications/api.ts` (`nettoyerNotifications`)
+- `frontend/src/features/notifications/NotificationBell.tsx` (bouton « Nettoyer »)
 - `Backend/app/api/routes/structure.py` (4 routes DELETE)
+- `Backend/app/api/routes/notifications.py` (route `POST /notifications/nettoyer`)
+- `Backend/app/services/notifications.py` (`purger_demande`, `nettoyer`)
+- `Backend/app/services/demandes.py` (purge des « demande_acces » à la décision et à l'annulation)
+- `Backend/app/schemas/notification.py` (`NettoyageOut`)
 - `Backend/app/services/structure/crud.py` (4 fonctions de suppression gardées ; doctrine du module mise à jour)
-- `Backend/tests/test_hierarchie.py` (3 tests de suppression)
+- `Backend/tests/test_hierarchie.py` (3 tests de suppression + test de notifications nettoyées)
 - Backend : suppression des 6 modules morts listés ci-dessus
 - `MODIFICATIONS.md`

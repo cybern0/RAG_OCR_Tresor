@@ -1,3 +1,23 @@
+# « Retirer le poste » retiré de /admin/agents ; nettoyage des notifications (résolues et lues)
+
+(11/2026)
+
+- **/admin/agents** : le bouton « Retirer le poste » disparaît de la liste — le poste se change ou se vide dans
+  la modal « Modifier » (désélectionner les boutons chef = agent simple). La liste garde la nomination rapide
+  d'un chef de service, la modification d'état et la suppression.
+- **Notifications** : les demandes d'accès tranchées ou annulées ne polluent plus les boîtes — à la décision et
+  à l'annulation, les notifications « demande_acces » de la demande sont **purgées chez les décideurs**
+  (`purger_demande` dans services/notifications.py, appelé par `decider` et `annuler` ; le demandeur garde la
+  notification de décision). Nouveau bouton **« Nettoyer »** dans la cloche, adossé à la route
+  `POST /notifications/nettoyer` : supprime les notifications **lues** et celles des demandes **déjà résolues**,
+  avec compte rendu (« Nettoyage : N notification(s) supprimée(s). »). « Tout marquer comme lu » est conservé.
+- **Tests** : `test_notifications_resolues_purgees_et_nettoyage` (purge à la décision et à l'annulation,
+  nettoyage du demandeur). Comme les tests d'API précédents, il attend `TEST_DATABASE_URL` — aucun Postgres dans
+  cet environnement, la suite locale reste « 93 réussis, 3 ignorés ». Vérifié ici : imports OK, route
+  `/notifications/nettoyer` enregistrée, `npm run build` OK.
+
+---
+
 # CRUD complet : suppression ajoutée sur /admin/structure (directions, services, divisions) et /admin/agents
 
 (11/2026)

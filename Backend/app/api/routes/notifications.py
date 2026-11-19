@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_principal
 from app.core.permissions import Principal
-from app.schemas.notification import NotificationOut, NotificationsOut
+from app.schemas.notification import NettoyageOut, NotificationOut, NotificationsOut
 from app.services import notifications as svc
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -24,6 +24,14 @@ def lister(
 def tout_lire(principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
     svc.marquer_toutes_lues(db, principal.user.id)
     db.commit()
+
+
+@router.post("/nettoyer", response_model=NettoyageOut)
+def nettoyer(principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    """Nettoyage : supprime les notifications lues et celles des demandes déjà tranchées ou annulées."""
+    nb = svc.nettoyer(db, principal.user.id)
+    db.commit()
+    return NettoyageOut(supprimees=nb)
 
 
 @router.post("/{notification_id}/lue", status_code=204)

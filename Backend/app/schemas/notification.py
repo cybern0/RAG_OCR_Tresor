@@ -20,3 +20,7 @@ class NotificationOut(BaseModel):
 class NotificationsOut(BaseModel):
     non_lues: int
     items: list[NotificationOut]
+
+
+class NettoyageOut(BaseModel):
+    supprimees: int

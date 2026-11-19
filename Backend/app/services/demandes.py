@@ -24,7 +24,7 @@ from app.db.vecteur import Document
 from app.schemas.demande import DemandeIn, DemandeOut, ExceptionOut
 from app.services.audit import log_action
 from app.services.historique import ecrire_historique
-from app.services.notifications import destinataires_gestion, notifier
+from app.services.notifications import destinataires_gestion, notifier, purger_demande
 
 DUREE_PAR_DEFAUT_HEURES = 24
 
@@ -188,6 +188,7 @@ def decider(db: Session, principal: Principal, demande_id: int, accepter: bool, 
         f"Votre demande est acceptée : {resume}." if accepter else "Votre demande a été refusée" + (f" : {reponse}" if reponse else "."),
         reference_type="demande", reference_id=demande.id,
     )
+    purger_demande(db, demande.id)  # la demande n'est plus à traiter : les « demande_acces » des décideurs disparaissent
     db.commit()
     return _out(db, principal, demande, {division.id})
 
@@ -204,6 +205,7 @@ def annuler(db: Session, principal: Principal, demande_id: int) -> DemandeOut:
         db, acteur=principal.user, cible_type="demande", cible_id=demande.id, action="demande_annulee",
         service_id=division.service_id, division_id=division.id, concerne_user_id=principal.user.id,
     )
+    purger_demande(db, demande.id)  # annulée : plus rien à traiter pour les décideurs
     db.commit()
     return _out(db, principal, demande, set())
 

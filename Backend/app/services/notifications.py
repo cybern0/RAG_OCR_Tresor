@@ -2,11 +2,11 @@
 
 from collections.abc import Iterable
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.acces import chef_division_actif, chef_service_actif
-from app.db.metier import Division, Notification, Role, User
+from app.db.metier import DemandeAcces, Division, Notification, Role, User
 
 
 def notifier(
@@ -81,5 +81,37 @@ def marquer_lue(db: Session, user_id: int, notification_id: int) -> bool:
 def marquer_toutes_lues(db: Session, user_id: int) -> int:
     res = db.execute(
         update(Notification).where(Notification.destinataire_user_id == user_id, Notification.lu.is_(False)).values(lu=True)
+    )
+    return res.rowcount
+
+
+def purger_demande(db: Session, demande_id: int) -> None:
+    """Une demande tranchée ou annulée n'est plus à traiter : ses notifications « demande_acces » disparaissent
+    des boîtes des décideurs (la décision reste notifiée au demandeur et tracée dans l'historique)."""
+    db.execute(
+        delete(Notification).where(
+            Notification.type_evenement == "demande_acces",
+            Notification.reference_type == "demande",
+            Notification.reference_id == demande_id,
+        )
+    )
+
+
+def nettoyer(db: Session, user_id: int) -> int:
+    """Supprime les notifications résolues du compte : les lues, et les « demande_acces » dont la demande
+    a déjà été tranchée ou annulée (restées en attente d'un traitement qui n'existe plus)."""
+    resolues = select(DemandeAcces.id).where(DemandeAcces.statut != "en_attente")
+    res = db.execute(
+        delete(Notification).where(
+            Notification.destinataire_user_id == user_id,
+            or_(
+                Notification.lu.is_(True),
+                and_(
+                    Notification.type_evenement == "demande_acces",
+                    Notification.reference_type == "demande",
+                    Notification.reference_id.in_(resolues),
+                ),
+            ),
+        )
     )
     return res.rowcount

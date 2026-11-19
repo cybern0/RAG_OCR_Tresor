@@ -694,3 +694,32 @@ def test_gardes_et_chaine_de_suppression_de_la_structure(client, world):
     assert client.delete(f"/structure/services/{s['id']}", headers=adm).status_code == 204
     assert client.delete(f"/structure/directions/{d['id']}", headers=adm).status_code == 204
     assert d["id"] not in {x["id"] for x in client.get("/structure/directions", headers=adm).json()}
+
+
+def test_notifications_resolues_purgees_et_nettoyage(client, world):
+    """Une demande tranchée ou annulée disparaît des notifications des décideurs (plus rien à traiter) ;
+    « nettoyer » supprime les notifications lues et celles des demandes déjà résolues."""
+    adm, tag = world["admin"], world["tag"]
+    cd1, mix = world["cd1"]["h"], world["mix"]["h"]
+
+    def notifs(h):
+        return client.get("/notifications", headers=h, params={"limit": 200}).json()["items"]
+
+    f = upload(client, world["a"]["h"], world["A"]["id"], f"Demande à trancher {tag}").json()
+    dem = client.post("/demandes", headers=mix, json={"type_demande": "fichier", "cible_id": f["id"], "motif": "Test nettoyage", "duree_heures": 4}).json()
+    assert any(x["type_evenement"] == "demande_acces" and x["reference_id"] == dem["id"] for x in notifs(cd1))
+    # décision : le décideur n'a plus la notification de traitement ; le demandeur garde la décision
+    assert client.post(f"/demandes/{dem['id']}/decision", headers=cd1, json={"accepter": True}).status_code == 200
+    assert not any(x["type_evenement"] == "demande_acces" and x["reference_id"] == dem["id"] for x in notifs(cd1))
+    assert any(x["type_evenement"] == "demande_decidee" and x["reference_id"] == dem["id"] for x in notifs(mix))
+    # une demande annulée purge aussi les « demande_acces »
+    dem2 = client.post("/demandes", headers=mix, json={"type_demande": "fichier", "cible_id": f["id"], "motif": "Annulée", "duree_heures": 4}).json()
+    assert any(x["type_evenement"] == "demande_acces" and x["reference_id"] == dem2["id"] for x in notifs(cd1))
+    assert client.post(f"/demandes/{dem2['id']}/annuler", headers=mix).status_code == 200
+    assert not any(x["type_evenement"] == "demande_acces" and x["reference_id"] == dem2["id"] for x in notifs(cd1))
+    # nettoyage du demandeur : tout marquer comme lu, puis nettoyer supprime toutes ses notifications lues
+    assert client.post("/notifications/lues", headers=mix).status_code == 204
+    avant = notifs(mix)
+    r = client.post("/notifications/nettoyer", headers=mix)
+    assert r.status_code == 200 and r.json()["supprimees"] == len(avant) and r.json()["supprimees"] >= 1
+    assert notifs(mix) == []

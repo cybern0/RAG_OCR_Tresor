@@ -1,8 +1,8 @@
 // Agents de la structure : recherche et filtres côté client (service, poste — chef de service / chef de division —,
 // état, avec ou sans compte). La modal « Modifier » centralise l'identité, l'affectation (direction → service →
-// division) et le poste via deux boutons (chef de division / chef de service, par défaut « agent », sans poste) ;
-// la liste conserve le retrait de poste et la nomination rapide d'un chef de service, et ajoute la suppression
-// (confirmée ; le compte utilisateur éventuel est dissocié, l'historique conserve la fiche).
+// division) et le poste via deux boutons (chef de division / chef de service, par défaut « agent », sans poste —
+// c'est aussi là qu'on rend un poste vacant) ; la liste conserve la nomination rapide d'un chef de service et ajoute
+// la suppression (confirmée ; le compte utilisateur éventuel est dissocié, l'historique conserve la fiche).
 import { Pencil, Plus, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -219,7 +219,7 @@ export function Component() {
                 <td className="td text-sm">{a.titre === 'CHEF_DIVISION' ? <Badge tone="gold">Chef de division</Badge> : a.titre === 'CHEF_SERVICE' ? <Badge tone="gold">Chef de service</Badge> : '—'}</td>
                 <td className="td text-sm">{a.nom_utilisateur ?? '—'}</td>
                 <td className="td"><Badge tone={a.actif ? 'green' : 'gray'}>{a.actif ? 'Actif' : 'Désactivé'}</Badge></td>
-                <td className="td text-right"><button className="btn-icon" title="Modifier l'agent (identité, affectation, poste)" aria-label={`Modifier l'agent ${a.nom} ${a.prenom}`} onClick={() => setEditing(a)}><Pencil className="h-4 w-4" /></button>{a.actif && a.titre === 'CHEF_SERVICE' && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, null, 'Poste de chef de service rendu vacant.')}>Retirer le poste</button>}{a.actif && a.titre === 'CHEF_DIVISION' && a.division_id !== null && <button className="btn-ghost" onClick={() => poste('division', a.division_id!, null, 'Poste rendu vacant.')}>Retirer le poste</button>}{a.actif && !a.titre && a.division_id === null && a.service_id !== null && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, a.id, 'Nommé chef de service (le titulaire précédent est remplacé).')}>Nommer chef de service</button>}<button className="btn-ghost" onClick={() => void toggle.mutateAsync({ id: a.id, actif: !a.actif }).catch((e) => toast.error(errorMessage(e)))}>{a.actif ? 'Désactiver' : 'Réactiver'}</button><button className="btn-ghost" onClick={() => setConfirming(a)}>Supprimer</button></td>
+                <td className="td text-right"><button className="btn-icon" title="Modifier l'agent (identité, affectation, poste)" aria-label={`Modifier l'agent ${a.nom} ${a.prenom}`} onClick={() => setEditing(a)}><Pencil className="h-4 w-4" /></button>{a.actif && !a.titre && a.division_id === null && a.service_id !== null && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, a.id, 'Nommé chef de service (le titulaire précédent est remplacé).')}>Nommer chef de service</button>}<button className="btn-ghost" onClick={() => void toggle.mutateAsync({ id: a.id, actif: !a.actif }).catch((e) => toast.error(errorMessage(e)))}>{a.actif ? 'Désactiver' : 'Réactiver'}</button><button className="btn-ghost" onClick={() => setConfirming(a)}>Supprimer</button></td>
               </tr>
             ))}
           </tbody>
