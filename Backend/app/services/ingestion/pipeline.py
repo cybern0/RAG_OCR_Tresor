@@ -14,10 +14,12 @@ from sqlalchemy.exc import IntegrityError
 from app.db.metier import SessionLocal
 from app.db.vecteur import Chunk, DocumentVersion
 from app.services import stockage
+from app.services.conversion_office import IS_WINDOWS, OFFICE_EXT
+from app.services.documents import apercu
 from app.services.classement import appliquer
 from app.services.ingestion.chunking import chunk_documents
 from app.services.ingestion.embedding import EmbeddingError, embed_documents
-from app.services.ingestion.parser import IngestionError, parse_file
+from app.services.ingestion.parser import DOCUMENT_EXT, IngestionError, parse_file
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +61,17 @@ def run_ingestion(version_id: int) -> None:
                 )
             # has_tabular / has_image sont les cases du fichier : cochées par l'utilisateur ou imposées par le type
             images_demandees = doc.has_image
-            parsed = parse_file(chemin, force_tabular=doc.has_tabular, force_images=images_demandees)
+            source = chemin
+            if chemin.suffix.lower() in OFFICE_EXT:
+                # conversion en PDF dès maintenant : l'aperçu est prêt à l'ouverture, et le PDF sert à l'indexation
+                pdf, erreur = apercu.preparer_apercu(version, chemin)
+                if pdf is not None and chemin.suffix.lower() in DOCUMENT_EXT:
+                    source = pdf
+                elif pdf is None and erreur and IS_WINDOWS and chemin.suffix.lower() in DOCUMENT_EXT:
+                    raise IngestionError(f"Lecture du document impossible : {erreur}")
+                elif erreur:
+                    logger.warning("Aperçu PDF non préparé pour la version %s : %s", version_id, erreur)
+            parsed = parse_file(source, force_tabular=doc.has_tabular, force_images=images_demandees)
             chunks = chunk_documents(parsed.documents, doc.id, version.nom_fichier)
             if not chunks:
                 raise IngestionError("Aucun passage exploitable n'a été extrait de ce fichier.")

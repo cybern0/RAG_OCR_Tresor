@@ -230,3 +230,44 @@ def test_ingestion_linux_garde_le_chemin_direct(monkeypatch, tmp_path: Path):
     source = tmp_path / "note.docx"; source.write_bytes(b"fake docx")
     with pytest.raises(p.IngestionError, match="Lecture du document"):
         p.parse_document(source)
+
+
+# --- Délai dynamique selon la taille du fichier ----------------------------------------------------------------------
+
+def _fichier(tmp_path: Path, octets: int, nom: str = "gros.docx") -> Path:
+    f = tmp_path / nom
+    with f.open("wb") as h:
+        h.truncate(octets)
+    return f
+
+
+def test_delai_proportionnel_a_la_taille(tmp_path: Path):
+    mo = 1024 * 1024
+    petit, moyen, gros = _fichier(tmp_path, 1, "p.docx"), _fichier(tmp_path, 10 * mo, "m.docx"), _fichier(tmp_path, 50 * mo, "g.docx")
+    assert conv.timeout_pour(petit) == 60 + 15          # arrondi au Mo supérieur : 1 Mo
+    assert conv.timeout_pour(moyen) == 60 + 15 * 10
+    assert conv.timeout_pour(gros) == 60 + 15 * 50
+    assert conv.timeout_pour(petit) < conv.timeout_pour(moyen) < conv.timeout_pour(gros)
+
+
+def test_delai_plafonne(tmp_path: Path):
+    enorme = _fichier(tmp_path, 500 * 1024 * 1024, "enorme.docx")
+    assert conv.timeout_pour(enorme) == 1800
+
+
+def test_convertir_vers_pdf_utilise_le_delai_dynamique(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(conv, "IS_WINDOWS", False)
+    source = _fichier(tmp_path, 4 * 1024 * 1024)
+    vu: list[int] = []
+
+    def faux_moteur(src, sortie, timeout):
+        vu.append(timeout)
+        pdf = sortie / (src.stem + ".pdf")
+        pdf.write_bytes(b"%PDF")
+        return pdf
+
+    monkeypatch.setattr(conv, "_convertir_avec_soffice", faux_moteur)
+    convertir_vers_pdf(source, tmp_path)
+    assert vu == [60 + 15 * 4]
+    convertir_vers_pdf(source, tmp_path, timeout=5)  # un délai explicite l'emporte
+    assert vu[-1] == 5

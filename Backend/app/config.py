@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # Fichiers déposés
     upload_dir: Path = BASE_DIR / "storage" / "uploads"
     max_upload_mb: int = 50
+    # Conversion Office/OpenDocument -> PDF : délai calculé d'après la taille du fichier déposé
+    # (base + secondes par Mo, plafonné) ; le moteur est interrompu au-delà.
+    conversion_timeout_base_s: int = 60
+    conversion_timeout_par_mo_s: int = 15
+    conversion_timeout_max_s: int = 1800
 
     # Sécurité
     secret_key: str = ""

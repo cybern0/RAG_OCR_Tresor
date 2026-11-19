@@ -32,7 +32,7 @@ EXCEL_EXT = {".xls", ".xlsx", ".ods"}
 POWERPOINT_EXT = {".ppt", ".pptx", ".odp"}
 OFFICE_EXT = WORD_EXT | EXCEL_EXT | POWERPOINT_EXT
 
-CONVERSION_TIMEOUT = 120
+CONVERSION_TIMEOUT = 120  # valeur de repli si les réglages sont illisibles ; le délai réel dépend de la taille (timeout_pour)
 _lock = threading.Lock()  # Office COM comme LibreOffice tolèrent mal les conversions simultanées
 
 # Chemins standards de LibreOffice sous Windows (LiteParse cherche les mêmes) et de PowerShell
@@ -53,6 +53,25 @@ class ConversionImpossibleError(RuntimeError):
 
 class ConversionTropLongueError(RuntimeError):
     """La conversion a dépassé le délai imparti."""
+
+
+def timeout_pour(source: Path) -> int:
+    """Délai (secondes) accordé à la conversion d'un fichier, selon sa taille :
+    base + secondes par Mo (arrondi au Mo supérieur), plafonné. Un fichier de 2 Mo : 90 s ; de 50 Mo : 810 s
+    (réglages conversion_timeout_base_s / _par_mo_s / _max_s)."""
+    try:
+        from app.config import get_settings
+
+        reglages = get_settings()
+        base, par_mo, maxi = reglages.conversion_timeout_base_s, reglages.conversion_timeout_par_mo_s, reglages.conversion_timeout_max_s
+    except Exception:  # noqa: BLE001 - réglages indisponibles : valeurs par défaut
+        base, par_mo, maxi = 60, 15, 1800
+    try:
+        taille = source.stat().st_size
+    except OSError:
+        return min(maxi, max(base, CONVERSION_TIMEOUT))
+    mo = -(-taille // (1024 * 1024))  # arrondi supérieur
+    return max(1, min(maxi, base + mo * par_mo))
 
 
 def _soffice() -> Path | None:
@@ -207,14 +226,16 @@ def _convertir_avec_soffice(source: Path, sortie_dir: Path, timeout: int) -> Pat
 
 # --- Point d'entrée --------------------------------------------------------------------------------------------------
 
-def convertir_vers_pdf(source: Path, sortie_dir: Path, timeout: int = CONVERSION_TIMEOUT) -> Path:
+def convertir_vers_pdf(source: Path, sortie_dir: Path, timeout: int | None = None) -> Path:
     """Convertit un fichier Office/OpenDocument en PDF dans sortie_dir (même nom, extension .pdf).
 
     Sous Windows : Microsoft Office d'abord, LibreOffice en repli (l'un des deux peut manquer,
     une erreur de l'un tente l'autre). Ailleurs : LibreOffice. Lève OfficeIndisponibleError si
     aucune suite n'est installée, ConversionImpossibleError si le fichier est refusé,
-    ConversionTropLongueError en cas de dépassement du délai.
+    ConversionTropLongueError en cas de dépassement du délai (par défaut calculé d'après la taille : timeout_pour).
     """
+    if timeout is None:
+        timeout = timeout_pour(source)
     if source.suffix.lower() not in OFFICE_EXT:
         raise ConversionImpossibleError(f"Type non convertible en PDF : {source.suffix or 'sans extension'}.")
     moteurs = [_convertir_avec_office, _convertir_avec_soffice] if IS_WINDOWS else [_convertir_avec_soffice]

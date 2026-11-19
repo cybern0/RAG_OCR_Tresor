@@ -1,3 +1,23 @@
+# Aperçu des fichiers Office : délai dynamique et conversion en PDF dès l'indexation
+
+(11/2026)
+
+Contre « La conversion en PDF a pris trop de temps » :
+- **Délai selon la taille du fichier** (`conversion_office.timeout_pour`) : base 60 s + 15 s par Mo (arrondi au Mo
+  supérieur), plafonné à 1800 s — 2 Mo : 90 s, 50 Mo (taille maximale de dépôt) : 810 s. Réglable dans `.env` :
+  `CONVERSION_TIMEOUT_BASE_S`, `CONVERSION_TIMEOUT_PAR_MO_S`, `CONVERSION_TIMEOUT_MAX_S`. Le délai fixe de 120 s
+  (dans `conversion_office.py` et `documents/apercu.py`) est remplacé ; un `timeout=` explicite reste prioritaire.
+- **PDF préparé au dépôt** (`apercu.preparer_apercu`, appelé par `run_ingestion`) : le fichier Office/OpenDocument est
+  converti dès que son indexation démarre — en arrière-plan, la réponse du dépôt n'attend pas — et le PDF est mis en
+  cache : l'aperçu s'ouvre instantanément. Le même PDF sert à l'indexation (une seule conversion au lieu de deux).
+  Un échec de conversion ne bloque pas l'indexation sous Linux (LiteParse reprend le fichier d'origine) ; sous Windows,
+  il est signalé comme avant dans le message d'erreur de la version. Les versions déjà indexées sans PDF en cache sont
+  converties à la première ouverture, avec le nouveau délai. Un verrou commun évite qu'un aperçu et une indexation
+  convertissent le même fichier en double.
+- Tests : `tests/test_conversion_office.py` (délai proportionnel, plafonné, utilisé par la conversion).
+
+---
+
 # Suppression réservée aux chefs de division et de service
 
 (11/2026)

@@ -35,7 +35,6 @@ _SECURITY_HEADERS = {
     "Cache-Control": "private, no-store",
 }
 _convert_lock = threading.Lock()  # LibreOffice n'aime pas deux conversions simultanées sur le même profil
-CONVERSION_TIMEOUT = 120
 
 
 def apercu_mode(nom_fichier: str) -> str:
@@ -78,24 +77,51 @@ def remove_cache(version_id: int) -> None:
 
 
 def convert_to_pdf(version: DocumentVersion) -> Path:
-    """PDF de la version (cache ; conversion au premier appel : Microsoft Office sous Windows, LibreOffice sinon)."""
+    """PDF de la version (cache ; conversion au premier appel : Microsoft Office sous Windows, LibreOffice sinon).
+    Le plus souvent le PDF existe déjà : il est préparé à l'indexation (preparer_apercu). Le délai de conversion
+    dépend de la taille du fichier (conversion_office.timeout_pour)."""
     target = cache_path(version.id)
     if target.is_file():
         return target
     source = _stored(version)
     target.parent.mkdir(parents=True, exist_ok=True)
-    with _convert_lock, tempfile.TemporaryDirectory(prefix="apercu_") as work:
-        try:
-            convertir_vers_pdf(source, Path(work), timeout=CONVERSION_TIMEOUT)
-        except OfficeIndisponibleError as e:
-            raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, str(e)) from None
-        except ConversionTropLongueError:
-            raise HTTPException(status.HTTP_504_GATEWAY_TIMEOUT, "La conversion en PDF a pris trop de temps.") from None
-        except ConversionImpossibleError:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Ce fichier n'a pas pu être converti en PDF.") from None
-        produced = Path(work) / f"{source.stem}.pdf"
-        shutil.move(str(produced), target)
+    with _convert_lock:
+        if target.is_file():  # un autre fil (l'indexation) l'a produit pendant l'attente du verrou
+            return target
+        with tempfile.TemporaryDirectory(prefix="apercu_") as work:
+            try:
+                convertir_vers_pdf(source, Path(work))  # délai calculé d'après la taille du fichier
+            except OfficeIndisponibleError as e:
+                raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, str(e)) from None
+            except ConversionTropLongueError:
+                raise HTTPException(status.HTTP_504_GATEWAY_TIMEOUT, "La conversion en PDF a pris trop de temps.") from None
+            except ConversionImpossibleError:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Ce fichier n'a pas pu être converti en PDF.") from None
+            produced = Path(work) / f"{source.stem}.pdf"
+            shutil.move(str(produced), target)
     return target
+
+
+def preparer_apercu(version: DocumentVersion, source: Path) -> tuple[Path | None, str | None]:
+    """Convertit en PDF, dès l'indexation (donc dès le dépôt), un fichier Office/OpenDocument et met le PDF en cache :
+    l'aperçu s'ouvre ensuite instantanément. Ne lève jamais : renvoie (chemin du PDF, None) ou (None, message d'erreur).
+    Le même PDF sert à l'indexation, ce qui évite une seconde conversion."""
+    if Path(version.nom_fichier).suffix.lower() not in _CONVERTIS:
+        return None, None
+    target = cache_path(version.id)
+    try:
+        with _convert_lock:
+            if target.is_file():
+                return target, None
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix="apercu_") as work:
+                convertir_vers_pdf(source, Path(work))  # délai calculé d'après la taille du fichier
+                shutil.move(str(Path(work) / f"{source.stem}.pdf"), target)
+        return target, None
+    except (OfficeIndisponibleError, ConversionImpossibleError, ConversionTropLongueError) as e:
+        return None, str(e)
+    except OSError as e:
+        return None, f"Aperçu PDF non enregistré : {e}"
 
 
 def preview_response(version: DocumentVersion) -> FileResponse:
