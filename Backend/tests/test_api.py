@@ -773,8 +773,8 @@ def test_reindexation_fichier_disparu_et_acces(client, world):
     assert wait_version(client, a, doc["id"], 1)["statut"] == "ready"
 
 
-def test_demarrage_refuse_une_base_sans_la_migration_de_reindexation():
-    """Base non migrée : arrêt net avec la commande à lancer, pas des erreurs 500 sur la liste des fichiers."""
+def test_demarrage_refuse_une_base_au_schema_non_conforme():
+    """Base au schéma non conforme : arrêt net avec la marche à suivre, pas des erreurs 500 sur la liste des fichiers."""
     from sqlalchemy import text
 
     from app.db.metier import engine
@@ -785,7 +785,7 @@ def test_demarrage_refuse_une_base_sans_la_migration_de_reindexation():
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE rag_sys.document_version RENAME COLUMN images_indexes TO images_indexes_absente"))  # simule la colonne manquante
     try:
-        with pytest.raises(RuntimeError, match=r"(?s)images_indexes.*migration_reindexation\.sql"):
+        with pytest.raises(RuntimeError, match=r"(?s)images_indexes.*01_schema\.sql"):
             verifier_schema(engine)
     finally:
         with engine.begin() as conn:

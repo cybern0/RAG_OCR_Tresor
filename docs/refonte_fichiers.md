@@ -78,9 +78,7 @@ Cette refonte suit quatre demandes :
 - `database/01_schema.sql` : table `dossier` supprimée, `document.dossier_id` supprimé, vue
   `vue_document_stats` sans `dossier_id`, invariant « rôle de fichier hors de la division du fichier »
   remplace l'ancien contrôle dossier/document.
-- **Base existante** : appliquer `database/migration_suppression_dossiers.sql` une fois — script idempotent, réexécutable (une première version laissait la colonne `document.dossier_id` NOT NULL en place et provoquait un 409 « doublon » systématique à chaque dépôt) (détache la clé
-  composite, supprime la table, recrée la vue) — aucun fichier du disque à toucher, les dépôts sont déjà
-  à plat depuis la refonte précédente.
+- **Base existante** : plus de script de migration (supprimé) ; la base se recrée vierge avec `01`, `02`, `03` (voir `docs/ordre_execution_sql.md`).
 
 ## Pourquoi (rappels)
 

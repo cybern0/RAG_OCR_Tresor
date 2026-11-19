@@ -440,14 +440,13 @@ def create_document(
     except IntegrityError as e:
         db.rollback()
         _remove_file(path)
-        # Un doublon (SQLSTATE 23505) ne doit plus masquer une autre cause : sur une base migrée avec
-        # l'ancienne version de migration_suppression_dossiers.sql, la colonne document.dossier_id
-        # NOT NULL restait en place et le dépôt échouait en violation NOT NULL — annoncé à tort « doublon ».
+        # Un doublon (SQLSTATE 23505) ne doit pas masquer une autre cause (ex. violation NOT NULL d'une base
+        # au schéma obsolète) : seul un vrai doublon est annoncé comme tel.
         if getattr(getattr(e, "orig", None), "sqlstate", None) == "23505":
             raise HTTPException(status.HTTP_409_CONFLICT, "Création impossible : doublon.") from None
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "Création impossible : la base a refusé l'écriture (schéma obsolète ? appliquer database/migration_suppression_dossiers.sql).",
+            "Création impossible : la base a refusé l'écriture (schéma obsolète ? recréer la base avec database/01_schema.sql).",
         ) from e
     ingestion_worker.enqueue(version.id)
     return _fresh(db, principal, doc.id)
@@ -599,7 +598,7 @@ def reindexer_version(
         doc.has_tabular if contient_tableaux is None else contient_tableaux,
         doc.has_image if contient_images is None else contient_images,
     )
-    # inconnu (version indexée avant la migration) : on se rabat sur les cases actuelles du fichier
+    # inconnu (version jamais indexée avec succès) : on se rabat sur les cases actuelles du fichier
     deja = reindexation.Parametres(
         doc.has_tabular if version.tableaux_indexes is None else version.tableaux_indexes,
         doc.has_image if version.images_indexes is None else version.images_indexes,

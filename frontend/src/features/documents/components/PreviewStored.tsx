@@ -18,6 +18,6 @@ export function PreviewStored({ documentId, numero, mode, tall }: { documentId: 
 
   if (mode === 'aucun') return <p className="rounded-lg border border-gold-500/30 p-4 text-sm text-cream-300">Pas d’aperçu pour ce type de fichier ici : le télécharger pour le lire.</p>
   if (preview.error) return <ErrorBox message={errorMessage(preview.error)} />
-  if (!preview.data) return <Loading label={mode === 'pdf_converti' ? 'Conversion en PDF…' : 'Chargement…'} />
+  if (!preview.data) return <Loading label="Chargement de l’aperçu…" />
   return <BlobPreview kind={mode === 'pdf_converti' ? 'pdf' : mode} blob={preview.data} tall={tall} />
 }

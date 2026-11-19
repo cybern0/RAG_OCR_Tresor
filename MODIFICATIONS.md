@@ -1,3 +1,26 @@
+# Aperçu : plus de remontage à chaque statut — scripts SQL pour base vierge (migrations supprimées)
+
+(11/2026)
+
+**Aperçu PDF qui « recommençait » après l'indexation.** Côté serveur, le PDF préparé au dépôt est bien mis en cache et
+réutilisé (une version ne change jamais). La cause était l'interface : `DocumentPage` identifiait l'aperçu par
+`document-version-statut`, donc l'aperçu se remontait (nouvelle requête, libellé « Conversion en PDF… ») à chaque passage
+`pending → processing → ready`. La clé ne distingue plus que « erreur » / « ok » (un aperçu en erreur est retenté une fois
+la version prête), et le libellé d'attente est neutre (« Chargement de l'aperçu… »). Le serveur journalise désormais
+`conversion au dépôt (indexation)` ou `absent du cache : conversion à l'ouverture` : si une conversion se répète, le
+journal dit laquelle.
+
+**Scripts SQL : base vierge uniquement.** `database/migration_reindexation.sql` et
+`database/migration_suppression_dossiers.sql` sont supprimés. `01_schema.sql` (déjà conforme : colonnes
+`tableaux_indexes` / `images_indexes`, pas de table `dossier`) est présenté comme base vierge ; `02_donnees_reference.sql`
+devient transactionnel avec des `INSERT` simples (plus de `ON CONFLICT`) ; `03_verification.sql` contrôle en plus la
+conformité du schéma (`schema_colonnes_attendues_manquantes`, `schema_reste_de_dossiers`, attendus à 0). Le contrôle de
+démarrage (`db/verif_schema.py`) et le message d'erreur de dépôt renvoient vers la recréation de la base (`01`, `02`, `03`)
+au lieu d'un script de migration ; README et `docs/` mis à jour. Les entrées plus bas qui citent ces deux scripts sont
+historiques.
+
+---
+
 # Aperçu des fichiers Office : délai dynamique et conversion en PDF dès l'indexation
 
 (11/2026)

@@ -1,4 +1,5 @@
--- 03 - Contrôle des invariants de la GED hiérarchique. À lancer après installation, après un import, ou à tout moment :
+-- 03 - Contrôle des invariants de la GED hiérarchique. À lancer juste après 02 sur la base vierge (tout doit valoir 0),
+-- puis après un import, une restauration, ou à tout moment :
 --   psql -U postgres -d rag -f database/03_verification.sql
 -- Chaque ligne de verification_invariants doit valoir 0 (anomalies). Les avertissements sont des recommandations, pas des erreurs.
 
@@ -33,7 +34,18 @@ FROM document_role dr JOIN document d ON d.id = dr.document_id WHERE dr.division
 UNION ALL
 SELECT 'historique_chaine_alteree', CASE WHEN (SELECT ok FROM verifier_historique()) THEN 0 ELSE 1 END
 UNION ALL
-SELECT 'vecteurs_non_normalises', count(*) FROM chunk WHERE abs(vector_norm(embedding) - 1) > 0.001;
+SELECT 'vecteurs_non_normalises', count(*) FROM chunk WHERE abs(vector_norm(embedding) - 1) > 0.001
+UNION ALL
+-- conformité du schéma (base créée par 01_schema.sql) : colonnes de réindexation présentes
+SELECT 'schema_colonnes_attendues_manquantes', count(*)
+FROM (VALUES ('document_version', 'tableaux_indexes'), ('document_version', 'images_indexes')) AS v(t, c)
+WHERE NOT EXISTS (
+    SELECT 1 FROM information_schema.columns i WHERE i.table_schema = 'rag_sys' AND i.table_name = v.t AND i.column_name = v.c)
+UNION ALL
+-- conformité du schéma : plus aucun reste du concept de dossier
+SELECT 'schema_reste_de_dossiers',
+       (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'rag_sys' AND table_name = 'dossier')
+     + (SELECT count(*) FROM information_schema.columns WHERE table_schema = 'rag_sys' AND table_name = 'document' AND column_name = 'dossier_id');
 
 SELECT * FROM verification_invariants ORDER BY anomalies DESC, controle;
 

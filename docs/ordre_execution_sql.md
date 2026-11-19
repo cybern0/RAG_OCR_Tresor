@@ -2,13 +2,10 @@
 
 La base naît **directement conforme** aux refontes : comptes gérés par l'application, super administrateur
 qui n'administre que, chef de service rétabli, et **fichiers déposés directement dans les divisions**
-(suppression des dossiers — voir `docs/refonte_fichiers.md`). Tous les changements autrefois portés par
-des scripts de migration (`10_suppression_chef_service.sql`, `migration_suppression_sous_dossiers.sql`,
-`migration_dossiers_defaut.sql`) sont fusionnés dans les scripts de base. Une migration subsiste, pour les
-bases **existantes** seulement : `migration_suppression_dossiers.sql` (suppression de la table `dossier`
-sans perte de données). Une seconde migration, `migration_reindexation.sql` (deux colonnes `tableaux_indexes` /
-`images_indexes` sur `document_version`, idempotente), sert aux bases existantes qui veulent la réindexation
-d'une version sans nouveau dépôt. Pour une installation neuve, aucune migration n'est nécessaire :
+(suppression des dossiers — voir `docs/refonte_fichiers.md`). Il n'y a **aucun script de migration** : `01`, `02` et `03` sont faits pour une **base vierge** (les anciens
+scripts `migration_suppression_dossiers.sql` et `migration_reindexation.sql` sont supprimés ; leur contenu est
+dans `01_schema.sql`, et `03_verification.sql` contrôle la conformité du schéma). Une base d'une ancienne version
+se recrée, comme ci-dessous.
 
 | # | Script | Rôle | Transaction | Répétition |
 |---|---|---|---|---|

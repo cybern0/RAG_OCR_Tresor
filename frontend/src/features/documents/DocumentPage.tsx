@@ -65,7 +65,7 @@ export function Component() {
       <div className="grid gap-5 lg:grid-cols-[1fr_22rem]">
         <section className="card min-w-0 p-4">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Aperçu{current ? ` · version ${current.numero}` : ''}</h2>
-          {current ? <PreviewStored key={`${d.id}-${current.numero}-${current.statut}`} documentId={d.id} numero={current.numero} mode={current.apercu} tall /> : <Loading />}
+          {current ? <PreviewStored key={`${d.id}-${current.numero}-${current.statut === 'error' ? 'erreur' : 'ok'}`} documentId={d.id} numero={current.numero} mode={current.apercu} tall /> : <Loading />}
         </section>
 
         <aside className="space-y-5">

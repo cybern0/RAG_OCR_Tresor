@@ -9,6 +9,7 @@ Sécurité (le contenu est servi par l'API, jamais exécuté) :
 - téléchargement : Content-Disposition: attachment avec le nom d'origine, en application/octet-stream.
 """
 
+import logging
 import shutil
 import tempfile
 import threading
@@ -24,6 +25,8 @@ from app.services import stockage
 from app.services.conversion_office import (
     ConversionImpossibleError, ConversionTropLongueError, OfficeIndisponibleError, convertir_vers_pdf,
 )
+
+logger = logging.getLogger(__name__)
 
 _IMAGES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".bmp": "image/bmp"}
 _TEXTE = {".txt", ".md", ".csv"}
@@ -88,6 +91,7 @@ def convert_to_pdf(version: DocumentVersion) -> Path:
     with _convert_lock:
         if target.is_file():  # un autre fil (l'indexation) l'a produit pendant l'attente du verrou
             return target
+        logger.info("Aperçu PDF de la version %s absent du cache : conversion à l'ouverture", version.id)
         with tempfile.TemporaryDirectory(prefix="apercu_") as work:
             try:
                 convertir_vers_pdf(source, Path(work))  # délai calculé d'après la taille du fichier
@@ -113,6 +117,7 @@ def preparer_apercu(version: DocumentVersion, source: Path) -> tuple[Path | None
         with _convert_lock:
             if target.is_file():
                 return target, None
+            logger.info("Aperçu PDF de la version %s : conversion au dépôt (indexation)", version.id)
             target.parent.mkdir(parents=True, exist_ok=True)
             with tempfile.TemporaryDirectory(prefix="apercu_") as work:
                 convertir_vers_pdf(source, Path(work))  # délai calculé d'après la taille du fichier

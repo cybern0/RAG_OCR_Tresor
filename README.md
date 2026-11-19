@@ -49,16 +49,10 @@ psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/seed.sql   # facultatif :
 `01` crée tout le schéma en une seule transaction (base NEUVE uniquement) ; `02` insère les rôles globaux
 et les permissions ; `03` contrôle les invariants (`verification_invariants`, chaque ligne attendue à 0).
 
-**Base existante antérieure aux refontes** : deux cas.
+**Aucun script de migration** : les scripts `01`, `02`, `03` sont faits pour une **base vierge**. Une base d'une
+version antérieure se **recrée** (sauvegarde, `DROP DATABASE`, `CREATE DATABASE`, puis la chaîne ci-dessus ; ordre
+complet et précautions : `docs/ordre_execution_sql.md`). Le backend refuse de démarrer sur un schéma non conforme.
 
-- **Mise à jour sans perte de données** : la refonte « fichiers à plat » (suppression des dossiers) fournit
-  un script de migration à appliquer UNE fois : `psql -U postgres -d rag -v ON_ERROR_STOP=1 -f
-  database/migration_suppression_dossiers.sql` (aucun fichier du disque à manipuler, aucun accès perdu).
-- **Réindexation d'une version sans nouveau dépôt** : ajoute deux colonnes à `document_version`. Base existante :
-  `psql -U postgres -d rag -v ON_ERROR_STOP=1 -f database/migration_reindexation.sql` (idempotente, sans perte ;
-  une base neuve créée avec `01_schema.sql` les a déjà).
-- **Base ancienne (avant les refontes)** : recréer la base — `DROP DATABASE`, puis la chaîne ci-dessus
-  (ordre complet et précautions : `docs/ordre_execution_sql.md`).
 
 Pour contrôler que les embeddings sont bien normalisés : `psql -U postgres -d rag -f database/verif_vecteurs_normalises.sql` (attendu : 0 non normalisé).
 
