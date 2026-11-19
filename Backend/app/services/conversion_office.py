@@ -120,7 +120,10 @@ def suites_disponibles() -> list[str]:
 _SCRIPT_PS = r"""
 param(
     [Parameter(Mandatory = $true)][string]$Source,
-    [Parameter(Mandatory = $true)][string]$OutDir
+    [Parameter(Mandatory = $true)][string]$OutDir,
+    [string]$Imprimante = "",
+    [switch]$Visible,                                   # diagnostic : Word/Excel visibles (on voit une éventuelle boîte de dialogue)
+    [string]$Methode = "export"                         # diagnostic Word : "export" (ExportAsFixedFormat) ou "saveas" (SaveAs2)
 )
 $ErrorActionPreference = "Stop"
 
@@ -132,49 +135,180 @@ function OfficeAbsent {
     [Console]::Error.WriteLine("OFFICE_ABSENT")
     exit 3
 }
+# Journal d'étapes lu par Python : en cas de délai dépassé, il dit OÙ la conversion est restée bloquée
+# (démarrage d'Office, ouverture du document, export PDF) et donne le PID d'Office à fermer.
+function Etape([string]$Texte) {
+    try { Add-Content -LiteralPath $script:journal -Value ((Get-Date -Format "HH:mm:ss.fff") + " " + $Texte) } catch { }
+}
 
 $source = (Resolve-Path -LiteralPath $Source).Path
 $outDir = (Resolve-Path -LiteralPath $OutDir).Path
 $out = Join-Path $outDir (([System.IO.Path]::GetFileNameWithoutExtension($source)) + ".pdf")
 $ext = [System.IO.Path]::GetExtension($source).ToLower()
+$script:journal = Join-Path $outDir "_etapes.txt"
 
 switch ($ext) {
-    { $_ -in ".doc", ".docx", ".rtf", ".odt" } { $progId = "Word.Application" }
-    { $_ -in ".xls", ".xlsx", ".ods" }         { $progId = "Excel.Application" }
-    { $_ -in ".ppt", ".pptx", ".odp" }         { $progId = "PowerPoint.Application" }
+    { $_ -in ".doc", ".docx", ".rtf", ".odt" } { $progId = "Word.Application"; $procName = "WINWORD" }
+    { $_ -in ".xls", ".xlsx", ".ods" }         { $progId = "Excel.Application"; $procName = "EXCEL" }
+    { $_ -in ".ppt", ".pptx", ".odp" }         { $progId = "PowerPoint.Application"; $procName = "POWERPNT" }
     default { Fail ("Type not convertible by Microsoft Office: " + $ext) }
 }
 
+$t0 = (Get-Date).AddSeconds(-2)
+Etape ("demarrage_office " + $progId)
 try { $app = New-Object -ComObject $progId } catch { OfficeAbsent }
+try {
+    $p = Get-Process -Name $procName -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -ge $t0 } | Select-Object -First 1
+    if ($p) { Etape ("PID " + $p.Id) }
+} catch { }
+Etape "office_demarre"
 
 try {
     switch ($ext) {
         { $_ -in ".doc", ".docx", ".rtf", ".odt" } {
-            $app.Visible = $false
-            $app.DisplayAlerts = 0
-            $doc = $app.Documents.Open($source, $false, $true)   # ConfirmConversions=False, ReadOnly=True
-            try { $doc.SaveAs2($out, 17) } finally { $doc.Close($false) }   # 17 = wdFormatPDF
+            $app.Visible = [bool]$Visible
+            $app.DisplayAlerts = 0                                  # wdAlertsNone
+            # Reglages anti-blocage propres a Word (Excel : UpdateLinks=0 ci-dessous) : jamais de macro ni d'invite,
+            # pas de mise a jour des liens a l'ouverture, pas de repagination en arriere-plan.
+            try { $app.AutomationSecurity = 3 } catch { }           # msoAutomationSecurityForceDisable
+            try { $app.Options.UpdateLinksAtOpen = $false } catch { }
+            try { $app.Options.ConfirmConversions = $false } catch { }
+            try { $app.Options.Pagination = $false } catch { }
+            # Word calcule la mise en page avec le pilote de l'imprimante active : une imprimante réseau hors ligne ou un
+            # pilote défaillant fait « geler » l'export. L'étape est tracée ; Imprimante (réglage facultatif) la remplace.
+            if ($Imprimante) {
+                Etape ("imprimante_demandee " + $Imprimante)
+                try { $app.ActivePrinter = $Imprimante } catch { Etape "imprimante_refusee" }
+            }
+            Etape "lecture_imprimante"
+            try { Etape ("imprimante_active " + $app.ActivePrinter) } catch { Etape "imprimante_illisible" }
+            Etape "ouverture_document"
+            $doc = $app.Documents.Open($source, $false, $true, $false)   # ConfirmConversions=False, ReadOnly=True, AddToRecentFiles=False
+            Etape "export_pdf"
+            try {
+                # meme methode que Excel ; repli sur SaveAs2 si l'export direct est refuse
+                if ($Methode -eq "saveas") { $doc.SaveAs2($out, 17) }
+                else { try { $doc.ExportAsFixedFormat($out, 17) } catch { $doc.SaveAs2($out, 17) } }   # 17 = wdExportFormatPDF / wdFormatPDF
+            } finally { $doc.Close($false) }
         }
         { $_ -in ".xls", ".xlsx", ".ods" } {
-            $app.Visible = $false
+            $app.Visible = [bool]$Visible
             $app.DisplayAlerts = $false
+            Etape "ouverture_document"
             $wb = $app.Workbooks.Open($source, 0, $true)          # UpdateLinks=0, ReadOnly=True
+            Etape "export_pdf"
             try { $wb.ExportAsFixedFormat(0, $out) } finally { $wb.Close($false) }   # 0 = xlTypePDF
         }
         { $_ -in ".ppt", ".pptx", ".odp" } {
             # PowerPoint ne peut pas tourner masque (contrainte du modele COM) ; sans fenetre
+            Etape "ouverture_document"
             $pres = $app.Presentations.Open($source, $true, $false, $false)   # ReadOnly=True, WithWindow=False
+            Etape "export_pdf"
             try { $pres.SaveAs($out, 32) } finally { $pres.Close() }   # 32 = ppSaveAsPDF
         }
     }
 } finally {
+    Etape "fermeture_office"
     $app.Quit()
     [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($app)
 }
+Etape "termine"
 
 if (-not (Test-Path -LiteralPath $out)) { Fail "PDF not produced by Microsoft Office." }
 exit 0
 """
+
+
+_ETAPES = {
+    "demarrage_office": "démarrage de l'application Office",
+    "office_demarre": "démarrage de l'application Office",
+    "lecture_imprimante": "lecture de l'imprimante active de Word (pilote d'imprimante bloqué ?)",
+    "ouverture_document": "ouverture du document",
+    "export_pdf": "export en PDF",
+    "fermeture_office": "fermeture d'Office",
+}
+
+
+def lire_journal(sortie_dir: Path) -> list[str]:
+    """Lignes « HH:MM:SS.mmm étape » écrites par le script PowerShell (vide si absent)."""
+    try:
+        return (sortie_dir / "_etapes.txt").read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    except OSError:
+        return []
+
+
+def _etape_bloquee(sortie_dir: Path) -> str | None:
+    """Dernière étape atteinte avant le blocage, en clair."""
+    for ligne in reversed(lire_journal(sortie_dir)):
+        nom = ligne.split(" ", 1)[-1].split(" ", 1)[0]
+        if nom in _ETAPES:
+            return _ETAPES[nom]
+    return None
+
+
+_SCRIPT_FENETRES = r"""
+param([Parameter(Mandatory = $true)][uint32]$ProcessId)
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+public class FenetresOffice {
+    public delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc p, IntPtr l);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    public static List<string> De(uint pid) {
+        List<string> r = new List<string>();
+        EnumWindows(delegate(IntPtr h, IntPtr l) {
+            uint p; GetWindowThreadProcessId(h, out p);
+            if (p == pid) {
+                StringBuilder t = new StringBuilder(256); GetWindowText(h, t, 256);
+                StringBuilder c = new StringBuilder(256); GetClassName(h, c, 256);
+                r.Add((IsWindowVisible(h) ? "visible" : "cachee") + " | " + c + " | " + t);
+            }
+            return true;
+        }, IntPtr.Zero);
+        return r;
+    }
+}
+'@
+[FenetresOffice]::De($ProcessId) | ForEach-Object { $_ }
+"""
+
+
+def _fenetres_office(sortie_dir: Path) -> list[str]:
+    """Fenêtres du processus Office bloqué (titre, classe, visible ou cachée) : une boîte de dialogue invisible qui
+    attend une réponse est la cause classique d'un blocage. Ne lève jamais ; vide si inconnu."""
+    pid = next((m[2] for m in (l.split(" ") for l in lire_journal(sortie_dir)) if len(m) >= 3 and m[1] == "PID" and m[2].isdigit()), None)
+    powershell = _powershell()
+    if pid is None or powershell is None:
+        return []
+    try:
+        script = sortie_dir / "_fenetres.ps1"
+        script.write_text(_SCRIPT_FENETRES, encoding="utf-8-sig")
+        sortie = subprocess.run(
+            [str(powershell), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script), "-ProcessId", pid],
+            capture_output=True, timeout=30,
+        )
+        lignes = (sortie.stdout or b"").decode("utf-8", "replace").splitlines()
+    except Exception:  # noqa: BLE001 - diagnostic au mieux
+        return []
+    return [l.strip() for l in lignes if l.strip() and ("#32770" in l or l.rsplit("|", 1)[-1].strip())][:8]
+
+
+def _fermer_office_bloque(sortie_dir: Path) -> None:
+    """Délai dépassé : tuer PowerShell ne ferme pas Word/Excel/PowerPoint (processus COM à part). Un Office resté
+    ouvert bloquerait les conversions suivantes : on le ferme d'après le PID noté par le script. Ne lève jamais."""
+    for ligne in lire_journal(sortie_dir):
+        morceaux = ligne.split(" ")
+        if len(morceaux) >= 3 and morceaux[1] == "PID" and morceaux[2].isdigit():
+            try:
+                subprocess.run(["taskkill", "/F", "/T", "/PID", morceaux[2]], capture_output=True, timeout=15)
+            except Exception:  # noqa: BLE001 - nettoyage au mieux
+                pass
 
 
 def _convertir_avec_office(source: Path, sortie_dir: Path, timeout: int) -> Path:
@@ -183,21 +317,67 @@ def _convertir_avec_office(source: Path, sortie_dir: Path, timeout: int) -> Path
         raise OfficeIndisponibleError("PowerShell est introuvable sur ce serveur Windows.")
     script = sortie_dir / "_conversion_office.ps1"
     script.write_text(_SCRIPT_PS, encoding="utf-8-sig")  # BOM requis par PowerShell 5.1
+    commande = [str(powershell), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                "-File", str(script), "-Source", str(source), "-OutDir", str(sortie_dir)]
+    imprimante = _imprimante_word()
+    if imprimante:
+        commande += ["-Imprimante", imprimante]
+    reglages = _reglages_diagnostic()
+    if reglages["visible"]:
+        commande += ["-Visible"]
+    if reglages["methode"] in ("export", "saveas"):
+        commande += ["-Methode", reglages["methode"]]
+    # Sortie redirigée vers des FICHIERS et non des tubes : Word/Excel héritent des tubes de PowerShell et les gardent
+    # ouverts jusqu'à leur arrêt complet (parfois des dizaines de secondes), ce qui retenait subprocess.run bien après
+    # la fin réelle du script.
     try:
-        proc = subprocess.run(
-            [str(powershell), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-             "-File", str(script), "-Source", str(source), "-OutDir", str(sortie_dir)],
-            capture_output=True, timeout=timeout,
-        )
+        with open(sortie_dir / "_sortie.txt", "wb") as sortie, open(sortie_dir / "_erreur.txt", "wb") as erreur:
+            proc = subprocess.run(commande, stdout=sortie, stderr=erreur, timeout=timeout)
     except subprocess.TimeoutExpired:
-        raise ConversionTropLongueError("La conversion Microsoft Office a dépassé le délai imparti.") from None
+        etape = _etape_bloquee(sortie_dir)
+        fenetres = _fenetres_office(sortie_dir)  # AVANT la fermeture d'Office
+        _fermer_office_bloque(sortie_dir)
+        detail = f" (bloquée à l'étape : {etape})" if etape else ""
+        if fenetres:
+            detail += " — fenêtres d'Office ouvertes : " + " ; ".join(fenetres)
+        raise ConversionTropLongueError(
+            f"La conversion Microsoft Office a dépassé le délai imparti ({timeout} s){detail}."
+        ) from None
+    _fermer_office_bloque(sortie_dir)  # Quit() a été demandé ; on s'assure qu'Office ne reste pas en arrière-plan
     produit = sortie_dir / (source.stem + ".pdf")
-    stderr = (proc.stderr or b"").decode("utf-8", "replace").strip()
+    brut = proc.stderr
+    if not brut:
+        try:
+            brut = (sortie_dir / "_erreur.txt").read_bytes()
+        except OSError:
+            brut = b""
+    stderr = brut.decode("utf-8", "replace").strip()
     if proc.returncode == 3:
         raise OfficeIndisponibleError("Microsoft Office n'est pas installé ou inaccessible via COM sur le serveur.")
     if proc.returncode != 0 or not produit.is_file():
         raise ConversionImpossibleError(f"Microsoft Office a refusé la conversion : {stderr[-300:]}")
     return produit
+
+
+def _reglages_diagnostic() -> dict:
+    """Réglages réservés au diagnostic (scripts/diagnostic_conversion.py) : Office visible, méthode d'export Word."""
+    try:
+        from app.config import get_settings
+
+        r = get_settings()
+        return {"visible": bool(r.conversion_office_visible), "methode": (r.conversion_word_methode or "export").lower()}
+    except Exception:  # noqa: BLE001
+        return {"visible": False, "methode": "export"}
+
+
+def _imprimante_word() -> str:
+    """Imprimante à imposer à Word pendant la conversion (réglage conversion_word_imprimante, vide par défaut)."""
+    try:
+        from app.config import get_settings
+
+        return (get_settings().conversion_word_imprimante or "").strip()
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 # --- Moteur LibreOffice (Linux, et repli sous Windows) ---------------------------------------------------------------

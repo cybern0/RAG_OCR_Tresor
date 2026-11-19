@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     conversion_timeout_base_s: int = 60
     conversion_timeout_par_mo_s: int = 15
     conversion_timeout_max_s: int = 1800
+    # Windows + Word : imprimante imposée à Word pendant la conversion (ex. « Microsoft Print to PDF »). Vide : celle de
+    # Windows. Utile quand l'export Word se bloque à cause d'une imprimante réseau hors ligne.
+    conversion_word_imprimante: str = ""
+    # Diagnostic uniquement (scripts/diagnostic_conversion.py) : Office visible sur le serveur ; méthode d'export Word
+    # « export » (défaut) ou « saveas ».
+    conversion_office_visible: bool = False
+    conversion_word_methode: str = "export"
 
     # Sécurité
     secret_key: str = ""

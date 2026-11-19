@@ -1,3 +1,58 @@
+# Word bloqué à l'export : imprimante écartée — fenêtres d'Office relevées, document témoin
+
+(11/2026)
+
+Diagnostic serveur : l'imprimante par défaut est locale (« Microsoft Print to PDF »), l'imposer ne change rien : l'hypothèse
+« imprimante » est écartée. Word s'ouvre en 0,9 s puis se fige à l'export PDF d'un fichier de 0,32 Mo.
+- **Au dépassement du délai**, avant de fermer Office, le serveur relève les fenêtres du processus (titre, classe,
+  visible / cachée) et les ajoute au message d'erreur : une boîte de dialogue cachée (classe `#32770`) qui attend une réponse
+  est la cause classique d'un tel blocage.
+- **`scripts/diagnostic_conversion.py`** : `--temoin` convertit un document Word minimal (distingue « Word est cassé » de
+  « ce document bloque »), `--visible` affiche Word sur le bureau du serveur, `--methode saveas` essaie l'autre méthode
+  d'export, et l'état du service Spooler d'impression est affiché.
+- Réglages de diagnostic : `CONVERSION_OFFICE_VISIBLE`, `CONVERSION_WORD_METHODE` (`export` | `saveas`).
+
+---
+
+# Conversion Office : diagnostic sur le serveur — Excel retenu 36 s hors script, Word bloqué à l'export
+
+(11/2026)
+
+Mesures (`scripts/diagnostic_conversion.py`, serveur Windows + Microsoft Office) : le `.xlsx` (0,03 Mo) convertissait en
+2,5 s de script mais `subprocess.run` ne rendait la main qu'après 39 s ; le `.docx` (0,32 Mo) s'ouvrait en 0,8 s puis restait
+bloqué à l'**export PDF** pendant tout le délai.
+- **Excel / tous les moteurs Office** : la sortie de PowerShell va dans des fichiers (`_sortie.txt`, `_erreur.txt`) et non
+  dans des tubes — Office hérite des tubes et les garde ouverts jusqu'à son arrêt complet, ce qui retenait l'appel. L'Office
+  lancé pour la conversion est en outre fermé par son PID dès que le script a rendu la main.
+- **Word** : le journal trace maintenant l'imprimante active de Word (`imprimante_active …`) ; l'export Word dépend du pilote
+  d'imprimante (mise en page), une imprimante réseau hors ligne le fige. Réglage facultatif `CONVERSION_WORD_IMPRIMANTE`
+  (ex. `Microsoft Print to PDF`) pour l'imposer à Word pendant la conversion.
+- **Diagnostic** : liste les imprimantes Windows (par défaut, réseau, hors ligne), sépare « durée du script » et « hors
+  script », option `--imprimante` pour tester sans toucher au `.env`.
+
+---
+
+# Conversion Word : comparaison avec Excel, étapes tracées, Office bloqué fermé, outil de diagnostic
+
+(11/2026)
+
+Word (`.docx`) échouait par dépassement de délai alors qu'Excel (`.xlsx`) passait vite. Écarts constatés dans le code :
+Word s'ouvrait sans désactiver les liens ni les macros (Excel : `UpdateLinks=0`) et s'exportait par `SaveAs2` (Excel :
+`ExportAsFixedFormat`) ; après un délai dépassé, PowerShell était tué mais **Word restait ouvert en arrière-plan** et
+bloquait les conversions suivantes ; et un Word n'est indexé qu'après conversion puis lecture LiteParse, alors qu'un
+`.xlsx` est lu directement (le PDF ne sert qu'à l'aperçu).
+- **Script PowerShell** (`conversion_office.py`) : Word désactive macros (`AutomationSecurity`), mise à jour des liens,
+  conversions et repagination en arrière-plan, s'ouvre en lecture seule et s'exporte avec `ExportAsFixedFormat` comme
+  Excel (repli sur `SaveAs2`).
+- **Journal d'étapes** : le script note l'heure de chaque étape (démarrage d'Office, ouverture, export, fermeture) et le
+  PID d'Office. Au dépassement du délai, le message dit où ça s'est bloqué (« bloquée à l'étape : ouverture du document »)
+  et l'Office resté ouvert est fermé (`taskkill`).
+- **Outil de diagnostic** : `Backend/scripts/diagnostic_conversion.py <fichiers>` mesure la conversion étape par étape,
+  pour comparer un Word et un Excel sur le serveur.
+- Test ajouté : `tests/test_conversion_office.py` (étape bloquée + fermeture d'Office).
+
+---
+
 # Aperçu : plus de remontage à chaque statut — scripts SQL pour base vierge (migrations supprimées)
 
 (11/2026)

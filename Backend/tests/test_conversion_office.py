@@ -271,3 +271,28 @@ def test_convertir_vers_pdf_utilise_le_delai_dynamique(monkeypatch, tmp_path: Pa
     assert vu == [60 + 15 * 4]
     convertir_vers_pdf(source, tmp_path, timeout=5)  # un délai explicite l'emporte
     assert vu[-1] == 5
+
+
+# --- Diagnostic : étape de blocage et fermeture d'Office après un délai dépassé ---------------------------------------
+
+def test_delai_office_indique_l_etape_et_ferme_office(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(conv, "IS_WINDOWS", True)
+    powershell = tmp_path / "powershell.exe"; powershell.write_text("")
+    monkeypatch.setattr(conv, "_POWERSHELL", [powershell])
+    monkeypatch.setattr(conv, "shutil", _shutil_stub())
+    appels: list[list[str]] = []
+
+    def run(cmd, **kwargs):
+        appels.append([str(c) for c in cmd])
+        if str(cmd[0]).endswith("powershell.exe"):   # le script a écrit son journal puis s'est bloqué à l'ouverture
+            (tmp_path / "_etapes.txt").write_text(
+                "10:00:00.100 demarrage_office Word.Application\n10:00:01.000 PID 4321\n"
+                "10:00:01.500 office_demarre\n10:00:01.600 ouverture_document\n", encoding="utf-8")
+            raise subprocess.TimeoutExpired(cmd, 5)
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(conv, "subprocess", _subprocess_stub(run))
+    source = tmp_path / "rapport.docx"; source.write_bytes(b"x")
+    with pytest.raises(ConversionTropLongueError, match=r"5 s.*ouverture du document"):
+        conv._convertir_avec_office(source, tmp_path, 5)
+    assert ["taskkill", "/F", "/T", "/PID", "4321"] in appels   # Word bloqué est fermé, pas laissé en arrière-plan
