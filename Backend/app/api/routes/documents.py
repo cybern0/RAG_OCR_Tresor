@@ -35,10 +35,7 @@ def filtres(principal: Principal = Depends(get_principal), db: Session = Depends
 @router.get("", response_model=list[DocumentOut] | DocumentPageOut)
 def list_documents(
     q: str | None = None,
-    categorie_id: int | None = Query(default=None),
-    type_id: int | None = Query(default=None),
     tag_id: list[int] | None = Query(default=None),
-    confidentialite: str | None = None,
     statut: str | None = None,
     extension: str | None = None,
     du: datetime | None = None,
@@ -54,14 +51,13 @@ def list_documents(
     principal: Principal = Depends(get_principal),
     db: Session = Depends(get_db),
 ):
+    """Filtres catégorie / type / confidentialité retirés : ces champs restent des métadonnées de classement
+    (badges, statistiques, règles automatiques) mais ne filtrent plus la liste."""
     return crud.list_documents(
         db,
         principal,
         q=q,
-        categorie_id=categorie_id,
-        type_id=type_id,
         tag_ids=tag_id,
-        confidentialite=confidentialite,
         statut=statut,
         extension=extension,
         du=du,

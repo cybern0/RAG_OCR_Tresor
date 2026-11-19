@@ -133,10 +133,12 @@ Rôles effectifs sur un fichier (recalculés à chaque requête, matrice `MATRIC
 | Purge définitive, rôles du fichier | non | non | oui | non |
 
 **Plus de dossiers** (refonte `/fichiers`, `docs/refonte_fichiers.md`) : la page **Fichiers** liste à plat
-tous les fichiers accessibles, avec recherche, filtres de classe (catégorie, type, confidentialité), **filtre
+tous les fichiers accessibles, avec recherche, **filtre
 par rôle** (les fichiers des admins portent plusieurs rôles, un agent peut en porter plusieurs) et, pour le
 chef de service, **filtre par division** ; dépôt direct dans la division (choix de la division s'il en gère
-plusieurs). **Stockage à plat** (`docs/refonte_classes.md`) : tous les fichiers vivent dans le seul
+plusieurs). Les filtres catégorie / type / confidentialité ont été retirés : ces champs restent des
+métadonnées de classement (badges, statistiques, règles automatiques), la visibilité étant déjà gouvernée
+par division et rôles côté serveur. **Stockage à plat** (`docs/refonte_classes.md`) : tous les fichiers vivent dans le seul
 `storage/uploads/` sous un nom généré — l'accès est entièrement contrôlé par l'application. Les dépôts
 anciens (`<division>/<dossier>/…` ou déjà à plat) restent lisibles : c'est le chemin enregistré en base
 qui fait foi. Le **tableau de bord du super administrateur (`/admin`, sa première page — il n'a pas d'Accueil)**

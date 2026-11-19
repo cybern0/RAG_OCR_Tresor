@@ -51,9 +51,6 @@ export interface DocumentPage { items: DocumentMeta[]; total: number; page: numb
 
 export interface DocumentFilters {
   q?: string
-  categorie_id?: number
-  type_id?: number
-  confidentialite?: string
   statut?: string
   role_id?: number
   division_id?: number

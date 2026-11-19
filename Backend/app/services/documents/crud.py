@@ -143,10 +143,7 @@ def _document_extension(doc: Document) -> str | None:
 def apply_document_filters(
     docs: list[Document],
     q: str | None = None,
-    categorie_id: int | None = None,
-    type_id: int | None = None,
     tag_ids: list[int] | None = None,
-    confidentialite: str | None = None,
     statut: str | None = None,
     extension: str | None = None,
     du=None,
@@ -156,7 +153,11 @@ def apply_document_filters(
     page: int | None = None,
     taille: int | None = None,
 ):
-    """Applique les filtres métier sur une liste de documents et retourne une page paginée."""
+    """Applique les filtres métier sur une liste de documents et retourne une page paginée.
+    Les filtres catégorie / type / confidentialité ont été retirés : ces champs restent des métadonnées de
+    classement (badges, statistiques, règles automatiques), la visibilité étant déjà gouvernée par la
+    condition d'accès (division et rôles) ; « INTERNE » étant la valeur par défaut d'un fichier non classé,
+    le filtre ne pouvait de toute façon pas distinguer classé et non classé."""
     filtered = list(docs)
 
     if q:
@@ -168,12 +169,6 @@ def apply_document_filters(
                 or any(needle in (v.nom_fichier or "").lower() for v in d.versions)
             ]
 
-    if categorie_id is not None:
-        filtered = [d for d in filtered if getattr(d, "categorie_id", None) == categorie_id]
-    if type_id is not None:
-        filtered = [d for d in filtered if getattr(d, "type_document_id", None) == type_id]
-    if confidentialite:
-        filtered = [d for d in filtered if getattr(d, "confidentialite", None) == confidentialite.upper()]
     if tag_ids:
         # tous les tags demandés doivent être présents sur le fichier
         wanted = set(tag_ids)
@@ -228,10 +223,7 @@ def list_documents(
     db: Session,
     principal: Principal,
     q: str | None = None,
-    categorie_id: int | None = None,
-    type_id: int | None = None,
     tag_ids: list[int] | None = None,
-    confidentialite: str | None = None,
     statut: str | None = None,
     extension: str | None = None,
     du=None,
@@ -258,7 +250,7 @@ def list_documents(
 
     ordered_docs = list(db.scalars(_query().where(*doc_filter).order_by(Document.cree_le.desc(), Document.id.desc())).unique().all())
     filtered = apply_document_filters(
-        ordered_docs, q=q, categorie_id=categorie_id, type_id=type_id, tag_ids=tag_ids, confidentialite=confidentialite,
+        ordered_docs, q=q, tag_ids=tag_ids,
         statut=statut, extension=extension, du=du, au=au, auteur_id=auteur_id, tri=tri, page=page, taille=taille,
     )
     roles_docs = roles_par_document(db, [d.id for d in filtered["items"]])

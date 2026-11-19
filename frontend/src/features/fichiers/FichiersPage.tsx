@@ -1,6 +1,8 @@
-// Liste à plat de tous les fichiers accessibles (plus de dossiers ni d'arborescence) : recherche, filtres de classe,
-// filtre par rôle (un fichier peut avoir plusieurs rôles, un agent en porter plusieurs), filtre par division
-// (chef de service), tri, pagination, sélection multiple, corbeille. Les filtres vivent dans l'URL ; le backend reste l'autorité.
+// Liste à plat de tous les fichiers accessibles (plus de dossiers ni d'arborescence) : recherche, filtre par rôle
+// (un fichier peut avoir plusieurs rôles, un agent en porter plusieurs), filtre par division (chef de service),
+// statut, tri, pagination, sélection multiple, corbeille. Les filtres vivent dans l'URL ; le backend reste l'autorité.
+// Les filtres catégorie / type / confidentialité ont été retirés : ces données restent des métadonnées de classement
+// (badges, statistiques, règles automatiques), la visibilité étant déjà gouvernée par division et rôles côté serveur.
 import { Download, Eye, FilePlus2, FileUp, Pencil, RotateCcw, Search, Tags, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
@@ -20,7 +22,7 @@ import ClassifyModal from '../documents/components/ClassifyModal'
 import EditDocumentModal from '../documents/components/EditDocumentModal'
 import NewVersionModal from '../documents/components/NewVersionModal'
 import { StatusBadge } from '../documents/components/StatusBadge'
-import { useDocumentMutations, useDocuments, useFiltres, useReferentiel } from '../documents/queries'
+import { useDocumentMutations, useDocuments, useFiltres } from '../documents/queries'
 import type { DocumentFilters, DocumentMeta } from '../documents/types'
 
 const TAILLE = 15
@@ -30,7 +32,6 @@ export function Component() {
   const [params, setParams] = useSearchParams()
   const toast = useToast()
   const mutations = useDocumentMutations()
-  const ref = useReferentiel()
   const filtres = useFiltres()
 
   const corbeille = params.get('vue') === 'corbeille'
@@ -45,9 +46,6 @@ export function Component() {
   const filters: DocumentFilters = {
     q: debouncedQ || undefined,
     statut: params.get('statut') || undefined,
-    categorie_id: params.get('categorie') ? Number(params.get('categorie')) : undefined,
-    type_id: params.get('type') ? Number(params.get('type')) : undefined,
-    confidentialite: params.get('conf') || undefined,
     role_id: params.get('role') ? Number(params.get('role')) : undefined,
     division_id: params.get('division') ? Number(params.get('division')) : undefined,
     tri: (params.get('tri') as DocumentFilters['tri']) || 'date_desc',
@@ -78,7 +76,7 @@ export function Component() {
     try { await downloadVersion(doc.id, doc.version.numero, doc.version.nom_fichier) } catch (e) { toast.error(errorMessage(e)) }
   }
 
-  const activeFilters = ['statut', 'categorie', 'type', 'conf', 'role', 'division', 'a_classer'].some((k) => params.get(k))
+  const activeFilters = ['statut', 'role', 'division', 'a_classer'].some((k) => params.get(k))
   const roleLibelle = filtres.data?.roles.find((r) => r.id === filters.role_id)
 
   return (
@@ -107,15 +105,6 @@ export function Component() {
         )}
         <select className="input w-auto" aria-label="Statut" value={params.get('statut') ?? ''} onChange={(e) => setParam('statut', e.target.value || null)}>
           <option value="">Tous les statuts</option><option value="ready">Prêt</option><option value="processing">Indexation</option><option value="pending">En attente</option><option value="error">Erreur</option>
-        </select>
-        <select className="input w-auto" aria-label="Catégorie" value={params.get('categorie') ?? ''} onChange={(e) => setParam('categorie', e.target.value || null)}>
-          <option value="">Toutes catégories</option>{ref.data?.categories.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
-        </select>
-        <select className="input w-auto" aria-label="Type" value={params.get('type') ?? ''} onChange={(e) => setParam('type', e.target.value || null)}>
-          <option value="">Tous types</option>{ref.data?.types.map((t) => <option key={t.id} value={t.id}>{t.nom}</option>)}
-        </select>
-        <select className="input w-auto" aria-label="Confidentialité" value={params.get('conf') ?? ''} onChange={(e) => setParam('conf', e.target.value || null)}>
-          <option value="">Toute confidentialité</option><option value="PUBLIC">Public</option><option value="INTERNE">Interne</option><option value="CONFIDENTIEL">Confidentiel</option>
         </select>
         <select className="input w-auto" aria-label="Tri" value={params.get('tri') ?? 'date_desc'} onChange={(e) => setParam('tri', e.target.value === 'date_desc' ? null : e.target.value)}>
           <option value="date_desc">Plus récents</option><option value="titre_asc">Titre A → Z</option><option value="titre_desc">Titre Z → A</option>

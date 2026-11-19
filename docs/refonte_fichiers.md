@@ -59,9 +59,11 @@ Cette refonte suit quatre demandes :
 ### Frontend
 
 - **Page `/fichiers`** (nouvelle `features/fichiers/FichiersPage.tsx`) : liste à plat — recherche, filtre
-  rôle (groupé par division pour un chef de service), filtre division (si plusieurs), statut, catégories,
-  types, confidentialité, tri, pagination, onglets Fichiers / Corbeille / À classer, sélection multiple,
+  rôle (groupé par division pour un chef de service), filtre division (si plusieurs), statut, tri,
+  pagination, onglets Fichiers / Corbeille / À classer, sélection multiple,
   dépôt direct (choix de la division si plusieurs). Les anciens liens `/dossiers/...` redirigent.
+  (Les filtres catégorie / type / confidentialité présents à l'origine ont été retirés ensuite : ces champs
+  restent des métadonnées de classement — badges, statistiques, règles automatiques.)
 - `/admin` (StatsPage refondue) : indicateurs, alertes du tableau de bord, section **Erreurs
   d'indexation** (regroupements + tableau des cas), répartition par service (divisions, agents, fichiers),
   statut d'indexation, état du système ; les statistiques « par dossier » disparaissent.

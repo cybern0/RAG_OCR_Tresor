@@ -1,3 +1,27 @@
+# Filtre de fichiers : catégorie, types et confidentialité retirés — ancien frontend mort supprimé
+
+(11/2026)
+
+La barre de filtres de la page **Fichiers** ne propose plus que l'essentiel utilisé : recherche, **rôle** (classe),
+**division** (chef de service), **statut**, tri — avec les onglets Fichiers / Corbeille / À classer.
+- **Catégorie et types retirés du filtre** : ces champs restent des métadonnées de classement (badges de classement,
+  statistiques « Par catégorie », règles automatiques d'administration) mais ne servent plus de critère de liste.
+- **Confidentialité retirée aussi** (vérifiée inutile en l'état) : « INTERNE » est la valeur par défaut de tout fichier
+  non classé, le filtre ne pouvait donc pas distinguer classé et non classé ; la visibilité est déjà gouvernée par
+  division et rôles côté serveur (condition d'accès unique) ; l'information reste visible (badge) et exploitée
+  (statistiques « Par confidentialité », règles automatiques).
+- **Backend** : les paramètres `categorie_id`, `type_id`, `confidentialite` de `GET /documents` sont retirés
+  (`routes/documents.py`, `services/documents/crud.py`) — aucun autre appelant ; `test_document_filters.py` garde le
+  filtre par tags. Le champ `confidentialite` lui-même n'est PAS touché (classement, statistiques, règles).
+- **Frontend : les 55 fichiers de l'ancienne architecture, restés dans le dépôt, sont supprimés** — la suppression
+  était décidée à la refonte « classes » (« 50 fichiers inatteignables ») mais n'avait jamais été appliquée ici, et
+  ces fichiers ne compilaient plus (`tsc` en échec : `features/dossiers/`, `features/admin/{AdminPage,
+  GedDashboardPanel}`, `api/`, `components/ui/`, `hooks/`, `lib/`, `types/`, vieux formulaires documents...).
+  Atteignabilité calculée depuis `main.tsx` : 68 fichiers vivants, 55 morts — supprimés, **`npm run build` repasse**.
+- Vérifications : `npm run build` OK (tsc + vite) ; suite backend verte.
+
+---
+
 # Conversion : LibreOffice seul moteur — Microsoft Office abandonné
 
 (11/2026)

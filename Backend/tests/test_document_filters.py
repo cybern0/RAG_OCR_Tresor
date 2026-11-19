@@ -51,20 +51,20 @@ def test_document_filters_and_pagination():
     assert [d.id for d in page_2["items"]] == [2]
 
 
-def test_document_filters_by_classement():
+def test_document_filters_by_tags():
+    """Filtre par tags : tous les tags demandés doivent être présents. (Les filtres catégorie / type /
+    confidentialité ont été retirés de la liste : métadonnées de classement, pas des critères de filtre.)"""
     from types import SimpleNamespace
 
     now = datetime.now(timezone.utc)
 
-    def doc(id, categorie, type_, conf, tags):
+    def doc(id, tags):
         d = DummyDoc(id, f"Doc {id}", 10, 1, now, [DummyVersion(1, f"d{id}.pdf", "ready", now)])
-        d.categorie_id, d.type_document_id, d.confidentialite = categorie, type_, conf
         d.tag_liens = [SimpleNamespace(tag_id=t) for t in tags]
         return d
 
-    docs = [doc(1, 5, 2, "INTERNE", [1, 2]), doc(2, 5, 3, "PUBLIC", [1]), doc(3, None, None, "INTERNE", [])]
+    docs = [doc(1, [1, 2]), doc(2, [1]), doc(3, [])]
 
-    assert [d.id for d in crud.apply_document_filters(docs, categorie_id=5, tri="titre_asc")["items"]] == [1, 2]
-    assert [d.id for d in crud.apply_document_filters(docs, type_id=3)["items"]] == [2]
-    assert [d.id for d in crud.apply_document_filters(docs, confidentialite="interne", tri="titre_asc")["items"]] == [1, 3]
     assert [d.id for d in crud.apply_document_filters(docs, tag_ids=[1, 2])["items"]] == [1]
+    assert [d.id for d in crud.apply_document_filters(docs, tag_ids=[1], tri="titre_asc")["items"]] == [1, 2]
+    assert [d.id for d in crud.apply_document_filters(docs, tag_ids=[3])["items"]] == []
