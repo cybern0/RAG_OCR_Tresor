@@ -57,6 +57,7 @@ export function useDocumentMutations() {
     add: useMutation({ mutationFn: api.addDocument, ...settle }),
     update: useMutation({ mutationFn: (v: { id: number } & api.UpdateDocumentInput) => api.updateDocument(v.id, v), ...settle }),
     addVersion: useMutation({ mutationFn: (v: { id: number; fichier: File; contientTableaux: boolean; contientImages: boolean }) => api.addVersion(v.id, v), ...settle }),
+    reindex: useMutation({ mutationFn: (v: { id: number; numero: number; contientTableaux: boolean; contientImages: boolean }) => api.reindexVersion(v.id, v.numero, v), ...settle }),
     remove: useMutation({ mutationFn: (id: number) => api.deleteDocument(id), ...settle }),
     purge: useMutation({ mutationFn: (id: number) => api.deleteDocument(id, true), ...settle }),
     restore: useMutation({ mutationFn: api.restoreDocument, ...settle }),

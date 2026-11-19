@@ -691,3 +691,98 @@ def test_produit_scalaire_et_cosinus_donnent_le_meme_classement(client, world):
     cosines = [r.cos for r in rows]
     assert all(a <= b + 1e-6 for a, b in zip(cosines, cosines[1:]))
 
+
+
+# --- Réindexation d'une version déjà stockée (sans nouvelle version) --------------------------------------------------
+
+def _nb_chunks(version_id_doc: int, numero: int = 1) -> int:
+    from sqlalchemy import func
+
+    with SessionLocal() as db:
+        vid = db.scalar(select(DocumentVersion.id).where(DocumentVersion.document_id == version_id_doc, DocumentVersion.numero == numero))
+        return db.scalar(select(func.count()).select_from(Chunk).where(Chunk.document_version_id == vid))
+
+
+def _reindexer(client, headers, doc_id, numero=1, **form):
+    return client.post(f"/documents/{doc_id}/versions/{numero}/reindexer", headers=headers, data=form)
+
+
+def test_reindexation_refusee_si_aucun_parametre_ne_change(client, world):
+    a, A = world["a"]["h"], world["A"]["id"]
+    doc = ready_doc(client, a, A, f"Rapport trimestriel {world['tag']}", name=f"rapport_{world['tag']}.txt")
+    r = _reindexer(client, a, doc["id"])
+    assert r.status_code == 409 and "Rien à réindexer" in r.json()["detail"], r.text
+    # renvoyer les valeurs actuelles des cases ne change rien non plus
+    assert _reindexer(client, a, doc["id"], contient_tableaux="false", contient_images="false").status_code == 409
+
+
+def test_reindexation_relit_le_fichier_stocke_sans_nouvelle_version(client, world):
+    a, A, tag = world["a"]["h"], world["A"]["id"], world["tag"]
+    doc = ready_doc(client, a, A, f"Budget annuel {tag}", name=f"budget_{tag}.txt")
+    avant = _nb_chunks(doc["id"])
+    with SessionLocal() as db:
+        chemin_avant = db.scalar(select(DocumentVersion.chemin_stockage).where(DocumentVersion.document_id == doc["id"]))
+
+    r = _reindexer(client, a, doc["id"], contient_tableaux="true")  # on avait oublié de signaler des tableaux
+    assert r.status_code == 202, r.text
+    assert r.json()["has_tabular"] is True
+    assert wait_version(client, a, doc["id"], 1)["statut"] == "ready"
+
+    versions = client.get(f"/documents/{doc['id']}/versions", headers=a).json()
+    assert [v["numero"] for v in versions] == [1]  # aucune nouvelle version
+    assert versions[0]["tableaux_indexes"] is True and versions[0]["images_indexes"] is False
+    assert _nb_chunks(doc["id"]) == avant  # les passages sont remplacés, pas doublés
+    with SessionLocal() as db:
+        assert db.scalar(select(DocumentVersion.chemin_stockage).where(DocumentVersion.document_id == doc["id"])) == chemin_avant
+
+    # « tableaux » est maintenant pris en compte : le redemander est refusé ; cocher « images » est un vrai changement
+    again = _reindexer(client, a, doc["id"], contient_tableaux="true")
+    assert again.status_code == 409 and "tableaux : oui" in again.json()["detail"]
+    assert _reindexer(client, a, doc["id"], contient_images="true").status_code == 202
+    assert wait_version(client, a, doc["id"], 1)["statut"] == "ready"
+
+
+def test_reindexation_autorisee_apres_une_erreur_meme_sans_changement(client, world):
+    a, A = world["a"]["h"], world["A"]["id"]
+    r = client.post("/documents", headers=a, data={"division_id": str(A)}, files={"fichier": ("faux2.xlsx", b"pas un classeur", "application/octet-stream")})
+    assert r.status_code == 201
+    doc_id = r.json()["id"]
+    assert wait_version(client, a, doc_id, 1)["statut"] == "error"
+    again = _reindexer(client, a, doc_id)  # nouvelle tentative : permise sans toucher aux cases
+    assert again.status_code == 202, again.text
+    assert wait_version(client, a, doc_id, 1)["statut"] == "error"  # le fichier est toujours illisible
+    assert len(client.get(f"/documents/{doc_id}/versions", headers=a).json()) == 1
+
+
+def test_reindexation_fichier_disparu_et_acces(client, world):
+    a, b, A, tag = world["a"]["h"], world["b"]["h"], world["A"]["id"], world["tag"]
+    doc = ready_doc(client, a, A, f"Note interne {tag}", name=f"note_{tag}.txt")
+    assert _reindexer(client, b, doc["id"], contient_images="true").status_code in (403, 404)  # hors périmètre
+    assert _reindexer(client, a, doc["id"], numero=99, contient_images="true").status_code == 404
+    with SessionLocal() as db:
+        Path(db.scalar(select(DocumentVersion.chemin_stockage).where(DocumentVersion.document_id == doc["id"]))).unlink()
+    r = _reindexer(client, a, doc["id"], contient_images="true")
+    assert r.status_code == 410 and "redéposer" in r.json()["detail"]
+    # le refus n'a rien modifié : la version est toujours prête et la case n'a pas bougé
+    assert client.get(f"/documents/{doc['id']}", headers=a).json()["has_image"] is False
+    assert wait_version(client, a, doc["id"], 1)["statut"] == "ready"
+
+
+def test_demarrage_refuse_une_base_sans_la_migration_de_reindexation():
+    """Base non migrée : arrêt net avec la commande à lancer, pas des erreurs 500 sur la liste des fichiers."""
+    from sqlalchemy import text
+
+    from app.db.metier import engine
+    from app.db.verif_schema import colonnes_manquantes, verifier_schema
+
+    assert colonnes_manquantes(engine) == {}
+    verifier_schema(engine)  # base à jour : silencieux
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE rag_sys.document_version RENAME COLUMN images_indexes TO images_indexes_absente"))  # simule la colonne manquante
+    try:
+        with pytest.raises(RuntimeError, match=r"(?s)images_indexes.*migration_reindexation\.sql"):
+            verifier_schema(engine)
+    finally:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE rag_sys.document_version RENAME COLUMN images_indexes_absente TO images_indexes"))
+    assert colonnes_manquantes(engine) == {}

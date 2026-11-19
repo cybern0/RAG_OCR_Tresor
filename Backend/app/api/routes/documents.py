@@ -199,6 +199,19 @@ def add_version(
     )
 
 
+@router.post("/{document_id}/versions/{numero}/reindexer", response_model=DocumentOut, status_code=202)
+def reindex_version(
+    document_id: int, numero: int, request: Request,
+    contient_tableaux: bool | None = Form(None),
+    contient_images: bool | None = Form(None),
+    principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
+):
+    """Relit le fichier déjà stocké, sans nouvelle version. 409 si rien ne changerait ; 410 si le fichier a disparu."""
+    return crud.reindexer_version(
+        db, principal, document_id, numero, contient_tableaux, contient_images, client_ip(request)
+    )
+
+
 @router.delete("/{document_id}/versions/{numero}", status_code=204)
 def delete_version(
     document_id: int, numero: int, request: Request,

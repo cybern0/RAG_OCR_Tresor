@@ -1,6 +1,6 @@
 // Historique des versions : date, auteur, état d'indexation ; sélection pour l'aperçu, téléchargement, suppression
 // (suppression réservée au gestionnaire de contenu). La version « qui fait foi » est la plus récente prête.
-import { Download, Trash2 } from 'lucide-react'
+import { Download, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { errorMessage } from '../../../shared/api/client'
 import { formatDate, formatSize } from '../../../shared/lib/format'
@@ -13,9 +13,9 @@ import { useDocumentMutations } from '../queries'
 import type { VersionMeta } from '../types'
 import { StatusBadge } from './StatusBadge'
 
-interface Props { documentId: number; versions: VersionMeta[]; selected: number; onSelect: (n: number) => void; canDelete: boolean }
+interface Props { documentId: number; versions: VersionMeta[]; selected: number; onSelect: (n: number) => void; canDelete: boolean; onReindex?: (n: number) => void }
 
-export function VersionsPanel({ documentId, versions, selected, onSelect, canDelete }: Props) {
+export function VersionsPanel({ documentId, versions, selected, onSelect, canDelete, onReindex }: Props) {
   const toast = useToast()
   const { removeVersion } = useDocumentMutations()
   const [toDelete, setToDelete] = useState<number | null>(null)
@@ -38,6 +38,10 @@ export function VersionsPanel({ documentId, versions, selected, onSelect, canDel
             <div className="mt-1 flex justify-end gap-1">
               <button className="btn-icon" title="Télécharger" aria-label={`Télécharger la version ${v.numero}`}
                 onClick={() => void downloadVersion(documentId, v.numero, v.nom_fichier).catch((e) => toast.error(errorMessage(e)))}><Download className="h-4 w-4" /></button>
+              {onReindex && (v.statut === 'ready' || v.statut === 'error') && (
+                <button className="btn-icon" title={v.statut === 'error' ? 'Relancer l’indexation' : 'Réindexer cette version'} aria-label={`Réindexer la version ${v.numero}`}
+                  onClick={() => onReindex(v.numero)}><RefreshCw className="h-4 w-4" /></button>
+              )}
               {canDelete && versions.length > 1 && (
                 <button className="btn-icon text-red-300" disabled={v.statut === 'processing'} title="Supprimer cette version" aria-label={`Supprimer la version ${v.numero}`} onClick={() => setToDelete(v.numero)}><Trash2 className="h-4 w-4" /></button>
               )}

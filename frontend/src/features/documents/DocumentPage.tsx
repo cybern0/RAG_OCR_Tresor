@@ -16,12 +16,13 @@ import ClassifyModal from './components/ClassifyModal'
 import { CommentsPanel } from './components/CommentsPanel'
 import EditDocumentModal from './components/EditDocumentModal'
 import NewVersionModal from './components/NewVersionModal'
+import ReindexModal from './components/ReindexModal'
 import { PreviewStored } from './components/PreviewStored'
 import { StatusBadge } from './components/StatusBadge'
 import { VersionsPanel } from './components/VersionsPanel'
 import { useDocument, useDocumentMutations, useVersions } from './queries'
 
-type Dialog = 'edit' | 'version' | 'classify' | 'delete' | null
+type Dialog = 'edit' | 'version' | 'classify' | 'delete' | 'reindex' | null
 
 export function Component() {
   const documentId = Number(useParams().documentId)
@@ -33,6 +34,7 @@ export function Component() {
   const { remove } = useDocumentMutations()
   const [dialog, setDialog] = useState<Dialog>(null)
   const [selected, setSelected] = useState<number | null>(null)
+  const [reindexOf, setReindexOf] = useState<number | null>(null)
 
   if (doc.isPending) return <Loading />
   if (doc.error || !doc.data) return (doc.error ? <ErreurAcces error={doc.error} documentId={Number(documentId)} /> : <ErrorBox message="Fichier introuvable." />)
@@ -43,6 +45,7 @@ export function Component() {
   const writable = !d.corbeille_le
   const mayAdd = d.droits.includes('ajouter_version') && writable
   const mayDelete = d.droits.includes('purger') && writable
+  const mayReindex = d.droits.includes('modifier') && writable
 
   return (
     <>
@@ -86,7 +89,8 @@ export function Component() {
           <section className="card p-4">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Versions</h2>
             {versions.isPending ? <Loading className="py-4" /> : current && (
-              <VersionsPanel documentId={d.id} versions={list} selected={current.numero} onSelect={setSelected} canDelete={mayDelete} />
+              <VersionsPanel documentId={d.id} versions={list} selected={current.numero} onSelect={setSelected} canDelete={mayDelete}
+                onReindex={mayReindex ? (n) => { setReindexOf(n); setDialog('reindex') } : undefined} />
             )}
             <ErrorBox message={versions.error ? errorMessage(versions.error) : null} />
           </section>
@@ -102,6 +106,9 @@ export function Component() {
 
       {dialog === 'edit' && <EditDocumentModal doc={d} onClose={() => setDialog(null)} />}
       {dialog === 'version' && <NewVersionModal doc={d} onClose={() => setDialog(null)} />}
+      {dialog === 'reindex' && list.find((v) => v.numero === reindexOf) && (
+        <ReindexModal doc={d} version={list.find((v) => v.numero === reindexOf)!} onClose={() => setDialog(null)} />
+      )}
       {dialog === 'classify' && <ClassifyModal docs={[d]} onClose={() => setDialog(null)} />}
       {dialog === 'delete' && (
         <ConfirmDialog title="Mettre à la corbeille" confirmLabel="Mettre à la corbeille" onClose={() => setDialog(null)}

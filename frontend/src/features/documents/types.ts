@@ -16,6 +16,9 @@ export interface VersionMeta {
   cree_le: string
   est_courante: boolean
   apercu: ApercuMode
+  // paramètres de la dernière indexation réussie (null : inconnu) : servent à savoir si réindexer changerait quelque chose
+  tableaux_indexes: boolean | null
+  images_indexes: boolean | null
 }
 
 export interface DocumentMeta {

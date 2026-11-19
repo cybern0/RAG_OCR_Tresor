@@ -6,7 +6,9 @@ qui n'administre que, chef de service rétabli, et **fichiers déposés directem
 des scripts de migration (`10_suppression_chef_service.sql`, `migration_suppression_sous_dossiers.sql`,
 `migration_dossiers_defaut.sql`) sont fusionnés dans les scripts de base. Une migration subsiste, pour les
 bases **existantes** seulement : `migration_suppression_dossiers.sql` (suppression de la table `dossier`
-sans perte de données). Pour une installation neuve, aucune migration n'est nécessaire :
+sans perte de données). Une seconde migration, `migration_reindexation.sql` (deux colonnes `tableaux_indexes` /
+`images_indexes` sur `document_version`, idempotente), sert aux bases existantes qui veulent la réindexation
+d'une version sans nouveau dépôt. Pour une installation neuve, aucune migration n'est nécessaire :
 
 | # | Script | Rôle | Transaction | Répétition |
 |---|---|---|---|---|

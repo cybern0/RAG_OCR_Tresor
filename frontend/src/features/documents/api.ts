@@ -42,6 +42,14 @@ export function addVersion(id: number, input: { fichier: File; contientTableaux:
   return api<DocumentMeta>(`/documents/${id}/versions`, { method: 'POST', form })
 }
 
+/** Relit le fichier déjà stocké d'une version, sans créer de nouvelle version (refusé si aucune case ne change). */
+export function reindexVersion(id: number, numero: number, input: { contientTableaux: boolean; contientImages: boolean }) {
+  const form = new FormData()
+  form.append('contient_tableaux', String(input.contientTableaux))
+  form.append('contient_images', String(input.contientImages))
+  return api<DocumentMeta>(`/documents/${id}/versions/${numero}/reindexer`, { method: 'POST', form })
+}
+
 export const deleteVersion = (id: number, numero: number) => api<void>(`/documents/${id}/versions/${numero}`, { method: 'DELETE' })
 
 export interface ClasserInput {

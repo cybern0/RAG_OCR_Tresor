@@ -1,3 +1,35 @@
+# Réindexation d'une version déjà stockée — fichier introuvable — nettoyage du frontend
+
+(11/2026)
+
+**Réindexation sans nouvelle version.** Depuis la fiche d'un fichier, le bouton ↻ d'une version prête ou en
+erreur relit le fichier DÉJÀ stocké (`POST /documents/{id}/versions/{numero}/reindexer`, droit `modifier`,
+réponse 202). Utile après une erreur d'indexation, ou quand on avait oublié de signaler des tableaux / des images.
+Les passages de la version sont remplacés, pas doublés ; aucune version n'est créée.
+- **Refus 409 si rien ne changerait** : une version prête n'est relue que si une case (tableaux, images) diffère
+  des paramètres de sa dernière indexation réussie. Une version **en erreur** peut toujours être relancée.
+  Une indexation déjà en attente / en cours est refusée. Fichier disparu du disque : 410.
+- **Paramètres suivis par version** : colonnes `document_version.tableaux_indexes` / `images_indexes`
+  (`database/migration_reindexation.sql` pour une base existante ; NULL = inconnu → repli sur les cases du fichier).
+- **Contrôle au démarrage** (`db/verif_schema.py`) : si une colonne attendue de `document_version` manque (migration non
+  appliquée), l'API s'arrête avec la commande à lancer au lieu de répondre par des erreurs 500 sur `/documents`.
+- Règles dans `services/documents/reindexation.py` ; service `crud.reindexer_version` ; interface `ReindexModal`.
+
+**Fichier de stockage introuvable à l'indexation.** `services/stockage.trouver()` résout le chemin enregistré
+(relatif, ou chemin absolu périmé d'une autre machine : le nom est cherché à plat dans `upload_dir`, jamais hors
+de ce dossier). Le pipeline signale « fichier introuvable » dans `message_erreur` au lieu d'un `FileNotFoundError`
+brut, et ne journalise plus de trace complète pour une cause attendue ; l'aperçu utilise le même résolveur.
+
+**Restes de l'authentification système supprimés.** `services/auth_os.py` et `tests/test_auth_os.py` (déjà
+annoncés comme supprimés lors de la refonte « classes », mais restés dans le dépôt) sont retirés : le module
+n'était plus importé et ses 6 tests visaient des réglages `auth_*` qui n'existent plus.
+
+**Frontend.** Suppression de 50 fichiers inatteignables de l'ancienne architecture (`api/`, `components/ui/`,
+`hooks/`, `features/{users,structure,audit,dossiers}`, anciennes pages admin) : un seul client HTTP et une seule
+gestion du 401 (`shared/`).
+
+---
+
 # Fichiers à plat : `/fichiers` remplace `/dossiers` — droits étendus du chef de service — erreurs d'indexation
 
 (11/2026, suite de la refonte « classes de fichiers » ; détails : `docs/refonte_fichiers.md`)

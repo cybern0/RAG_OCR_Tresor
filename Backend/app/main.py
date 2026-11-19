@@ -32,6 +32,8 @@ from app.api.routes import (
     users,
 )
 from app.config import get_settings
+from app.db.metier import engine
+from app.db.verif_schema import verifier_schema
 from app.workers import ingestion_worker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
@@ -42,6 +44,7 @@ async def lifespan(_: FastAPI):
     settings = get_settings()
     settings.check_secret()
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    verifier_schema(engine)
     ingestion_worker.start()
     yield
     ingestion_worker.stop()

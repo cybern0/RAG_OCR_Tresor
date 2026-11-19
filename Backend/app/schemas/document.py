@@ -54,6 +54,9 @@ class VersionOut(BaseModel):
     cree_le: datetime  # la date de la version
     est_courante: bool  # version prête la plus récente : celle qui fait foi
     apercu: ApercuMode
+    # paramètres de la dernière indexation réussie (None : inconnu) : l'interface en déduit si réindexer a un sens
+    tableaux_indexes: bool | None = None
+    images_indexes: bool | None = None
 
 
 class DocumentOut(BaseModel):

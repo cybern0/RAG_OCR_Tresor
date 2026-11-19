@@ -258,6 +258,10 @@ CREATE TABLE document_version (
     ocr_utilise BOOLEAN NOT NULL DEFAULT FALSE,
     statut VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (statut IN ('pending', 'processing', 'ready', 'error')),
     message_erreur TEXT,
+    -- paramètres avec lesquels la version a été indexée avec succès (NULL : pas encore indexée ou inconnu) :
+    -- la réindexation est refusée tant qu'elle ne changerait rien
+    tableaux_indexes BOOLEAN,
+    images_indexes BOOLEAN,
     cree_par BIGINT REFERENCES _user(id) ON DELETE SET NULL,
     cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_version_document_numero UNIQUE (document_id, numero)

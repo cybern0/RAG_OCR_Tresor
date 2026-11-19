@@ -58,7 +58,8 @@ def run_ingestion(version_id: int) -> None:
                     "Le redéposer comme nouvelle version."
                 )
             # has_tabular / has_image sont les cases du fichier : cochées par l'utilisateur ou imposées par le type
-            parsed = parse_file(chemin, force_tabular=doc.has_tabular, force_images=doc.has_image)
+            images_demandees = doc.has_image
+            parsed = parse_file(chemin, force_tabular=doc.has_tabular, force_images=images_demandees)
             chunks = chunk_documents(parsed.documents, doc.id, version.nom_fichier)
             if not chunks:
                 raise IngestionError("Aucun passage exploitable n'a été extrait de ce fichier.")
@@ -82,6 +83,8 @@ def run_ingestion(version_id: int) -> None:
             texte = "\n".join(c.page_content for c in chunks)[:20_000]
             appliquer(db, doc, version, texte)
             version.nb_pages = parsed.nb_pages
+            # paramètres de cette indexation : une réindexation qui n'en changerait aucun sera refusée
+            version.tableaux_indexes, version.images_indexes = parsed.has_tabular, images_demandees
             version.ocr_utilise = parsed.ocr_utilise
             if parsed.has_tabular and not doc.has_tabular:
                 doc.has_tabular = True  # tableaux détectés : la case est cochée

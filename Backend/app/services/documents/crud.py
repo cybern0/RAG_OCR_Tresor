@@ -29,7 +29,7 @@ from app.db.metier import Division, DocumentRole, DocumentTag, RoleDivision
 from app.db.vecteur import Document, DocumentVersion
 from app.schemas.document import DocumentOut, RoleBrief, RoleFiltreOut, VersionOut
 from app.services.audit import log_action
-from app.services.documents import apercu
+from app.services.documents import apercu, reindexation
 from app.services.historique import ecrire_historique
 from app.services.ingestion.parser import ALLOWED_EXT, apply_flags, forced_flags
 from app.services.notifications import destinataires_gestion, notifier
@@ -48,6 +48,7 @@ def _version_out(v: DocumentVersion, courante: int | None) -> VersionOut:
         nb_pages=v.nb_pages, ocr_utilise=v.ocr_utilise, statut=v.statut, message_erreur=v.message_erreur,
         cree_par_nom=v.auteur.nom_utilisateur if v.auteur else None, cree_le=v.cree_le,
         est_courante=(v.numero == courante), apercu=apercu.apercu_mode(v.nom_fichier),
+        tableaux_indexes=v.tableaux_indexes, images_indexes=v.images_indexes,
     )
 
 
@@ -577,6 +578,55 @@ def update_document(
         db.commit()
     if reindex:
         ingestion_worker.enqueue(latest.id)
+    return _fresh(db, principal, document_id)
+
+
+def reindexer_version(
+    db: Session, principal: Principal, document_id: int, numero: int,
+    contient_tableaux: bool | None, contient_images: bool | None, ip: str | None,
+) -> DocumentOut:
+    """Relit le fichier DÉJÀ stocké d'une version, sans créer de nouvelle version (règles : reindexation.py).
+
+    Sert quand l'indexation a échoué, ou quand on avait oublié de signaler des tableaux / des images.
+    """
+    doc, _ = get_document(db, principal, document_id, MODIFIER)
+    version = next((v for v in doc.versions if v.numero == numero), None)
+    if version is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Version introuvable.")
+
+    tableaux, images = apply_flags(
+        Path(version.nom_fichier).suffix,
+        doc.has_tabular if contient_tableaux is None else contient_tableaux,
+        doc.has_image if contient_images is None else contient_images,
+    )
+    # inconnu (version indexée avant la migration) : on se rabat sur les cases actuelles du fichier
+    deja = reindexation.Parametres(
+        doc.has_tabular if version.tableaux_indexes is None else version.tableaux_indexes,
+        doc.has_image if version.images_indexes is None else version.images_indexes,
+    )
+    message = reindexation.refus(version.statut, deja, reindexation.Parametres(tableaux, images))
+    if message:
+        raise HTTPException(status.HTTP_409_CONFLICT, message)
+    if stockage.trouver(version.chemin_stockage) is None:
+        raise HTTPException(
+            status.HTTP_410_GONE,
+            "Le fichier de cette version est introuvable sur le serveur : le redéposer comme nouvelle version.",
+        )
+
+    avant: dict = {"version": numero, "statut": version.statut}
+    changes: dict = {"version": numero, "fichier": version.nom_fichier}
+    if tableaux != doc.has_tabular:
+        avant["has_tabular"], changes["has_tabular"] = doc.has_tabular, tableaux
+        doc.has_tabular = tableaux
+    if images != doc.has_image:
+        avant["has_image"], changes["has_image"] = doc.has_image, images
+        doc.has_image = images
+    version.statut, version.message_erreur = "pending", None
+    doc.modifie_par = principal.user.id
+    log_action(db, principal.user.id, "document.reindexer", "document", doc.id, changes, ip)
+    _trace(db, principal, doc, "version_reindexee", avant=avant, apres=changes)
+    db.commit()
+    ingestion_worker.enqueue(version.id)
     return _fresh(db, principal, document_id)
 
 

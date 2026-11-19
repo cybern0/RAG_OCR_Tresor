@@ -83,6 +83,9 @@ class DocumentVersion(Base):
     ocr_utilise: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     statut: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending")
     message_erreur: Mapped[str | None] = mapped_column(Text)
+    # paramètres de la dernière indexation réussie (None : inconnu) : une réindexation sans changement est refusée
+    tableaux_indexes: Mapped[bool | None] = mapped_column(Boolean)
+    images_indexes: Mapped[bool | None] = mapped_column(Boolean)
     cree_par: Mapped[int | None] = mapped_column(ForeignKey("_user.id", ondelete="SET NULL"))
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
