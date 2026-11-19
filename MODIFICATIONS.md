@@ -1,3 +1,25 @@
+# /historique : filtre « demande » retiré — /admin/agents : modal « Modifier » pour rendre un agent nommable chef de service
+
+(11/2026)
+
+- **`/historique`** : l'option « Demande » est retirée du filtre « Type de cible » (à la demande de l'utilisateur) ;
+  les entrées de type demande restent visibles dans « Tous les types », le backend continuant de les journaliser.
+- **`/admin/agents`** : le parcours de nomination d'un chef de service était bloqué pour un agent créé **avec** une
+  division — le backend l'exige sans division (« retirez d'abord sa division », règle `transferer_chef_service`),
+  mais l'interface n'offrait aucun moyen de retirer la division d'un agent existant. Ajout d'une modal
+  **« Modifier »** (crayon dans la colonne d'actions) : nom, prénom, fonction, email, service, division
+  (« Aucune » permis en modification ; la règle « division obligatoire » ne vaut qu'à la création, cf.
+  `_valider_etat(creation=...)`). Le matricule et le poste ne se changent pas ici (poste : boutons dédiés de la liste).
+  Signature frontend `updateAgent` élargie au périmètre réel du `PATCH /structure/agents/{id}`.
+- **Nommer un chef de service — parcours complet** : 1) à la création, champ « Poste » = « Chef de service »
+  (division désactivée) ; 2) pour un agent existant : s'il est chef de division, « Retirer le poste » d'abord ;
+  puis crayon « Modifier » → Division « Aucune » → enregistrer ; le bouton « Nommer chef de service » apparaît
+  alors dans la liste (l'agent doit être actif, du service visé, sans division et sans titre ; le titulaire
+  précédent est remplacé).
+- Vérifications : `npm run build` OK (tsc + vite) ; suite backend verte (93 réussis, 3 ignorés).
+
+---
+
 # /historique : filtre « types » nettoyé — /admin/utilisateurs et /admin/agents : recherche, filtres, poste de chef affiché
 
 (11/2026)

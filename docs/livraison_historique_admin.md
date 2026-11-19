@@ -1,8 +1,30 @@
 # Livraison : /historique nettoyé, recherche et filtres sur /admin/utilisateurs et /admin/agents, poste de chef affiché
 
-> Demande du 19/11/2026 : « dans /historique nettoyer le dictionnaire de filtre "types", ainsi dans
+> Demandes du 19/11/2026 : « dans /historique nettoyer le dictionnaire de filtre "types", ainsi dans
 > /admin/utilisateurs ajouter des filtres et recherche, de même que dans /admin/agents, aussi nommé
-> chef de service y est absent. »
+> chef de service y est absent. » — puis : « supprimer le filtre demande dans /historique, comment
+> nomme-t-on un chef de service dans /admin/agents ? »
+
+## 0. Compléments du second tour
+
+- **`/historique`** : l'option « Demande » est retirée du filtre « Type de cible ». Les entrées de type
+  demande restent visibles dans « Tous les types » — le backend continue de les journaliser
+  (`services/demandes.py` est monté et vivant) ; seul le filtre disparaît.
+- **`/admin/agents`** : ajout d'une modal **« Modifier »** (icône crayon dans la colonne d'actions) —
+  nom, prénom, fonction, email, service, division. Elle lève le blocage du parcours de nomination :
+  le backend exige qu'un chef de service soit **sans division** (« retirez d'abord sa division »), mais
+  l'interface ne permettait pas de retirer la division d'un agent existant (aucun formulaire, et la
+  signature frontend de `updateAgent` était plus étroite que le `PATCH` backend). En modification,
+  « Aucune » division est accepté pour un agent sans titre (la règle « division obligatoire » ne vaut
+  qu'à la création — `_valider_etat(creation=...)`). Vérifications : `npm run build` OK,
+  pytest 93 réussis / 3 ignorés.
+- **Comment nommer un chef de service** — deux chemins :
+  1. **À la création** (Nouvel agent) : champ « Poste » = « Chef de service » (la division est désactivée).
+  2. **Pour un agent existant** : s'il est chef de division, « Retirer le poste » d'abord ; puis crayon
+     « Modifier » → Division « **Aucune** » → Enregistrer ; le bouton « **Nommer chef de service** »
+     apparaît alors dans la colonne d'actions. Conditions : agent **actif**, du service visé, sans
+     division et sans titre — le titulaire précédent est remplacé (historique + notification). Un seul
+     chef de service par service ; « Retirer le poste » rend le poste vacant.
 
 ## 1. `/historique` — dictionnaire du filtre « types » nettoyé
 
@@ -45,8 +67,9 @@ Au passage, les modules backend morts qui produisaient les valeurs fantômes son
 
 ## Fichiers modifiés
 
-- `frontend/src/features/historique/HistoriquePage.tsx` (dictionnaire TYPES + libellés)
+- `frontend/src/features/historique/HistoriquePage.tsx` (dictionnaire TYPES + libellés, puis retrait de « Demande »)
 - `frontend/src/features/admin/users/UsersPage.tsx` (recherche, filtres, colonne Poste)
-- `frontend/src/features/admin/structure/AgentsPage.tsx` (recherche, filtres)
+- `frontend/src/features/admin/structure/AgentsPage.tsx` (recherche, filtres, puis modal « Modifier »)
+- `frontend/src/features/admin/api.ts` (signature `updateAgent` élargie au `PATCH` backend)
 - Backend : suppression des 6 modules morts listés ci-dessus (aucun autre changement d'API)
 - `MODIFICATIONS.md`

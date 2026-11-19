@@ -9,15 +9,16 @@ import PageHeader from '../../shared/ui/PageHeader'
 import { listHistorique, verifierHistorique } from './api'
 
 const PAR_PAGE = 50
-// Valeurs réellement écrites par le backend (cible_type) : document, utilisateur, role_division, demande, agent.
-// Les anciennes entrées « user », « service », « division » ne correspondaient à rien (et « dossier »/« unite »
+// Valeurs réellement écrites par le backend (cible_type) : document, utilisateur, role_division, agent.
+// Le filtre « demande » a été retiré à la demande de l'utilisateur ; les entrées de type demande restent
+// visibles dans « Tous les types » (le backend continue de les journaliser). Les anciennes entrées
+// « user », « service », « division » ne correspondaient à rien (et « dossier »/« unite »
 // appartenaient à des modules supprimés) — dictionnaire nettoyé et libellés lisibles.
 const TYPES: [string, string][] = [
   ['', 'Tous les types'],
   ['document', 'Document'],
   ['utilisateur', 'Utilisateur'],
   ['role_division', 'Rôle de division'],
-  ['demande', 'Demande'],
   ['agent', 'Agent'],
 ]
 

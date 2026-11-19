@@ -1,6 +1,7 @@
 // Agents de la structure : recherche et filtres côté client (service, poste — chef de service / chef de division —,
-// état, avec ou sans compte). La nomination et le retrait des postes se font depuis la liste.
-import { Plus, Search } from 'lucide-react'
+// état, avec ou sans compte). La nomination et le retrait des postes se font depuis la liste ; la modal
+// « Modifier » permet de changer l'identité et l'affectation (service, division — « Aucune » pour un futur chef de service).
+import { Pencil, Plus, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { errorMessage } from '../../../shared/api/client'
@@ -13,6 +14,7 @@ import Modal from '../../../shared/ui/Modal'
 import PageHeader from '../../../shared/ui/PageHeader'
 import { useToast } from '../../../shared/hooks/useToast'
 import { createAgent, listDivisionsAdmin, transfererChef, transfererChefService, updateAgent } from '../api'
+import type { Agent } from '../types'
 import { useQuery } from '@tanstack/react-query'
 import { adminKeys, useAdminMutation, useAgents, useServices } from '../queries'
 
@@ -49,11 +51,48 @@ function AgentModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void }) {
+  const toast = useToast()
+  const services = useServices()
+  const [f, setF] = useState({ nom: agent.nom, prenom: agent.prenom, fonction: agent.fonction ?? '', email: agent.email ?? '', service_id: agent.service_id ?? ('' as number | ''), division_id: agent.division_id ?? ('' as number | '') })
+  const [error, setError] = useState<string | null>(null)
+  const active = (services.data ?? []).filter((s) => s.actif || s.id === agent.service_id)
+  const divisions = useQuery({ queryKey: ['admin', 'divisions'], queryFn: listDivisionsAdmin })
+  const divs = (divisions.data ?? []).filter((d) => d.service_id === f.service_id && (d.actif || d.id === agent.division_id))
+  const save = useAdminMutation(() => updateAgent(agent.id, { nom: f.nom, prenom: f.prenom, fonction: f.fonction || null, email: f.email || null, service_id: Number(f.service_id), division_id: f.division_id === '' ? null : Number(f.division_id) }), [adminKeys.agents])
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((s) => ({ ...s, [k]: k === 'service_id' || k === 'division_id' ? (e.target.value ? Number(e.target.value) : '') : e.target.value, ...(k === 'service_id' ? { division_id: '' as const } : {}) }))
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    try { await save.mutateAsync(undefined); toast.success('Agent modifié.'); onClose() } catch (err) { setError(errorMessage(err)) }
+  }
+  return (
+    <Modal title={`Modifier ${agent.nom} ${agent.prenom}`} onClose={onClose}>
+      <form onSubmit={(e) => void submit(e)} className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Nom">{(id) => <input id={id} className="input" required value={f.nom} onChange={set('nom')} />}</Field>
+          <Field label="Prénom">{(id) => <input id={id} className="input" required value={f.prenom} onChange={set('prenom')} />}</Field>
+          <Field label="Service">{(id) => <select id={id} className="input" required value={f.service_id} onChange={set('service_id')}><option value="">— Choisir —</option>{active.map((s) => <option key={s.id} value={s.id}>{s.nom}</option>)}</select>}</Field>
+          <Field label="Division" hint="« Aucune » : l'agent reste au service sans division — c'est le préalable pour pouvoir le nommer chef de service.">
+            {(id) => <select id={id} className="input" value={f.division_id} onChange={set('division_id')} disabled={!f.service_id}><option value="">— Aucune —</option>{divs.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}</select>}
+          </Field>
+          <Field label="Fonction (facultatif)">{(id) => <input id={id} className="input" value={f.fonction} onChange={set('fonction')} />}</Field>
+          <Field label="Email (facultatif)">{(id) => <input id={id} type="email" className="input" value={f.email} onChange={set('email')} />}</Field>
+        </div>
+        <p className="text-xs text-cream-300">Le poste (chef de division, chef de service) se nomme ou se retire depuis la liste, colonne d'actions ; le matricule n'est pas modifiable.</p>
+        <ErrorBox message={error} />
+        <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={onClose}>Annuler</button><button className="btn" disabled={save.isPending}>{save.isPending ? 'Enregistrement…' : 'Enregistrer'}</button></div>
+      </form>
+    </Modal>
+  )
+}
+
 export function Component() {
   const toast = useToast()
   const agents = useAgents()
   const services = useServices()
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Agent | null>(null)
   const [q, setQ] = useState('')
   const [serviceId, setServiceId] = useState('')
   const [posteFiltre, setPosteFiltre] = useState('')
@@ -120,13 +159,14 @@ export function Component() {
                 <td className="td text-sm">{a.titre === 'CHEF_DIVISION' ? <Badge tone="gold">Chef de division</Badge> : a.titre === 'CHEF_SERVICE' ? <Badge tone="gold">Chef de service</Badge> : '—'}</td>
                 <td className="td text-sm">{a.nom_utilisateur ?? '—'}</td>
                 <td className="td"><Badge tone={a.actif ? 'green' : 'gray'}>{a.actif ? 'Actif' : 'Désactivé'}</Badge></td>
-                <td className="td text-right">{a.actif && a.titre === 'CHEF_SERVICE' && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, null, 'Poste de chef de service rendu vacant.')}>Retirer le poste</button>}{a.actif && a.titre === 'CHEF_DIVISION' && a.division_id !== null && <button className="btn-ghost" onClick={() => poste('division', a.division_id!, null, 'Poste rendu vacant.')}>Retirer le poste</button>}{a.actif && !a.titre && a.division_id !== null && <button className="btn-ghost" onClick={() => poste('division', a.division_id!, a.id, 'Nommé chef de division (le titulaire précédent est remplacé).')}>Nommer chef de division</button>}{a.actif && !a.titre && a.division_id === null && a.service_id !== null && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, a.id, 'Nommé chef de service (le titulaire précédent est remplacé).')}>Nommer chef de service</button>}<button className="btn-ghost" onClick={() => void toggle.mutateAsync({ id: a.id, actif: !a.actif }).catch((e) => toast.error(errorMessage(e)))}>{a.actif ? 'Désactiver' : 'Réactiver'}</button></td>
+                <td className="td text-right"><button className="btn-icon" title="Modifier l'agent" aria-label={`Modifier l'agent ${a.nom} ${a.prenom}`} onClick={() => setEditing(a)}><Pencil className="h-4 w-4" /></button>{a.actif && a.titre === 'CHEF_SERVICE' && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, null, 'Poste de chef de service rendu vacant.')}>Retirer le poste</button>}{a.actif && a.titre === 'CHEF_DIVISION' && a.division_id !== null && <button className="btn-ghost" onClick={() => poste('division', a.division_id!, null, 'Poste rendu vacant.')}>Retirer le poste</button>}{a.actif && !a.titre && a.division_id !== null && <button className="btn-ghost" onClick={() => poste('division', a.division_id!, a.id, 'Nommé chef de division (le titulaire précédent est remplacé).')}>Nommer chef de division</button>}{a.actif && !a.titre && a.division_id === null && a.service_id !== null && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, a.id, 'Nommé chef de service (le titulaire précédent est remplacé).')}>Nommer chef de service</button>}<button className="btn-ghost" onClick={() => void toggle.mutateAsync({ id: a.id, actif: !a.actif }).catch((e) => toast.error(errorMessage(e)))}>{a.actif ? 'Désactiver' : 'Réactiver'}</button></td>
               </tr>
             ))}
           </tbody>
         </table></div>
       )}
       {open && <AgentModal onClose={() => setOpen(false)} />}
+      {editing && <EditAgentModal agent={editing} onClose={() => setEditing(null)} />}
     </>
   )
 }
