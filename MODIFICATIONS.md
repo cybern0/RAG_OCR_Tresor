@@ -1,3 +1,24 @@
+# /historique : filtre « types » nettoyé — /admin/utilisateurs et /admin/agents : recherche, filtres, poste de chef affiché
+
+(11/2026)
+
+- **`/historique`** : le dictionnaire du filtre « Type de cible » listait des valeurs qui ne correspondaient à rien
+  (`user`, `service`, `division` au lieu des vraies valeurs écrites par le backend) et masquait `utilisateur`.
+  Aligné sur les valeurs réellement journalisées — document, utilisateur, rôle de division, demande, agent — avec
+  des libellés lisibles. Au passage, les modules backend morts `routes/dossiers.py`, `routes/securite.py`,
+  `services/dossiers/`, `services/securite.py`, `schemas/dossier.py`, `schemas/securite.py` (jamais montés dans
+  `main.py`, donc jamais appelables) sont supprimés — complément de la suppression des dossiers décidée à la refonte.
+- **`/admin/utilisateurs`** : recherche (compte, agent, service) et filtres (rôle du compte, **poste de l'agent**,
+  état, service) côté client ; **nouvelle colonne « Poste »** : le titre de l'agent lié — **chef de service**,
+  chef de division — était absent de la liste alors que le backend le fournit déjà (`AgentBrief.titre`) ; il est
+  désormais affiché et filtrable.
+- **`/admin/agents`** : recherche (matricule, nom, prénom, fonction, email) et filtres (service, poste, état,
+  avec/sans compte) côté client. Le badge « Chef de service » existait déjà ici ; les chefs de service figuraient
+  bien dans la liste renvoyée par le backend (`list_agents` ne filtre pas les agents sans division).
+- Vérifications : `npm run build` OK (tsc + vite) ; suite backend verte (93 réussis, 3 ignorés).
+
+---
+
 # Filtre de fichiers : catégorie, types et confidentialité retirés — ancien frontend mort supprimé
 
 (11/2026)

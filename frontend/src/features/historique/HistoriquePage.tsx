@@ -9,7 +9,17 @@ import PageHeader from '../../shared/ui/PageHeader'
 import { listHistorique, verifierHistorique } from './api'
 
 const PAR_PAGE = 50
-const TYPES = ['', 'document', 'user', 'role_division', 'demande', 'agent', 'service', 'division']
+// Valeurs réellement écrites par le backend (cible_type) : document, utilisateur, role_division, demande, agent.
+// Les anciennes entrées « user », « service », « division » ne correspondaient à rien (et « dossier »/« unite »
+// appartenaient à des modules supprimés) — dictionnaire nettoyé et libellés lisibles.
+const TYPES: [string, string][] = [
+  ['', 'Tous les types'],
+  ['document', 'Document'],
+  ['utilisateur', 'Utilisateur'],
+  ['role_division', 'Rôle de division'],
+  ['demande', 'Demande'],
+  ['agent', 'Agent'],
+]
 
 export function Component() {
   const [type, setType] = useState('')
@@ -22,7 +32,7 @@ export function Component() {
       <PageHeader title="Historique" description="Registre des modifications, impossible à altérer sans que la vérification le détecte."
         actions={<div className="flex gap-2">
           <select className="input w-44" aria-label="Type de cible" value={type} onChange={(e) => { setType(e.target.value); setPage(0) }}>
-            {TYPES.map((t) => <option key={t} value={t}>{t || 'Tous les types'}</option>)}
+            {TYPES.map(([v, libelle]) => <option key={v} value={v}>{libelle}</option>)}
           </select>
           <button className="btn" disabled={verif.isPending} onClick={() => verif.mutate()}><ShieldCheck className="h-4 w-4" /> Vérifier la chaîne</button>
         </div>} />

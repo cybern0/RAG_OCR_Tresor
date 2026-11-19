@@ -1,8 +1,10 @@
 // Liste des comptes. Création ici ; modification (rôle, agent, activation, mot de passe) sur la page de détail du compte.
 // Permissions du backend : utilisateur.creer (créer), utilisateur.modifier (modifier / désactiver).
+// Recherche et filtres côté client (rôle, poste de l'agent — chef de service / chef de division —, état, service) :
+// le titre d'agent porté par le compte (« Poste ») est désormais affiché dans la liste.
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Settings2, UserCheck, UserX } from 'lucide-react'
-import { useState } from 'react'
+import { Plus, Search, Settings2, UserCheck, UserX } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { errorMessage } from '../../../shared/api/client'
@@ -106,25 +108,72 @@ export function Component() {
   const toast = useToast()
   const users = useUsers()
   const [creating, setCreating] = useState(false)
+  const [q, setQ] = useState('')
+  const [role, setRole] = useState('')
+  const [poste, setPoste] = useState('')
+  const [etat, setEtat] = useState('')
+  const [service, setService] = useState('')
   const toggle = useAdminMutation((u: UserOut) => updateUser(u.id, { actif: !u.actif }), [adminKeys.users])
   const mayCreate = can('utilisateur.creer')
   const mayEdit = can('utilisateur.modifier')
+
+  // Filtres côté client : la liste est chargée en entier et reste petite (comptes de l'application).
+  const services = useMemo(() => [...new Set((users.data ?? []).map((u) => u.agent?.service_nom).filter((s): s is string => !!s))].sort(), [users.data])
+  const visibles = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return (users.data ?? []).filter((u) => {
+      if (role && u.role !== role) return false
+      if (etat === 'actif' && !u.actif) return false
+      if (etat === 'inactif' && u.actif) return false
+      if (poste === 'aucun' && u.agent?.titre) return false
+      if (poste && poste !== 'aucun' && u.agent?.titre !== poste) return false
+      if (service && u.agent?.service_nom !== service) return false
+      if (needle) {
+        const cible = [u.nom_utilisateur, u.agent?.nom, u.agent?.prenom, u.agent?.service_nom].filter(Boolean).join(' ').toLowerCase()
+        if (!cible.includes(needle)) return false
+      }
+      return true
+    })
+  }, [users.data, q, role, poste, etat, service])
+  const filtresActifs = !!(q || role || poste || etat || service)
 
   return (
     <>
       <PageHeader title="Utilisateurs" description="Comptes de l’application. Ouvrir un compte pour modifier son rôle, son agent ou son mot de passe."
         actions={mayCreate ? <button className="btn" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nouvel utilisateur</button> : null} />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-52 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-cream-300" aria-hidden />
+          <input className="input pl-9" type="search" placeholder="Rechercher un compte, un agent, un service…" aria-label="Rechercher un utilisateur" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <select className="input w-auto" aria-label="Rôle du compte" value={role} onChange={(e) => setRole(e.target.value)}>
+          <option value="">Tous les rôles</option><option value="ADMIN">Administrateur</option><option value="UTILISATEUR">Utilisateur</option>
+        </select>
+        <select className="input w-auto" aria-label="Poste de l’agent" value={poste} onChange={(e) => setPoste(e.target.value)}>
+          <option value="">Tous les postes</option><option value="CHEF_SERVICE">Chef de service</option><option value="CHEF_DIVISION">Chef de division</option><option value="aucun">Sans poste</option>
+        </select>
+        <select className="input w-auto" aria-label="État du compte" value={etat} onChange={(e) => setEtat(e.target.value)}>
+          <option value="">Tous les états</option><option value="actif">Actifs</option><option value="inactif">Désactivés</option>
+        </select>
+        <select className="input w-auto" aria-label="Service" value={service} onChange={(e) => setService(e.target.value)}>
+          <option value="">Tous les services</option>{services.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        {filtresActifs && <button className="btn-ghost" onClick={() => { setQ(''); setRole(''); setPoste(''); setEtat(''); setService('') }}>Effacer les filtres</button>}
+      </div>
       <ErrorBox message={users.error ? errorMessage(users.error) : null} />
-      {users.isPending ? <Loading /> : (users.data ?? []).length === 0 ? <EmptyState title="Aucun utilisateur" /> : (
+      {users.isPending ? <Loading /> : (users.data ?? []).length === 0 ? <EmptyState title="Aucun utilisateur" /> : visibles.length === 0 ? (
+        <EmptyState title="Aucun utilisateur ne correspond">Ajustez la recherche ou effacez les filtres.</EmptyState>
+      ) : (
         <div className="card overflow-x-auto">
           <table className="w-full border-collapse">
-            <thead><tr><th className="th">Compte</th><th className="th">Rôle</th><th className="th">Agent</th><th className="th">Dernière connexion</th><th className="th">État</th><th className="th" /></tr></thead>
+            <thead><tr><th className="th">Compte</th><th className="th">Rôle</th><th className="th">Agent</th><th className="th">Poste</th><th className="th">Dernière connexion</th><th className="th">État</th><th className="th" /></tr></thead>
             <tbody>
-              {users.data!.map((u) => (
+              {visibles.map((u) => (
                 <tr key={u.id} className="hover:bg-leaf-700/40">
                   <td className="td font-medium"><Link className="hover:text-gold-300" to={`/admin/utilisateurs/${u.id}`}>{u.nom_utilisateur}</Link>{u.id === me?.id && <span className="ml-2 text-xs text-cream-300">(vous)</span>}</td>
                   <td className="td"><Badge tone={u.role === 'ADMIN' ? 'gold' : 'gray'}>{u.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur'}</Badge></td>
                   <td className="td text-sm">{u.agent ? <>{u.agent.nom} {u.agent.prenom}<br /><span className="text-xs text-cream-300">{u.agent.service_nom ?? 'Sans service'}</span></> : '—'}</td>
+                  <td className="td text-sm">{u.agent?.titre === 'CHEF_SERVICE' ? <Badge tone="gold">Chef de service</Badge> : u.agent?.titre === 'CHEF_DIVISION' ? <Badge tone="gold">Chef de division</Badge> : '—'}</td>
                   <td className="td text-xs">{formatDate(u.derniere_connexion)}</td>
                   <td className="td">{u.actif ? <Badge tone="green">Actif</Badge> : <Badge tone="red">Désactivé</Badge>}</td>
                   <td className="td">

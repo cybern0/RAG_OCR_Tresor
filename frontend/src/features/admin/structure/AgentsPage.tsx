@@ -1,5 +1,7 @@
-import { Plus } from 'lucide-react'
-import { useState } from 'react'
+// Agents de la structure : recherche et filtres côté client (service, poste — chef de service / chef de division —,
+// état, avec ou sans compte). La nomination et le retrait des postes se font depuis la liste.
+import { Plus, Search } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { errorMessage } from '../../../shared/api/client'
 import { exempleEmail, exempleFonction, exempleMatricule, exempleNom, exemplePrenom } from '../../../shared/lib/exemples'
@@ -50,7 +52,32 @@ function AgentModal({ onClose }: { onClose: () => void }) {
 export function Component() {
   const toast = useToast()
   const agents = useAgents()
+  const services = useServices()
   const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const [serviceId, setServiceId] = useState('')
+  const [posteFiltre, setPosteFiltre] = useState('')
+  const [etat, setEtat] = useState('')
+  const [compte, setCompte] = useState('')
+  // Filtres côté client : la liste des agents est chargée en entier et reste petite.
+  const visibles = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return (agents.data ?? []).filter((a) => {
+      if (serviceId && a.service_id !== Number(serviceId)) return false
+      if (posteFiltre === 'aucun' && a.titre) return false
+      if (posteFiltre && posteFiltre !== 'aucun' && a.titre !== posteFiltre) return false
+      if (etat === 'actif' && !a.actif) return false
+      if (etat === 'inactif' && a.actif) return false
+      if (compte === 'avec' && !a.nom_utilisateur) return false
+      if (compte === 'sans' && a.nom_utilisateur) return false
+      if (needle) {
+        const cible = [a.matricule, a.nom, a.prenom, a.fonction, a.email, a.service_nom, a.division_nom, a.nom_utilisateur].filter(Boolean).join(' ').toLowerCase()
+        if (!cible.includes(needle)) return false
+      }
+      return true
+    })
+  }, [agents.data, q, serviceId, posteFiltre, etat, compte])
+  const filtresActifs = !!(q || serviceId || posteFiltre || etat || compte)
   const poste = (kind: 'division' | 'service', unitId: number, agentId: number | null, ok: string) =>
     void (kind === 'division' ? transfererChef(unitId, agentId) : transfererChefService(unitId, agentId))
       .then(() => { toast.success(ok); return agents.refetch() }).catch((e) => toast.error(errorMessage(e)))
@@ -59,12 +86,33 @@ export function Component() {
     <>
       <PageHeader title="Agents" description="Les personnes de la structure. Un agent peut recevoir un compte utilisateur ; son service en découle."
         actions={<button className="btn" onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Nouvel agent</button>} />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-52 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-cream-300" aria-hidden />
+          <input className="input pl-9" type="search" placeholder="Rechercher un agent (matricule, nom, email…)" aria-label="Rechercher un agent" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <select className="input w-auto" aria-label="Service" value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+          <option value="">Tous les services</option>{(services.data ?? []).map((s) => <option key={s.id} value={s.id}>{s.nom}</option>)}
+        </select>
+        <select className="input w-auto" aria-label="Poste" value={posteFiltre} onChange={(e) => setPosteFiltre(e.target.value)}>
+          <option value="">Tous les postes</option><option value="CHEF_SERVICE">Chef de service</option><option value="CHEF_DIVISION">Chef de division</option><option value="aucun">Sans poste</option>
+        </select>
+        <select className="input w-auto" aria-label="État de l’agent" value={etat} onChange={(e) => setEtat(e.target.value)}>
+          <option value="">Tous les états</option><option value="actif">Actifs</option><option value="inactif">Désactivés</option>
+        </select>
+        <select className="input w-auto" aria-label="Compte utilisateur" value={compte} onChange={(e) => setCompte(e.target.value)}>
+          <option value="">Avec ou sans compte</option><option value="avec">Avec compte</option><option value="sans">Sans compte</option>
+        </select>
+        {filtresActifs && <button className="btn-ghost" onClick={() => { setQ(''); setServiceId(''); setPosteFiltre(''); setEtat(''); setCompte('') }}>Effacer les filtres</button>}
+      </div>
       <ErrorBox message={agents.error ? errorMessage(agents.error) : null} />
-      {agents.isPending ? <Loading /> : (agents.data ?? []).length === 0 ? <EmptyState title="Aucun agent" /> : (
+      {agents.isPending ? <Loading /> : (agents.data ?? []).length === 0 ? <EmptyState title="Aucun agent" /> : visibles.length === 0 ? (
+        <EmptyState title="Aucun agent ne correspond">Ajustez la recherche ou effacez les filtres.</EmptyState>
+      ) : (
         <div className="card overflow-x-auto"><table className="w-full border-collapse">
           <thead><tr><th className="th">Matricule</th><th className="th">Agent</th><th className="th">Service / division</th><th className="th">Poste</th><th className="th">Compte</th><th className="th">État</th><th className="th" /></tr></thead>
           <tbody>
-            {agents.data!.map((a) => (
+            {visibles.map((a) => (
               <tr key={a.id} className="hover:bg-leaf-700/40">
                 <td className="td font-mono text-xs">{a.matricule}</td>
                 <td className="td">{a.nom} {a.prenom}<br /><span className="text-xs text-cream-300">{a.fonction ?? ''}{a.email ? ` · ${a.email}` : ''}</span></td>
