@@ -1,3 +1,18 @@
+# Suppression réservée aux chefs de division et de service
+
+(11/2026)
+
+Les agents (rôle effectif **AUTEUR**) ne peuvent plus supprimer de fichiers : mise à la corbeille, restauration et
+purge sont réservées au **GERANT** (chef de division, et chef de service sur les divisions de son service).
+- **Changement central** : `Backend/app/core/acces.py`, matrice `MATRICE` — `SUPPRIMER` retiré de `AUTEUR`
+  (il reste à `GERANT` ; `PURGER` était déjà réservé au gérant). Le serveur répond **403** à l'auteur sur
+  `DELETE /documents/{id}` (avec ou sans `force`) et `POST /documents/{id}/restore`.
+- L'interface n'affiche plus les boutons corbeille / restaurer à l'auteur : elle lit `doc.droits`, issu de la matrice.
+- Tests adaptés (`test_security`, `test_api`, `test_hierarchie`) : l'auteur reçoit 403, le chef 204.
+- L'auteur garde : voir, commenter, ajouter une version, modifier titre et cases.
+
+---
+
 # Réindexation d'une version déjà stockée — fichier introuvable — nettoyage du frontend
 
 (11/2026)

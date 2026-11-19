@@ -193,8 +193,9 @@ def test_depot_direct_sans_dossier_et_division_desactivee(client, world):
     assert client.get(f"/documents/{doc['id']}", headers=a).status_code == 200
     assert client.get("/documents", headers=a, params={"division_id": v1}).status_code == 200
     assert client.patch(f"/structure/divisions/{v1}", headers=adm, json={"actif": True}).status_code == 200
-    client.delete(f"/documents/{f['id']}", headers=a)
-    client.delete(f"/documents/{doc['id']}", headers=a)
+    assert client.delete(f"/documents/{f['id']}", headers=a).status_code == 403   # l'auteur ne supprime pas
+    client.delete(f"/documents/{f['id']}", headers=cd1)
+    client.delete(f"/documents/{doc['id']}", headers=cd1)
     client.patch(f"/structure/divisions/{nv['id']}", headers=adm, json={"actif": False})
 
 

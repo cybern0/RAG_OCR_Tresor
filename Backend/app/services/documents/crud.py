@@ -654,7 +654,7 @@ def delete_version(db: Session, principal: Principal, document_id: int, numero: 
 
 
 def delete_document(db: Session, principal: Principal, document_id: int, ip: str | None, force: bool = False) -> None:
-    """Met un document dans la corbeille par défaut (gérant ou auteur) ; force=true : purge définitive (gérant seulement)."""
+    """Met un document dans la corbeille par défaut (gérant seulement : chef de division ou de service ; l'auteur n'a pas ce droit) ; force=true : purge définitive (gérant seulement)."""
     doc, _ = get_document(db, principal, document_id, PURGER if force else SUPPRIMER)
     versions = [(v.id, v.chemin_stockage) for v in doc.versions]
     if force:

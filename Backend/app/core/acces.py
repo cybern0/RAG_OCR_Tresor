@@ -5,7 +5,7 @@ Pour un fichier, le rôle effectif est calculé à chaque requête :
   * chef de division (sa division) ou chef de service (toutes les divisions de son service, même rôle étendu) :
       GERANT   -> tout : contenu, versions, rôles des fichiers (les « classes »), classement, corbeille
   * membre de la division du fichier :
-      AUTEUR   a déposé le fichier                   -> voir, modifier, versions, corbeille
+      AUTEUR   a déposé le fichier                   -> voir, modifier, versions (PAS de suppression : corbeille/purge = chefs)
       LECTEUR  un rôle commun avec le fichier, ou une exception ponctuelle valide -> lecture, commentaires
       sinon    403 (« Demander l'accès »)
   * tout le reste : 404 (l'existence n'est pas révélée) — y compris le super administrateur : il ne fait
@@ -49,7 +49,7 @@ CHAT = "chat"
 COMMENTER = "commenter"
 AJOUTER_VERSION = "ajouter_version"
 MODIFIER = "modifier"  # titre, cases tableaux / images
-SUPPRIMER = "supprimer"  # corbeille, restauration
+SUPPRIMER = "supprimer"  # corbeille, restauration — réservé au GERANT (chef de division / chef de service)
 PURGER = "purger"  # suppression définitive
 CLASSER = "classer"  # rôles du fichier
 
@@ -58,7 +58,7 @@ ACTIONS_ECRITURE = frozenset({AJOUTER_VERSION, MODIFIER, SUPPRIMER, PURGER, CLAS
 _LECTURE = frozenset({VOIR, APERCU, TELECHARGER, CHAT})
 MATRICE: dict[str, frozenset[str]] = {
     GERANT: _LECTURE | {COMMENTER, AJOUTER_VERSION, MODIFIER, SUPPRIMER, PURGER, CLASSER},
-    AUTEUR: _LECTURE | {COMMENTER, AJOUTER_VERSION, MODIFIER, SUPPRIMER},
+    AUTEUR: _LECTURE | {COMMENTER, AJOUTER_VERSION, MODIFIER},  # pas de SUPPRIMER : seuls les chefs (GERANT) suppriment
     LECTEUR: _LECTURE | {COMMENTER},
     SUPERIEUR: _LECTURE,
 }

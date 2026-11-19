@@ -230,18 +230,23 @@ def test_connexion_et_me(client, world):
 
 
 def test_document_corbeille_soft_delete_et_restore(client, world):
-    h = world["a"]["h"]  # l'auteur met son fichier à la corbeille et le restaure
+    h = world["a"]["h"]  # l'auteur dépose ; seul le chef de division supprime / restaure
+    g = world["cd1"]["h"]
     division_id = world["A"]["id"]
     doc = ready_doc(client, h, division_id, "Document de test corbeille")
     doc_id = doc["id"]
-    assert client.delete(f"/documents/{doc_id}", headers=h).status_code == 204
+    # l'auteur (agent) ne peut ni mettre à la corbeille ni restaurer ni purger
+    assert client.delete(f"/documents/{doc_id}", headers=h).status_code == 403
+    assert client.delete(f"/documents/{doc_id}", headers=h, params={"force": True}).status_code == 403
+    assert client.delete(f"/documents/{doc_id}", headers=g).status_code == 204
     assert doc_id not in [item["id"] for item in client.get("/documents", headers=h, params={"division_id": division_id}).json()]
     assert doc_id in [item["id"] for item in client.get("/documents", headers=h, params={"division_id": division_id, "corbeille": True}).json()]
-    assert client.post(f"/documents/{doc_id}/restore", headers=h).status_code == 204
+    assert client.post(f"/documents/{doc_id}/restore", headers=h).status_code == 403
+    assert client.post(f"/documents/{doc_id}/restore", headers=g).status_code == 204
     assert doc_id in [item["id"] for item in client.get("/documents", headers=h, params={"division_id": division_id}).json()]
     # la purge définitive est réservée au chef de division : l'auteur reçoit 403, le chef 204
     assert client.delete(f"/documents/{doc_id}", headers=h, params={"force": True}).status_code == 403
-    assert client.delete(f"/documents/{doc_id}", headers=world["cd1"]["h"], params={"force": True}).status_code == 204
+    assert client.delete(f"/documents/{doc_id}", headers=g, params={"force": True}).status_code == 204
 
 
 def test_mauvais_mot_de_passe_et_compte_verrouille(client, world):
@@ -562,7 +567,7 @@ def test_sources_portent_version_et_date_et_filtre_derniere_version(client, worl
     client.put("/chat/preferences", headers=a, json={"derniere_version_seulement": True})
     assert mine(ask(client, a, q)) == [1]
     client.put("/chat/preferences", headers=a, json={"derniere_version_seulement": False})
-    client.delete(f"/documents/{doc['id']}", headers=a)
+    client.delete(f"/documents/{doc['id']}", headers=world["cd1"]["h"])
 
 
 def test_memoire_dans_la_session_survit_a_la_reconnexion(client, world):

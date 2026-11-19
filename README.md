@@ -135,7 +135,7 @@ Rôles effectifs sur un fichier (recalculés à chaque requête, matrice `MATRIC
 |---|---|---|---|---|
 | Voir, aperçu, téléchargement, chat, commenter | oui | oui | oui | oui |
 | Ajouter un fichier / une version, modifier titre et cases | non | oui | oui | non |
-| Corbeille, restauration | non | oui | oui | non |
+| Corbeille, restauration (suppression) | non | **non** | oui (chef de division / chef de service) | non |
 | Purge définitive, rôles du fichier | non | non | oui | non |
 
 **Plus de dossiers** (refonte `/fichiers`, `docs/refonte_fichiers.md`) : la page **Fichiers** liste à plat
