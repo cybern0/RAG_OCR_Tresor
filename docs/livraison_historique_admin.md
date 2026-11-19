@@ -6,7 +6,31 @@
 > nomme-t-on un chef de service dans /admin/agents ? » — enfin : « dans agent, modifier aussi
 > direction, service et division ; enlever le bouton "Nommer chef de division" et le mettre dans le
 > formulaire de modification, toujours en bouton, sans email ni fonction ; deux boutons : chef de
-> service ou chef de division, par défaut vide (agent). »
+> service ou chef de division, par défaut vide (agent). » — et : « /admin/structure et /admin/agents
+> devraient avoir un CRUD complet — /admin/agents ne manque que delete. »
+
+## 0 ter. Compléments du quatrième tour — CRUD complet : la suppression
+
+- **Backend — 4 routes DELETE** (super administrateur uniquement) :
+  `DELETE /structure/agents/{id}`, `DELETE /structure/directions/{id}`, `DELETE /structure/services/{id}`,
+  `DELETE /structure/divisions/{id}`. La doctrine « pas de suppression physique » du module structure est
+  remplacée par une **suppression gardée** : refus **409** tant que des éléments dépendent encore de l'objet —
+  une direction contient des services ; un service, des divisions ou des agents ; une division, des agents,
+  des rôles, des **documents** (FK obligatoire) ou des demandes d'accès. Le message 409 liste ce qui bloque et
+  en quelle quantité (ex. « encore utilisée : 2 agent(s), 1 document »). Les documents ne bloquent pas la
+  suppression d'un **service** (`cree_par_service_id` en SET NULL).
+- **Supprimer un agent** : son compte utilisateur éventuel est **dissocié, pas supprimé** (aucune route DELETE
+  utilisateur n'existe — le compte survit, sans agent lié) ; la suppression est tracée dans l'historique chaîné
+  (`agent_supprime`, avec matricule, titre et compte) et un poste de chef tenu par l'agent redevient vacant.
+- **Frontend** : bouton « **Supprimer** » dans la liste des agents et dans les trois tableaux de
+  `/admin/structure`, chacun derrière une fenêtre de confirmation (`ConfirmDialog`) qui énonce la règle et, pour
+  un agent avec compte, ce que devient le compte ; l'erreur 409 du backend s'affiche dans la fenêtre sans la fermer.
+- **Tests** : 3 tests d'API dans `tests/test_hierarchie.py` (dissociation du compte + historique + 403 chef de
+  service ; libération du poste d'un chef supprimé ; garde 409 à chaque niveau puis chaîne complète
+  direction → service → division avec purge `force=true` du document bloquant). **Ils attendent
+  `TEST_DATABASE_URL`** : aucun Postgres n'est disponible dans cet environnement d'exécution, la suite locale
+  reste « 93 réussis, 3 ignorés » (tests d'API ignorés sans base — cf. Backend/README.md). Vérifié ici :
+  imports de l'application OK, 4 routes DELETE enregistrées sur le routeur structure, `npm run build` OK.
 
 ## 0 bis. Compléments du troisième tour — modal « Modifier » d'un agent
 
@@ -89,7 +113,11 @@ Au passage, les modules backend morts qui produisaient les valeurs fantômes son
 
 - `frontend/src/features/historique/HistoriquePage.tsx` (dictionnaire TYPES + libellés, puis retrait de « Demande »)
 - `frontend/src/features/admin/users/UsersPage.tsx` (recherche, filtres, colonne Poste)
-- `frontend/src/features/admin/structure/AgentsPage.tsx` (recherche, filtres, puis modal « Modifier »)
-- `frontend/src/features/admin/api.ts` (signature `updateAgent` élargie au `PATCH` backend)
-- Backend : suppression des 6 modules morts listés ci-dessus (aucun autre changement d'API)
+- `frontend/src/features/admin/structure/AgentsPage.tsx` (recherche, filtres, modal « Modifier », suppression)
+- `frontend/src/features/admin/structure/StructurePage.tsx` (suppression gardée des trois niveaux)
+- `frontend/src/features/admin/api.ts` (`updateAgent` élargie ; `deleteAgent`, `deleteDirection`, `deleteService`, `deleteDivision`)
+- `Backend/app/api/routes/structure.py` (4 routes DELETE)
+- `Backend/app/services/structure/crud.py` (4 fonctions de suppression gardées ; doctrine du module mise à jour)
+- `Backend/tests/test_hierarchie.py` (3 tests de suppression)
+- Backend : suppression des 6 modules morts listés ci-dessus
 - `MODIFICATIONS.md`

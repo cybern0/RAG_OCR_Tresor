@@ -1,14 +1,17 @@
 """Logique de la structure : directions, services, divisions, agents, titres et postes.
 
-Pas de suppression physique (les fichiers et les comptes en dépendent) : on désactive avec `actif = false`.
-Un titre vaut rôle d'administration : un seul chef de division actif par division et un seul chef de service actif
-par service, garantis par des index uniques en base ; ici on donne seulement des messages clairs et on trace dans
-l'historique. Le chef de service a le même rôle que le chef de division, étendu à toutes les divisions de son service ;
-il gère les agents de SON service (création, affectation, postes de chef de division) — le périmètre est vérifié ici.
+Suppression gardée (CRUD complet) : une direction encore pourvue de services, un service encore pourvu de
+divisions ou d'agents, une division encore utilisée (agents, rôles, documents, demandes d'accès) sont refusés
+avec un 409 qui dit quoi traiter d'abord. Supprimer un agent dissocie son compte utilisateur — le compte survit,
+sans agent lié. Un titre vaut rôle d'administration : un seul chef de division actif par division et un seul chef
+de service actif par service, garantis par des index uniques en base ; ici on donne seulement des messages clairs
+et on trace dans l'historique. Le chef de service a le même rôle que le chef de division, étendu à toutes les
+divisions de son service ; il gère les agents de SON service (création, affectation, postes de chef de division)
+— le périmètre est vérifié ici.
 """
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -21,6 +24,7 @@ from app.core.permissions import (
 )
 from app.db.metier import (
     Agent,
+    DemandeAcces,
     Direction,
     Division,
     RoleDivision,
@@ -28,6 +32,7 @@ from app.db.metier import (
     User,
     UserRoleDivision,
 )
+from app.db.vecteur import Document  # gardes de suppression : documents classés dans la division
 from app.schemas.structure import (
     AgentIn,
     AgentOut,
@@ -633,3 +638,86 @@ def arbre(db: Session, principal: Principal) -> list[ServiceArbreOut]:
         if unites:
             resultat.append(ServiceArbreOut(id=s.id, code=s.code, nom=s.nom, actif=s.actif, divisions=unites))
     return resultat
+
+
+# --- Suppressions (CRUD complet) : refus 409 tant que des éléments dépendent encore de l'objet ---------------
+
+def delete_direction(db: Session, actor_id: int, direction_id: int, ip: str | None) -> None:
+    """Supprime une direction ; refusée tant qu'elle contient des services (les déplacer ou les supprimer d'abord)."""
+    obj = db.get(Direction, direction_id)
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Direction introuvable.")
+    nb = db.scalar(select(func.count()).select_from(Service).where(Service.direction_id == direction_id))
+    if nb:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"La direction « {obj.nom} » contient {nb} service(s) : supprimez-les ou déplacez-les d'abord.",
+        )
+    db.delete(obj)
+    log_action(db, actor_id, "structure.direction.supprimer", "direction", direction_id, {"code": obj.code, "nom": obj.nom}, ip)
+    db.commit()
+
+
+def delete_service(db: Session, actor_id: int, service_id: int, ip: str | None) -> None:
+    """Supprime un service sans divisions ni agents (les documents ne bloquent pas : cree_par_service_id en SET NULL)."""
+    obj = db.get(Service, service_id)
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Service introuvable.")
+    nb_div = db.scalar(select(func.count()).select_from(Division).where(Division.service_id == service_id))
+    nb_agents = db.scalar(select(func.count()).select_from(Agent).where(Agent.service_id == service_id))
+    if nb_div or nb_agents:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Le service « {obj.nom} » est encore utilisé ({nb_div} division(s), {nb_agents} agent(s)) : traitez-les d'abord.",
+        )
+    db.delete(obj)
+    log_action(db, actor_id, "structure.service.supprimer", "service", service_id, {"code": obj.code, "nom": obj.nom}, ip)
+    db.commit()
+
+
+def delete_division(db: Session, actor_id: int, division_id: int, ip: str | None) -> None:
+    """Supprime une division inutilisée ; le message liste ce qui la bloque : agents, rôles, documents, demandes."""
+    obj = db.get(Division, division_id)
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
+    blocages = []
+    nb_agents = db.scalar(select(func.count()).select_from(Agent).where(Agent.division_id == division_id))
+    if nb_agents:
+        blocages.append(f"{nb_agents} agent(s)")
+    nb_roles = db.scalar(select(func.count()).select_from(RoleDivision).where(RoleDivision.division_id == division_id))
+    if nb_roles:
+        blocages.append(f"{nb_roles} rôle(s) de division")
+    nb_docs = db.scalar(select(func.count()).select_from(Document).where(Document.division_id == division_id))
+    if nb_docs:
+        blocages.append(f"{nb_docs} document(s)")
+    nb_demandes = db.scalar(select(func.count()).select_from(DemandeAcces).where(DemandeAcces.division_id == division_id))
+    if nb_demandes:
+        blocages.append(f"{nb_demandes} demande(s) d'accès")
+    if blocages:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"La division « {obj.nom} » est encore utilisée : {', '.join(blocages)}. Traitez-les d'abord.",
+        )
+    db.delete(obj)
+    log_action(db, actor_id, "structure.division.supprimer", "division", division_id, {"code": obj.code, "nom": obj.nom}, ip)
+    db.commit()
+
+
+def delete_agent(db: Session, actor: Principal, agent_id: int, ip: str | None) -> None:
+    """Supprime un agent. Son compte utilisateur, s'il en a un, est dissocié (le compte survit, sans agent lié) ;
+    l'historique conserve la fiche supprimée, titre compris — le poste redevient vacant (index unique libéré)."""
+    obj = db.get(Agent, agent_id)
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent introuvable.")
+    compte = db.scalar(select(User).where(User.agent_id == agent_id))
+    compte_nom = None
+    if compte is not None:
+        compte_nom = compte.nom_utilisateur
+        compte.agent_id = None
+    ecrire_historique(
+        db, acteur=actor.user, cible_type="agent", cible_id=obj.id, action="agent_supprime",
+        avant={"matricule": obj.matricule, "nom": obj.nom, "prenom": obj.prenom, "titre": obj.titre, "compte": compte_nom},
+        service_id=obj.service_id, division_id=obj.division_id,
+    )
+    db.delete(obj)
+    db.commit()

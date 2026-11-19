@@ -640,3 +640,57 @@ def test_le_chef_de_service_meme_role_sur_toutes_les_divisions(client, world):
     # un agent avec division ne peut pas devenir chef de service ; un agent d'un autre service non plus
     assert client.put(f"/structure/services/{s2}/chef", headers=adm, json={"agent_id": world["cd3"]["agent"]["id"]}).status_code == 422
     assert client.put(f"/structure/services/{s2}/chef", headers=adm, json={"agent_id": ancien}).status_code == 422
+
+
+# --- suppression (CRUD complet) : gardes d'intégrité, dissociation du compte, postes libérés ---------------------------------
+
+def test_suppression_agent_et_dissociation_du_compte(client, world):
+    """Supprimer un agent (réservé au super administrateur) retire la fiche, dissocie son compte utilisateur
+    et trace la suppression dans l'historique chaîné."""
+    adm, tag = world["admin"], world["tag"]
+    ag = mk_agent(client, adm, "supa", tag, world["svc"]["s1"]["id"], world["div"]["v1"]["id"])
+    mk_user(client, adm, ag, "supa", tag)
+    # réservé au super administrateur
+    assert client.delete(f"/structure/agents/{ag['id']}", headers=world["cs"]["h"]).status_code == 403
+    assert client.delete(f"/structure/agents/{ag['id']}", headers=adm).status_code == 204
+    assert ag["id"] not in {a["id"] for a in client.get("/structure/agents", headers=adm).json()}
+    # le compte survit, sans agent lié
+    compte = next(u for u in client.get("/users", headers=adm).json() if u["nom_utilisateur"] == f"user_supa_{tag}")
+    assert compte["agent"] is None
+    hist = client.get("/historique", headers=adm, params={"cible_type": "agent", "limit": 50}).json()
+    assert any(i["action"] == "agent_supprime" and i["cible_id"] == ag["id"] for i in hist["items"])
+    assert client.delete("/structure/agents/999999999", headers=adm).status_code == 404
+
+
+def test_supprimer_un_chef_libere_le_poste(client, world):
+    """Supprimer un chef libère son poste (l'index unique disparaît avec la ligne) : la division redevient sans chef."""
+    adm, s1 = world["admin"], world["svc"]["s1"]["id"]
+    tag = uuid.uuid4().hex[:6]
+    v = client.post("/structure/divisions", headers=adm, json={"service_id": s1, "nom": f"Division supchef {tag}"}).json()
+    chef = mk_agent(client, adm, "supc", tag, s1, v["id"], "CHEF_DIVISION")
+    assert client.delete(f"/structure/agents/{chef['id']}", headers=adm).status_code == 204
+    poste = next(p for p in client.get("/structure/postes", headers=adm).json()["divisions"] if p["division_id"] == v["id"])
+    assert poste["chef"] is None
+
+
+def test_gardes_et_chaine_de_suppression_de_la_structure(client, world):
+    """Chaque niveau refuse (409) tant qu'il contient encore quelque chose — services, divisions, agents,
+    documents ; vidé, toute la chaîne direction → service → division se supprime."""
+    adm = world["admin"]
+    tag = uuid.uuid4().hex[:6]
+    d = client.post("/structure/directions", headers=adm, json={"code": f"DX{tag}", "nom": "Direction à supprimer"}).json()
+    s = client.post("/structure/services", headers=adm, json={"direction_id": d["id"], "code": f"SX{tag}", "nom": "Service à supprimer"}).json()
+    v = client.post("/structure/divisions", headers=adm, json={"service_id": s["id"], "nom": f"Division à supprimer {tag}"}).json()
+    assert client.delete(f"/structure/directions/{d['id']}", headers=adm).status_code == 409  # contient un service
+    assert client.delete(f"/structure/services/{s['id']}", headers=adm).status_code == 409   # contient une division
+    ag = mk_agent(client, adm, "supg", tag, s["id"], v["id"])
+    assert client.delete(f"/structure/divisions/{v['id']}", headers=adm).status_code == 409  # agent rattaché
+    assert client.delete(f"/structure/agents/{ag['id']}", headers=adm).status_code == 204
+    f = ready_doc(client, adm, v["id"], f"Document bloquant {tag}")
+    assert client.delete(f"/structure/divisions/{v['id']}", headers=adm).status_code == 409  # document classé dedans
+    assert client.delete(f"/documents/{f['id']}?force=true", headers=adm).status_code == 204  # purge du document
+    # chaîne complète une fois vidée : division → service → direction
+    assert client.delete(f"/structure/divisions/{v['id']}", headers=adm).status_code == 204
+    assert client.delete(f"/structure/services/{s['id']}", headers=adm).status_code == 204
+    assert client.delete(f"/structure/directions/{d['id']}", headers=adm).status_code == 204
+    assert d["id"] not in {x["id"] for x in client.get("/structure/directions", headers=adm).json()}

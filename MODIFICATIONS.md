@@ -1,3 +1,30 @@
+# CRUD complet : suppression ajoutée sur /admin/structure (directions, services, divisions) et /admin/agents
+
+(11/2026)
+
+- **Backend — 4 routes DELETE** dans `routes/structure.py` + `services/structure/crud.py` (super administrateur) :
+  `DELETE /structure/agents/{id}`, `/structure/directions/{id}`, `/structure/services/{id}`, `/structure/divisions/{id}`.
+  La doctrine « pas de suppression physique » du module est remplacée par une **suppression gardée** : 409 tant que
+  des éléments dépendent de l'objet — direction avec services ; service avec divisions ou agents ; division avec
+  agents, rôles, documents ou demandes d'accès (le message 409 liste ce qui bloque, avec les quantités). Les
+  documents ne bloquent pas la suppression d'un **service** (`cree_par_service_id` en SET NULL). **Supprimer un
+  agent dissocie son compte utilisateur** (le compte survit, sans agent lié — il n'existe aucune route DELETE
+  utilisateur), trace `agent_supprime` dans l'historique chaîné (fiche, titre, compte) et libère le poste de chef.
+  Directions/services/divisions : trace via `log_action` (`structure.*.supprimer`), comme leur création.
+- **Frontend** : `deleteAgent`, `deleteDirection`, `deleteService`, `deleteDivision` dans `api.ts` ; bouton
+  **« Supprimer »** dans la liste des agents et dans les trois tableaux de `/admin/structure`, chacun derrière
+  un `ConfirmDialog` qui énonce la règle (et, pour un agent avec compte, ce que devient le compte). L'erreur 409
+  du backend s'affiche dans la fenêtre sans la fermer.
+- **Tests** : 3 tests d'API dans `tests/test_hierarchie.py` — dissociation du compte + historique + 403 pour un
+  chef de service, libération du poste d'un chef supprimé, garde 409 à chaque niveau puis chaîne complète
+  direction → service → division (avec purge `force=true` du document bloquant). **Ils exigent
+  `TEST_DATABASE_URL`** (aucun Postgres dans cet environnement : la suite exécutée ici reste « 93 réussis,
+  3 ignorés » — les tests d'API s'exécuteront là où la variable est définie, cf. Backend/README.md).
+  Vérifié localement : imports de l'application OK, 4 routes DELETE enregistrées sur le routeur structure,
+  `npm run build` OK.
+
+---
+
 # /admin/agents : modal « Modifier » enrichie (direction → service → division, poste en deux boutons)
 
 (11/2026)

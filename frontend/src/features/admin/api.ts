@@ -21,6 +21,11 @@ export const updateDivision = (id: number, data: { nom?: string; actif?: boolean
 export const listAgents = () => api<Agent[]>('/structure/agents')
 export const createAgent = (data: { matricule: string; nom: string; prenom: string; fonction?: string | null; email?: string | null; service_id: number; division_id?: number | null; titre?: 'CHEF_DIVISION' | 'CHEF_SERVICE' | null }) => api<Agent>('/structure/agents', { method: 'POST', json: data })
 export const updateAgent = (id: number, data: { nom?: string; prenom?: string; fonction?: string | null; email?: string | null; service_id?: number; division_id?: number | null; titre?: 'CHEF_DIVISION' | 'CHEF_SERVICE' | null; actif?: boolean }) => api<Agent>(`/structure/agents/${id}`, { method: 'PATCH', json: data })
+// Suppressions gardées : le backend répond 409 tant que des éléments dépendent encore de l'objet.
+export const deleteDirection = (id: number) => api<void>(`/structure/directions/${id}`, { method: 'DELETE' })
+export const deleteService = (id: number) => api<void>(`/structure/services/${id}`, { method: 'DELETE' })
+export const deleteDivision = (id: number) => api<void>(`/structure/divisions/${id}`, { method: 'DELETE' })
+export const deleteAgent = (id: number) => api<void>(`/structure/agents/${id}`, { method: 'DELETE' })
 
 // --- audit, statistiques, santé
 export const listAudit = (limit = 200, offset = 0) => api<AuditRow[]>(`/audit${query({ limit, offset })}`)

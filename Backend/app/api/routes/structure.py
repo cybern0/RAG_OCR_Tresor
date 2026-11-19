@@ -45,6 +45,12 @@ def update_direction(
     return crud.update_direction(db, actor.user.id, direction_id, data, client_ip(request))
 
 
+@router.delete("/directions/{direction_id}", status_code=204)
+def delete_direction(direction_id: int, request: Request, actor: Principal = Depends(_super_admin), db: Session = Depends(get_db)):
+    """Suppression refusée (409) tant que la direction contient des services."""
+    return crud.delete_direction(db, actor.user.id, direction_id, client_ip(request))
+
+
 @router.get("/services", response_model=list[ServiceOut])
 def list_services(principal: Principal = Depends(_admin), db: Session = Depends(get_db)):
     return [crud.to_service_out(s) for s in crud.list_services(db, principal)]
@@ -61,6 +67,12 @@ def update_service(
     actor: Principal = Depends(_super_admin), db: Session = Depends(get_db),
 ):
     return crud.to_service_out(crud.update_service(db, actor.user.id, service_id, data, client_ip(request)))
+
+
+@router.delete("/services/{service_id}", status_code=204)
+def delete_service(service_id: int, request: Request, actor: Principal = Depends(_super_admin), db: Session = Depends(get_db)):
+    """Suppression refusée (409) tant que le service contient des divisions ou des agents."""
+    return crud.delete_service(db, actor.user.id, service_id, client_ip(request))
 
 
 @router.get("/divisions", response_model=list[DivisionOut])
@@ -81,6 +93,12 @@ def update_division(
     actor: Principal = Depends(_super_admin), db: Session = Depends(get_db),
 ):
     return crud.to_division_out(crud.update_division(db, actor.user.id, division_id, data, client_ip(request)))
+
+
+@router.delete("/divisions/{division_id}", status_code=204)
+def delete_division(division_id: int, request: Request, actor: Principal = Depends(_super_admin), db: Session = Depends(get_db)):
+    """Suppression refusée (409) tant que des agents, rôles, documents ou demandes d'accès l'utilisent."""
+    return crud.delete_division(db, actor.user.id, division_id, client_ip(request))
 
 
 @router.get("/postes", response_model=PostesOut)
@@ -125,3 +143,9 @@ def update_agent(
     actor: Principal = Depends(_admin), db: Session = Depends(get_db),
 ):
     return crud.update_agent(db, actor, agent_id, data, client_ip(request))
+
+
+@router.delete("/agents/{agent_id}", status_code=204)
+def delete_agent(agent_id: int, request: Request, actor: Principal = Depends(_super_admin), db: Session = Depends(get_db)):
+    """Supprime l'agent (super administrateur) ; son compte utilisateur est dissocié, l'historique conserve la fiche."""
+    return crud.delete_agent(db, actor, agent_id, client_ip(request))

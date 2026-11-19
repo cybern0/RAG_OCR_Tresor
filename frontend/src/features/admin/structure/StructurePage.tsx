@@ -1,4 +1,6 @@
-// Directions, services et divisions : création et activation. Une division appartient à un service et un service à une direction.
+// Directions, services et divisions : CRUD complet (création, modification d'état, suppression gardée).
+// Une division appartient à un service et un service à une direction ; la suppression est refusée tant que
+// des éléments dépendent encore de l'objet (409 expliqué dans la fenêtre de confirmation).
 import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
@@ -6,13 +8,14 @@ import type { FormEvent } from 'react'
 import { errorMessage } from '../../../shared/api/client'
 import { exempleCode, exempleNomDirection, exempleNomService } from '../../../shared/lib/exemples'
 import Badge from '../../../shared/ui/Badge'
+import ConfirmDialog from '../../../shared/ui/ConfirmDialog'
 import ExampleButton from '../../../shared/ui/ExampleButton'
 import Field from '../../../shared/ui/Field'
 import { ErrorBox, Loading } from '../../../shared/ui/Feedback'
 import Modal from '../../../shared/ui/Modal'
 import PageHeader from '../../../shared/ui/PageHeader'
 import { useToast } from '../../../shared/hooks/useToast'
-import { createDirection, createDivision, createService, listDivisionsAdmin, updateDirection, updateDivision, updateService } from '../api'
+import { createDirection, createDivision, createService, deleteDirection, deleteDivision, deleteService, listDivisionsAdmin, updateDirection, updateDivision, updateService } from '../api'
 import { adminKeys, useAdminMutation, useDirections, useServices } from '../queries'
 
 function DirectionModal({ onClose }: { onClose: () => void }) {
@@ -95,9 +98,13 @@ export function Component() {
   const services = useServices()
   const divisions = useQuery({ queryKey: ['admin', 'divisions'], queryFn: listDivisionsAdmin })
   const [modal, setModal] = useState<'direction' | 'service' | 'division' | null>(null)
+  const [confirm, setConfirm] = useState<{ kind: 'direction' | 'service' | 'division'; id: number; nom: string } | null>(null)
   const toggleDirection = useAdminMutation((v: { id: number; actif: boolean }) => updateDirection(v.id, { actif: v.actif }), [adminKeys.directions, adminKeys.services])
   const toggleService = useAdminMutation((v: { id: number; actif: boolean }) => updateService(v.id, { actif: v.actif }), [adminKeys.services])
   const toggleDivision = useAdminMutation((v: { id: number; actif: boolean }) => updateDivision(v.id, { actif: v.actif }), [['admin', 'divisions'] as const])
+  const supprDirection = useAdminMutation((id: number) => deleteDirection(id), [adminKeys.directions, adminKeys.services])
+  const supprService = useAdminMutation((id: number) => deleteService(id), [adminKeys.services, ['admin', 'divisions'] as const])
+  const supprDivision = useAdminMutation((id: number) => deleteDivision(id), [['admin', 'divisions'] as const])
   const fail = (e: unknown) => toast.error(errorMessage(e))
 
   return (
@@ -111,7 +118,7 @@ export function Component() {
             <div className="card overflow-x-auto"><table className="w-full border-collapse"><thead><tr><th className="th">Code</th><th className="th">Nom</th><th className="th">État</th><th className="th" /></tr></thead><tbody>
               {directions.data!.map((d) => (
                 <tr key={d.id} className="hover:bg-leaf-700/40"><td className="td font-mono text-xs">{d.code}</td><td className="td">{d.nom}</td><td className="td"><Badge tone={d.actif ? 'green' : 'gray'}>{d.actif ? 'Active' : 'Désactivée'}</Badge></td>
-                  <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleDirection.mutateAsync({ id: d.id, actif: !d.actif }).catch(fail)}>{d.actif ? 'Désactiver' : 'Réactiver'}</button></td></tr>
+                  <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleDirection.mutateAsync({ id: d.id, actif: !d.actif }).catch(fail)}>{d.actif ? 'Désactiver' : 'Réactiver'}</button><button className="btn-ghost" onClick={() => setConfirm({ kind: 'direction', id: d.id, nom: d.nom })}>Supprimer</button></td></tr>
               ))}
             </tbody></table></div>
           )}
@@ -122,7 +129,7 @@ export function Component() {
             <div className="card overflow-x-auto"><table className="w-full border-collapse"><thead><tr><th className="th">Service</th><th className="th">Direction</th><th className="th">État</th><th className="th" /></tr></thead><tbody>
               {services.data!.map((s) => (
                 <tr key={s.id} className="hover:bg-leaf-700/40"><td className="td">{s.nom}<br /><span className="font-mono text-xs text-cream-300">{s.code}{s.site ? ` · ${s.site}` : ''}</span></td><td className="td text-sm">{s.direction_nom}</td><td className="td"><Badge tone={s.actif ? 'green' : 'gray'}>{s.actif ? 'Actif' : 'Désactivé'}</Badge></td>
-                  <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleService.mutateAsync({ id: s.id, actif: !s.actif }).catch(fail)}>{s.actif ? 'Désactiver' : 'Réactiver'}</button></td></tr>
+                  <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleService.mutateAsync({ id: s.id, actif: !s.actif }).catch(fail)}>{s.actif ? 'Désactiver' : 'Réactiver'}</button><button className="btn-ghost" onClick={() => setConfirm({ kind: 'service', id: s.id, nom: s.nom })}>Supprimer</button></td></tr>
               ))}
             </tbody></table></div>
           )}
@@ -133,7 +140,7 @@ export function Component() {
             <div className="card overflow-x-auto"><table className="w-full border-collapse"><thead><tr><th className="th">Division</th><th className="th">Service</th><th className="th">État</th><th className="th" /></tr></thead><tbody>
               {divisions.data!.map((d) => (
                 <tr key={d.id} className="hover:bg-leaf-700/40"><td className="td">{d.nom}<br /><span className="font-mono text-xs text-cream-300">{d.code ?? '—'}</span></td><td className="td text-sm">{d.service_nom ?? '—'}{d.direction_nom ? <><br /><span className="text-xs text-cream-300">{d.direction_nom}</span></> : null}</td><td className="td"><Badge tone={d.actif ? 'green' : 'gray'}>{d.actif ? 'Active' : 'Désactivée'}</Badge></td>
-                  <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleDivision.mutateAsync({ id: d.id, actif: !d.actif }).catch(fail)}>{d.actif ? 'Désactiver' : 'Réactiver'}</button></td></tr>
+                  <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleDivision.mutateAsync({ id: d.id, actif: !d.actif }).catch(fail)}>{d.actif ? 'Désactiver' : 'Réactiver'}</button><button className="btn-ghost" onClick={() => setConfirm({ kind: 'division', id: d.id, nom: d.nom })}>Supprimer</button></td></tr>
               ))}
             </tbody></table></div>
           )}
@@ -142,6 +149,22 @@ export function Component() {
       {modal === 'direction' && <DirectionModal onClose={() => setModal(null)} />}
       {modal === 'service' && <ServiceModal onClose={() => setModal(null)} />}
       {modal === 'division' && <DivisionModal onClose={() => setModal(null)} />}
+      {confirm && (
+        <ConfirmDialog
+          title={`Supprimer ${confirm.kind === 'direction' ? 'la direction' : confirm.kind === 'service' ? 'le service' : 'la division'} « ${confirm.nom} » ?`}
+          confirmLabel="Supprimer définitivement"
+          onClose={() => setConfirm(null)}
+          onConfirm={async () => {
+            if (confirm.kind === 'direction') { await supprDirection.mutateAsync(confirm.id); toast.success('Direction supprimée.') }
+            else if (confirm.kind === 'service') { await supprService.mutateAsync(confirm.id); toast.success('Service supprimé.') }
+            else { await supprDivision.mutateAsync(confirm.id); toast.success('Division supprimée.') }
+          }}
+        >
+          {confirm.kind === 'direction' && <>La direction et son code disparaissent. Impossible tant qu'elle contient des services : déplacez-les ou supprimez-les d'abord.</>}
+          {confirm.kind === 'service' && <>Le service et son code disparaissent. Impossible tant qu'il contient des divisions ou des agents.</>}
+          {confirm.kind === 'division' && <>La division disparaît. Impossible si des agents, rôles, documents ou demandes d'accès l'utilisent encore.</>}
+        </ConfirmDialog>
+      )}
     </>
   )
 }
