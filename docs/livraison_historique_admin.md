@@ -3,7 +3,27 @@
 > Demandes du 19/11/2026 : « dans /historique nettoyer le dictionnaire de filtre "types", ainsi dans
 > /admin/utilisateurs ajouter des filtres et recherche, de même que dans /admin/agents, aussi nommé
 > chef de service y est absent. » — puis : « supprimer le filtre demande dans /historique, comment
-> nomme-t-on un chef de service dans /admin/agents ? »
+> nomme-t-on un chef de service dans /admin/agents ? » — enfin : « dans agent, modifier aussi
+> direction, service et division ; enlever le bouton "Nommer chef de division" et le mettre dans le
+> formulaire de modification, toujours en bouton, sans email ni fonction ; deux boutons : chef de
+> service ou chef de division, par défaut vide (agent). »
+
+## 0 bis. Compléments du troisième tour — modal « Modifier » d'un agent
+
+- **Affectation complète modifiable** : la modal suit désormais **direction → service → division**
+  (la direction filtre les services ; l'agent reste rattaché au service, sa direction en découle).
+- **Poste en deux boutons** dans la modal : « Chef de division » et « Chef de service », **par défaut
+  aucun** (agent simple) ; cliquer un bouton sélectionné le désélectionne. « Chef de division » n'est
+  actif qu'une fois une division choisie ; « Chef de service » remet la division à « Aucune ».
+  **Le champ email et la fonction sortent du formulaire** (inchangés à la modification, toujours
+  saisissables à la création).
+- **Le bouton « Nommer chef de division » disparaît de la liste** : la nomination se fait par les
+  boutons de la modal, avec le même comportement que les transferts dédiés — le titulaire précédent
+  est remplacé (historique + notification). Soumission en trois temps, dans l'ordre des contraintes
+  du backend : rendre l'ancien poste si le poste ou l'affectation change → PATCH identité/service/
+  division → nomination (`transfererChef` / `transfererChefService`). La liste conserve
+  « Retirer le poste » (les deux types) et la nomination rapide d'un chef de service.
+- Vérifications : `npm run build` OK (tsc + vite) ; pytest 93 réussis / 3 ignorés.
 
 ## 0. Compléments du second tour
 

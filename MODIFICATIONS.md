@@ -1,3 +1,23 @@
+# /admin/agents : modal « Modifier » enrichie (direction → service → division, poste en deux boutons)
+
+(11/2026)
+
+- **`/admin/agents` — modal « Modifier »** : la direction entre dans le parcours d'affectation (elle filtre la
+  liste des services ; l'agent reste rattaché au service choisi — direction, service et division modifiables).
+  **Le poste se règle désormais dans la modal via deux boutons** — « Chef de division » et « Chef de service » —
+  par défaut aucun (l'agent simple). Le champ email et la fonction sortent du formulaire (ils restent inchangés
+  à la modification ; ils restent saisissables à la création).
+- **Nomination depuis la modal** : la liste perd le bouton « Nommer chef de division » ; la nomination se fait
+  par les boutons de la modal, avec le même comportement que les transferts dédiés (le titulaire précédent est
+  remplacé, historique et notification). Soumission en trois temps dans l'ordre des contraintes du backend :
+  rendre l'ancien poste si l'affectation ou le poste change → PATCH identité/service/division → nomination via
+  `transfererChef` / `transfererChefService`. La liste conserve « Retirer le poste » (les deux types) et la
+  nomination rapide d'un chef de service ; « Chef de division » n'est actif qu'une division choisie,
+  « Chef de service » qu'un service choisi (il remet la division à « Aucune »).
+- Vérifications : `npm run build` OK (tsc + vite) ; suite backend verte (93 réussis, 3 ignorés).
+
+---
+
 # /historique : filtre « demande » retiré — /admin/agents : modal « Modifier » pour rendre un agent nommable chef de service
 
 (11/2026)

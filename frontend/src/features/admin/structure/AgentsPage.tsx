@@ -1,6 +1,7 @@
 // Agents de la structure : recherche et filtres côté client (service, poste — chef de service / chef de division —,
-// état, avec ou sans compte). La nomination et le retrait des postes se font depuis la liste ; la modal
-// « Modifier » permet de changer l'identité et l'affectation (service, division — « Aucune » pour un futur chef de service).
+// état, avec ou sans compte). La modal « Modifier » centralise l'identité, l'affectation (direction → service →
+// division) et le poste via deux boutons (chef de division / chef de service, par défaut « agent », sans poste) ;
+// la liste conserve le retrait de poste et la nomination rapide d'un chef de service.
 import { Pencil, Plus, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -16,7 +17,7 @@ import { useToast } from '../../../shared/hooks/useToast'
 import { createAgent, listDivisionsAdmin, transfererChef, transfererChefService, updateAgent } from '../api'
 import type { Agent } from '../types'
 import { useQuery } from '@tanstack/react-query'
-import { adminKeys, useAdminMutation, useAgents, useServices } from '../queries'
+import { adminKeys, useAdminMutation, useAgents, useDirections, useServices } from '../queries'
 
 function AgentModal({ onClose }: { onClose: () => void }) {
   const toast = useToast()
@@ -53,33 +54,88 @@ function AgentModal({ onClose }: { onClose: () => void }) {
 
 function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const toast = useToast()
-  const services = useServices()
-  const [f, setF] = useState({ nom: agent.nom, prenom: agent.prenom, fonction: agent.fonction ?? '', email: agent.email ?? '', service_id: agent.service_id ?? ('' as number | ''), division_id: agent.division_id ?? ('' as number | '') })
+  const directions = useDirections()
+  const servicesQ = useServices()
+  const [f, setF] = useState({
+    nom: agent.nom, prenom: agent.prenom,
+    direction_id: '' as number | '',
+    service_id: agent.service_id ?? ('' as number | ''),
+    division_id: agent.division_id ?? ('' as number | ''),
+    poste: (agent.titre ?? '') as '' | 'CHEF_DIVISION' | 'CHEF_SERVICE',
+  })
   const [error, setError] = useState<string | null>(null)
-  const active = (services.data ?? []).filter((s) => s.actif || s.id === agent.service_id)
+  const dirs = (directions.data ?? []).filter((d) => d.actif || d.id === f.direction_id)
+  // Direction affichée : celle choisie, sinon celle du service courant de l'agent (une fois la liste chargée).
+  const serviceCourant = (servicesQ.data ?? []).find((s) => s.id === agent.service_id)
+  const directionId = f.direction_id !== '' ? f.direction_id : serviceCourant?.direction_id ?? ''
+  const servicesVisibles = (servicesQ.data ?? []).filter((s) => (s.actif || s.id === agent.service_id) && (directionId === '' || s.direction_id === directionId))
   const divisions = useQuery({ queryKey: ['admin', 'divisions'], queryFn: listDivisionsAdmin })
   const divs = (divisions.data ?? []).filter((d) => d.service_id === f.service_id && (d.actif || d.id === agent.division_id))
-  const save = useAdminMutation(() => updateAgent(agent.id, { nom: f.nom, prenom: f.prenom, fonction: f.fonction || null, email: f.email || null, service_id: Number(f.service_id), division_id: f.division_id === '' ? null : Number(f.division_id) }), [adminKeys.agents])
-  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((s) => ({ ...s, [k]: k === 'service_id' || k === 'division_id' ? (e.target.value ? Number(e.target.value) : '') : e.target.value, ...(k === 'service_id' ? { division_id: '' as const } : {}) }))
+  // Soumission en trois temps, dans l'ordre des contraintes du backend :
+  // 1) l'agent avait un poste qui change ou une affectation qui bouge → rendre le poste d'abord ;
+  // 2) identité + affectation (direction implicite via le service ; email et fonction inchangés) ;
+  // 3) nommer le nouveau poste via les transferts dédiés (le titulaire précédent est remplacé).
+  const save = useAdminMutation(async () => {
+    const serviceFinal = Number(f.service_id)
+    const divisionFinale = f.division_id === '' ? null : Number(f.division_id)
+    const affectationBouge = serviceFinal !== agent.service_id || divisionFinale !== agent.division_id
+    if (agent.titre === 'CHEF_SERVICE' && (f.poste !== agent.titre || affectationBouge)) await transfererChefService(agent.service_id!, null)
+    else if (agent.titre === 'CHEF_DIVISION' && (f.poste !== agent.titre || affectationBouge)) await transfererChef(agent.division_id!, null)
+    await updateAgent(agent.id, { nom: f.nom, prenom: f.prenom, service_id: serviceFinal, division_id: divisionFinale })
+    if (f.poste === 'CHEF_DIVISION') await transfererChef(divisionFinale!, agent.id)
+    else if (f.poste === 'CHEF_SERVICE') await transfererChefService(serviceFinal, agent.id)
+  }, [adminKeys.agents])
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    if (f.poste === 'CHEF_DIVISION' && f.division_id === '') { setError('Choisissez la division du chef de division.'); return }
     try { await save.mutateAsync(undefined); toast.success('Agent modifié.'); onClose() } catch (err) { setError(errorMessage(err)) }
   }
   return (
     <Modal title={`Modifier ${agent.nom} ${agent.prenom}`} onClose={onClose}>
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Nom">{(id) => <input id={id} className="input" required value={f.nom} onChange={set('nom')} />}</Field>
-          <Field label="Prénom">{(id) => <input id={id} className="input" required value={f.prenom} onChange={set('prenom')} />}</Field>
-          <Field label="Service">{(id) => <select id={id} className="input" required value={f.service_id} onChange={set('service_id')}><option value="">— Choisir —</option>{active.map((s) => <option key={s.id} value={s.id}>{s.nom}</option>)}</select>}</Field>
-          <Field label="Division" hint="« Aucune » : l'agent reste au service sans division — c'est le préalable pour pouvoir le nommer chef de service.">
-            {(id) => <select id={id} className="input" value={f.division_id} onChange={set('division_id')} disabled={!f.service_id}><option value="">— Aucune —</option>{divs.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}</select>}
+          <Field label="Nom">{(id) => <input id={id} className="input" required value={f.nom} onChange={(e) => setF((s) => ({ ...s, nom: e.target.value }))} />}</Field>
+          <Field label="Prénom">{(id) => <input id={id} className="input" required value={f.prenom} onChange={(e) => setF((s) => ({ ...s, prenom: e.target.value }))} />}</Field>
+          <Field label="Direction" hint="Filtre la liste des services.">
+            {(id) => (
+              <select id={id} className="input" value={directionId} onChange={(e) => setF((s) => ({ ...s, direction_id: e.target.value ? Number(e.target.value) : '', service_id: '', division_id: '', ...(s.poste === 'CHEF_DIVISION' ? { poste: '' as const } : {}) }))}>
+                <option value="">— Choisir —</option>
+                {dirs.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}
+              </select>
+            )}
           </Field>
-          <Field label="Fonction (facultatif)">{(id) => <input id={id} className="input" value={f.fonction} onChange={set('fonction')} />}</Field>
-          <Field label="Email (facultatif)">{(id) => <input id={id} type="email" className="input" value={f.email} onChange={set('email')} />}</Field>
+          <Field label="Service">
+            {(id) => (
+              <select id={id} className="input" required value={f.service_id} onChange={(e) => setF((s) => ({ ...s, service_id: e.target.value ? Number(e.target.value) : '', division_id: '', ...(s.poste === 'CHEF_DIVISION' ? { poste: '' as const } : {}) }))}>
+                <option value="">— Choisir —</option>
+                {servicesVisibles.map((s) => <option key={s.id} value={s.id}>{s.nom}</option>)}
+              </select>
+            )}
+          </Field>
+          <Field label="Division" hint="« Aucune » : l'agent reste au service sans division — c'est le préalable pour pouvoir le nommer chef de service.">
+            {(id) => (
+              <select id={id} className="input" value={f.division_id} disabled={!f.service_id} onChange={(e) => setF((s) => ({ ...s, division_id: e.target.value ? Number(e.target.value) : '', ...(e.target.value === '' && s.poste === 'CHEF_DIVISION' ? { poste: '' as const } : {}) }))}>
+                <option value="">— Aucune —</option>
+                {divs.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}
+              </select>
+            )}
+          </Field>
         </div>
-        <p className="text-xs text-cream-300">Le poste (chef de division, chef de service) se nomme ou se retire depuis la liste, colonne d'actions ; le matricule n'est pas modifiable.</p>
+        <div>
+          <span className="label">Poste</span>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={f.poste === 'CHEF_DIVISION' ? 'btn' : 'btn-ghost'} aria-pressed={f.poste === 'CHEF_DIVISION'} disabled={!f.division_id}
+              onClick={() => setF((s) => (s.poste === 'CHEF_DIVISION' ? { ...s, poste: '' } : { ...s, poste: 'CHEF_DIVISION' }))}>
+              {f.poste === 'CHEF_DIVISION' ? '✓ ' : ''}Chef de division
+            </button>
+            <button type="button" className={f.poste === 'CHEF_SERVICE' ? 'btn' : 'btn-ghost'} aria-pressed={f.poste === 'CHEF_SERVICE'} disabled={!f.service_id}
+              onClick={() => setF((s) => (s.poste === 'CHEF_SERVICE' ? { ...s, poste: '' } : { ...s, poste: 'CHEF_SERVICE', division_id: '' as const }))}>
+              {f.poste === 'CHEF_SERVICE' ? '✓ ' : ''}Chef de service
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-cream-300">Par défaut : aucun poste (agent). Nommer un chef remplace le titulaire précédent ; le chef de service couvre toutes les divisions de son service, sans division propre. Le matricule n'est pas modifiable.</p>
+        </div>
         <ErrorBox message={error} />
         <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={onClose}>Annuler</button><button className="btn" disabled={save.isPending}>{save.isPending ? 'Enregistrement…' : 'Enregistrer'}</button></div>
       </form>
@@ -159,7 +215,7 @@ export function Component() {
                 <td className="td text-sm">{a.titre === 'CHEF_DIVISION' ? <Badge tone="gold">Chef de division</Badge> : a.titre === 'CHEF_SERVICE' ? <Badge tone="gold">Chef de service</Badge> : '—'}</td>
                 <td className="td text-sm">{a.nom_utilisateur ?? '—'}</td>
                 <td className="td"><Badge tone={a.actif ? 'green' : 'gray'}>{a.actif ? 'Actif' : 'Désactivé'}</Badge></td>
-                <td className="td text-right"><button className="btn-icon" title="Modifier l'agent" aria-label={`Modifier l'agent ${a.nom} ${a.prenom}`} onClick={() => setEditing(a)}><Pencil className="h-4 w-4" /></button>{a.actif && a.titre === 'CHEF_SERVICE' && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, null, 'Poste de chef de service rendu vacant.')}>Retirer le poste</button>}{a.actif && a.titre === 'CHEF_DIVISION' && a.division_id !== null && <button className="btn-ghost" onClick={() => poste('division', a.division_id!, null, 'Poste rendu vacant.')}>Retirer le poste</button>}{a.actif && !a.titre && a.division_id !== null && <button className="btn-ghost" onClick={() => poste('division', a.division_id!, a.id, 'Nommé chef de division (le titulaire précédent est remplacé).')}>Nommer chef de division</button>}{a.actif && !a.titre && a.division_id === null && a.service_id !== null && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, a.id, 'Nommé chef de service (le titulaire précédent est remplacé).')}>Nommer chef de service</button>}<button className="btn-ghost" onClick={() => void toggle.mutateAsync({ id: a.id, actif: !a.actif }).catch((e) => toast.error(errorMessage(e)))}>{a.actif ? 'Désactiver' : 'Réactiver'}</button></td>
+                <td className="td text-right"><button className="btn-icon" title="Modifier l'agent (identité, affectation, poste)" aria-label={`Modifier l'agent ${a.nom} ${a.prenom}`} onClick={() => setEditing(a)}><Pencil className="h-4 w-4" /></button>{a.actif && a.titre === 'CHEF_SERVICE' && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, null, 'Poste de chef de service rendu vacant.')}>Retirer le poste</button>}{a.actif && a.titre === 'CHEF_DIVISION' && a.division_id !== null && <button className="btn-ghost" onClick={() => poste('division', a.division_id!, null, 'Poste rendu vacant.')}>Retirer le poste</button>}{a.actif && !a.titre && a.division_id === null && a.service_id !== null && <button className="btn-ghost" onClick={() => poste('service', a.service_id!, a.id, 'Nommé chef de service (le titulaire précédent est remplacé).')}>Nommer chef de service</button>}<button className="btn-ghost" onClick={() => void toggle.mutateAsync({ id: a.id, actif: !a.actif }).catch((e) => toast.error(errorMessage(e)))}>{a.actif ? 'Désactiver' : 'Réactiver'}</button></td>
               </tr>
             ))}
           </tbody>
