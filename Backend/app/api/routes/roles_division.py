@@ -5,12 +5,18 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_principal
 from app.core.permissions import Principal
-from app.schemas.roles_division import RoleDivisionIn, RoleDivisionOut, RoleDivisionUpdate
+from app.schemas.roles_division import AgentDivisionBrief, RoleDivisionIn, RoleDivisionOut, RoleDivisionUpdate
 from app.schemas.user import RoleDivisionBrief, RolesUtilisateurIn
 from app.services import roles_division as svc
 from app.services.users import crud as users_crud
 
 router = APIRouter(tags=["roles"])
+
+
+@router.get("/divisions/{division_id}/agents", response_model=list[AgentDivisionBrief])
+def lister_agents(division_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    """Agents actifs de la division, pour l'affectation manuelle des fichiers (membres, chefs, super administrateur)."""
+    return svc.lister_agents(db, principal, division_id)
 
 
 @router.get("/divisions/{division_id}/roles", response_model=list[RoleDivisionOut])

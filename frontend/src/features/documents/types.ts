@@ -34,6 +34,8 @@ export interface DocumentMeta {
   version: VersionMeta // la plus récente
   mon_role: string
   droits: string[]
+  affectations: { id: number; nom: string; prenom: string; matricule: string | null }[] // agents affectés : eux (et l'auteur) lisent le fichier
+  a_affecter: boolean // aucune affectation : accès refusé par défaut, le chef (et l'auteur) le voit
   cree_par_nom: string | null
   cree_le: string
   modifie_le: string
@@ -52,13 +54,13 @@ export interface DocumentPage { items: DocumentMeta[]; total: number; page: numb
 export interface DocumentFilters {
   q?: string
   statut?: string
-  role_id?: number
+  agent_id?: number
   division_id?: number
   tri?: 'date_desc' | 'titre_asc' | 'titre_desc'
   page: number
   taille: number
   corbeille?: boolean
-  a_classer?: boolean
+  a_affecter?: boolean
 }
 
 export interface Referentiel {
@@ -70,7 +72,7 @@ export interface Referentiel {
 
 /** Options des filtres de la liste des fichiers, selon le périmètre du compte connecté. */
 export interface FiltresListe {
-  roles: { id: number; code: string; libelle: string; division_id: number; division_nom: string | null }[]
+  agents: { id: number; nom: string; prenom: string; division_id: number; division_nom: string | null }[]
   divisions: { id: number; nom: string }[]
   depot_divisions: number[]
 }

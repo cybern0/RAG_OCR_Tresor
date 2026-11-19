@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from app.schemas.document import RoleBrief
+from app.schemas.user import RoleDivisionBrief
 from app.schemas.historique import HistoriqueOut
 
 
@@ -56,7 +56,7 @@ class NomTotal(BaseModel):
 
 
 class ErreurIndexationBrief(BaseModel):
-    """Une version en échec d'indexation : où (division, service), quelles classes, pourquoi."""
+    """Une version en échec d'indexation : où (division, service), déposé par qui, pourquoi."""
 
     document_id: int
     titre: str
@@ -65,17 +65,17 @@ class ErreurIndexationBrief(BaseModel):
     message_erreur: str | None
     division_nom: str
     service_nom: str | None
-    roles: list[str] = []
+    depose_par: str | None = None
     cree_le: datetime
 
 
 class ErreursIndexation(BaseModel):
-    """Traçage des erreurs d'indexation : total, répartition par service / division / rôle, et les cas à corriger."""
+    """Traçage des erreurs d'indexation : total, répartition par service / division / auteur, et les cas à corriger."""
 
     total: int
     par_service: list[NomTotal] = []
     par_division: list[NomTotal] = []
-    par_role: list[NomTotal] = []
+    par_auteur: list[NomTotal] = []
     items: list[ErreurIndexationBrief] = []
 
 
@@ -86,9 +86,9 @@ class TableauDeBordOut(BaseModel):
     indicateurs: list[Indicateur]
     repartition: Repartition | None = None
     alertes: list[str] = []
-    a_classer: list[FichierBrief] = []
+    a_affecter: list[FichierBrief] = []
     erreurs_indexation: ErreursIndexation | None = None
     derniers_changements: list[HistoriqueOut] = []
-    mes_roles: list[RoleBrief] = []
+    mes_roles: list[RoleDivisionBrief] = []
     mes_fichiers: list[FichierBrief] = []
     acces_ponctuels: list[AccesPonctuelBrief] = []

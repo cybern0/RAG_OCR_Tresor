@@ -1,9 +1,9 @@
-// Liste à plat de tous les fichiers accessibles (plus de dossiers ni d'arborescence) : recherche, filtre par rôle
-// (un fichier peut avoir plusieurs rôles, un agent en porter plusieurs), filtre par division (chef de service),
-// statut, tri, pagination, sélection multiple, corbeille. Les filtres vivent dans l'URL ; le backend reste l'autorité.
-// Les filtres catégorie / type / confidentialité ont été retirés : ces données restent des métadonnées de classement
-// (badges, statistiques, règles automatiques), la visibilité étant déjà gouvernée par division et rôles côté serveur.
-import { Download, Eye, FilePlus2, FileUp, Pencil, RotateCcw, Search, Tags, Trash2 } from 'lucide-react'
+// Liste à plat de tous les fichiers accessibles (plus de dossiers ni d'arborescence) : recherche, filtre
+// « affecté à » (un fichier est affecté manuellement à un ou plusieurs agents par le chef), filtre par division
+// (chef de service), statut, tri, pagination, sélection multiple, corbeille. Les filtres vivent dans l'URL ;
+// le backend reste l'autorité. Les filtres catégorie / type / confidentialité ont été retirés : ces données
+// restent des métadonnées (badges, statistiques, règles automatiques), l'accès étant gouverné par les affectations.
+import { Download, Eye, FilePlus2, FileUp, Pencil, RotateCcw, Search, Tags, Trash2, UserSquare } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { errorMessage } from '../../shared/api/client'
@@ -20,13 +20,27 @@ import AddDocumentModal from '../documents/components/AddDocumentModal'
 import { ClassementBadges } from '../documents/components/ClassementBadges'
 import ClassifyModal from '../documents/components/ClassifyModal'
 import EditDocumentModal from '../documents/components/EditDocumentModal'
+import AffectationModal from '../documents/components/AffectationModal'
 import NewVersionModal from '../documents/components/NewVersionModal'
 import { StatusBadge } from '../documents/components/StatusBadge'
 import { useDocumentMutations, useDocuments, useFiltres } from '../documents/queries'
 import type { DocumentFilters, DocumentMeta } from '../documents/types'
 
 const TAILLE = 15
-type Dialog = { kind: 'add' } | { kind: 'edit' | 'version' | 'classify' | 'trash' | 'purge'; doc: DocumentMeta } | { kind: 'classify-many' } | null
+type Dialog = { kind: 'add' } | { kind: 'edit' | 'version' | 'classify' | 'affect' | 'trash' | 'purge'; doc: DocumentMeta } | { kind: 'classify-many' } | null
+
+/** Noms des agents affectés (max 2) ou l'état « à affecter » : l'accès se décide ici, plus par les classes. */
+function AffectationBadges({ doc, max = 2 }: { doc: DocumentMeta; max?: number }) {
+  if (doc.affectations.length === 0) return <Badge tone="amber">À affecter</Badge>
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {doc.affectations.slice(0, max).map((a) => (
+        <Badge key={a.id} tone="green">{a.prenom} {a.nom}</Badge>
+      ))}
+      {doc.affectations.length > max && <span className="text-xs text-cream-300">+{doc.affectations.length - max}</span>}
+    </div>
+  )
+}
 
 export function Component() {
   const [params, setParams] = useSearchParams()
@@ -46,13 +60,13 @@ export function Component() {
   const filters: DocumentFilters = {
     q: debouncedQ || undefined,
     statut: params.get('statut') || undefined,
-    role_id: params.get('role') ? Number(params.get('role')) : undefined,
+    agent_id: params.get('agent') ? Number(params.get('agent')) : undefined,
     division_id: params.get('division') ? Number(params.get('division')) : undefined,
     tri: (params.get('tri') as DocumentFilters['tri']) || 'date_desc',
     page,
     taille: TAILLE,
     corbeille,
-    a_classer: params.get('a_classer') === '1',
+    a_affecter: params.get('a_affecter') === '1',
   }
   const docs = useDocuments(filters)
 
@@ -76,12 +90,12 @@ export function Component() {
     try { await downloadVersion(doc.id, doc.version.numero, doc.version.nom_fichier) } catch (e) { toast.error(errorMessage(e)) }
   }
 
-  const activeFilters = ['statut', 'role', 'division', 'a_classer'].some((k) => params.get(k))
-  const roleLibelle = filtres.data?.roles.find((r) => r.id === filters.role_id)
+  const activeFilters = ['statut', 'agent', 'division', 'a_affecter'].some((k) => params.get(k))
+  const agentChoisi = filtres.data?.agents.find((x) => x.id === filters.agent_id)
 
   return (
     <>
-      <PageHeader title="Fichiers" description="Tous les fichiers auxquels vos rôles donnent accès, sans arborescence : déposez directement et filtrez par classe, par rôle ou par division."
+      <PageHeader title="Fichiers" description="Tous les fichiers auxquels vous avez accès, sans arborescence : déposez directement, le chef affecte chaque fichier aux agents de sa division, et filtrez par agent ou par division."
         actions={mayAdd && !corbeille ? <button className="btn" onClick={() => setDialog({ kind: 'add' })}><FilePlus2 className="h-4 w-4" /> Ajouter un fichier</button> : null} />
       {filtres.data && filtres.data.divisions.length > 1 && (
         <p className="mb-3 text-sm text-cream-300">{filtres.data.divisions.length} divisions dans votre périmètre — utilisez le filtre « Division » pour vous concentrer sur l'une d'elles.</p>
@@ -93,9 +107,9 @@ export function Component() {
           <input className="input pl-9" type="search" placeholder="Rechercher par titre ou nom de fichier…" aria-label="Rechercher un fichier" value={q}
             onChange={(e) => { setQ(e.target.value); setParam('q', e.target.value || null) }} />
         </div>
-        <select className="input w-auto" aria-label="Rôle (classe)" value={params.get('role') ?? ''} onChange={(e) => setParam('role', e.target.value || null)}>
-          <option value="">Tous les rôles</option>
-          {(filtres.data?.roles ?? []).map((r) => <option key={r.id} value={r.id}>{r.libelle}{r.division_nom ? ` · ${r.division_nom}` : ''}</option>)}
+        <select className="input w-auto" aria-label="Affecté à" value={params.get('agent') ?? ''} onChange={(e) => setParam('agent', e.target.value || null)}>
+          <option value="">Tous les agents affectés</option>
+          {(filtres.data?.agents ?? []).map((x) => <option key={x.id} value={x.id}>{x.prenom} {x.nom}{x.division_nom ? ` · ${x.division_nom}` : ''}</option>)}
         </select>
         {(filtres.data?.divisions.length ?? 0) > 1 && (
           <select className="input w-auto" aria-label="Division" value={params.get('division') ?? ''} onChange={(e) => setParam('division', e.target.value || null)}>
@@ -116,16 +130,16 @@ export function Component() {
         <div className="flex gap-1 rounded-lg border border-gold-500/30 p-0.5" role="tablist">
           <button role="tab" aria-selected={!corbeille} className={`rounded-md px-3 py-1 text-sm ${!corbeille ? 'bg-gold-500 font-semibold text-leaf-950' : 'text-cream-100 hover:bg-gold-500/15'}`} onClick={() => setParam('vue', null)}>Fichiers</button>
           <button role="tab" aria-selected={corbeille} className={`rounded-md px-3 py-1 text-sm ${corbeille ? 'bg-gold-500 font-semibold text-leaf-950' : 'text-cream-100 hover:bg-gold-500/15'}`} onClick={() => setParam('vue', 'corbeille')}>Corbeille</button>
-          <button role="tab" aria-selected={filters.a_classer} className={`rounded-md px-3 py-1 text-sm ${filters.a_classer ? 'bg-gold-500 font-semibold text-leaf-950' : 'text-cream-100 hover:bg-gold-500/15'}`} onClick={() => setParam('a_classer', filters.a_classer ? null : '1')}>À classer</button>
+          <button role="tab" aria-selected={filters.a_affecter} className={`rounded-md px-3 py-1 text-sm ${filters.a_affecter ? 'bg-gold-500 font-semibold text-leaf-950' : 'text-cream-100 hover:bg-gold-500/15'}`} onClick={() => setParam('a_affecter', filters.a_affecter ? null : '1')}>À affecter</button>
         </div>
         {chosen.length > 0 && !corbeille && (
           <div className="flex items-center gap-2 text-sm text-cream-300">
             {plural(chosen.length, 'fichier sélectionné', 'fichiers sélectionnés')}
-            <button className="btn-ghost" onClick={() => setDialog({ kind: 'classify-many' })}><Tags className="h-4 w-4" /> Classer</button>
+            <button className="btn-ghost" onClick={() => setDialog({ kind: 'classify-many' })}><Tags className="h-4 w-4" /> Métadonnées</button>
           </div>
         )}
       </div>
-      {roleLibelle && <p className="mb-3 text-sm text-cream-300">Filtré par rôle : <Badge tone="gold">{roleLibelle.libelle}{roleLibelle.division_nom ? ` · ${roleLibelle.division_nom}` : ''}</Badge> — seuls les fichiers portant ce rôle (et accessibles avec vos droits) apparaissent.</p>}
+      {agentChoisi && <p className="mb-3 text-sm text-cream-300">Filtré par affectation : <Badge tone="green">{agentChoisi.prenom} {agentChoisi.nom}{agentChoisi.division_nom ? ` · ${agentChoisi.division_nom}` : ''}</Badge> — seuls les fichiers affectés à cet agent (et accessibles avec vos droits) apparaissent.</p>}
 
       <ErrorBox message={docs.error ? errorMessage(docs.error) : null} />
       {docs.isPending ? <Loading /> : items.length === 0 ? (
@@ -139,7 +153,7 @@ export function Component() {
             <thead>
               <tr>
                 {!corbeille && <th className="th w-8"><input type="checkbox" aria-label="Tout sélectionner" className="accent-gold-500" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(items.map((i) => i.id)))} /></th>}
-                <th className="th">Fichier</th><th className="th">Division</th><th className="th">Classement</th><th className="th">Statut</th><th className="th">Modifié</th><th className="th text-right">Actions</th>
+                <th className="th">Fichier</th><th className="th">Division</th><th className="th">Affectations</th><th className="th">Métadonnées</th><th className="th">Statut</th><th className="th">Modifié</th><th className="th text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -152,6 +166,7 @@ export function Component() {
                     <p className="text-xs text-cream-300">v{doc.version.numero} · {plural(doc.nb_versions, 'version')}</p>
                   </td>
                   <td className="td text-sm text-cream-200">{doc.division_nom}</td>
+                  <td className="td"><AffectationBadges doc={doc} /></td>
                   <td className="td"><ClassementBadges doc={doc} /></td>
                   <td className="td">
                     <StatusBadge statut={doc.version.statut} />
@@ -175,7 +190,8 @@ export function Component() {
                               <button className="btn-icon" title="Modifier" aria-label={`Modifier ${doc.titre}`} onClick={() => setDialog({ kind: 'edit', doc })}><Pencil className="h-4 w-4" /></button>
                             </>
                           )}
-                          {doc.droits.includes('classer') && <button className="btn-icon" title="Classer" aria-label={`Classer ${doc.titre}`} onClick={() => setDialog({ kind: 'classify', doc })}><Tags className="h-4 w-4" /></button>}
+                          {doc.droits.includes('classer') && <button className="btn-icon" title="Métadonnées" aria-label={`Métadonnées de ${doc.titre}`} onClick={() => setDialog({ kind: 'classify', doc })}><Tags className="h-4 w-4" /></button>}
+                          {doc.droits.includes('affecter') && <button className="btn-icon" title="Affecter à des agents" aria-label={`Affecter ${doc.titre}`} onClick={() => setDialog({ kind: 'affect', doc })}><UserSquare className="h-4 w-4" /></button>}
                           {doc.droits.includes('supprimer') && <button className="btn-icon text-red-300" title="Mettre à la corbeille" aria-label={`Supprimer ${doc.titre}`} onClick={() => setDialog({ kind: 'trash', doc })}><Trash2 className="h-4 w-4" /></button>}
                         </>
                       )}
@@ -194,6 +210,7 @@ export function Component() {
       {dialog?.kind === 'edit' && <EditDocumentModal doc={dialog.doc} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'version' && <NewVersionModal doc={dialog.doc} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'classify' && <ClassifyModal docs={[dialog.doc]} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'affect' && <AffectationModal doc={dialog.doc} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'classify-many' && <ClassifyModal docs={chosen} onClose={() => setDialog(null)} onDone={() => setSelected(new Set())} />}
       {dialog?.kind === 'trash' && (
         <ConfirmDialog title="Mettre à la corbeille" confirmLabel="Mettre à la corbeille" onClose={() => setDialog(null)}

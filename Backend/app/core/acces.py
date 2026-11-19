@@ -3,10 +3,11 @@
 Pour un fichier, le rôle effectif est calculé à chaque requête :
 
   * chef de division (sa division) ou chef de service (toutes les divisions de son service, même rôle étendu) :
-      GERANT   -> tout : contenu, versions, rôles des fichiers (les « classes »), classement, corbeille
+      GERANT   -> tout : contenu, versions, AFFECTATION du fichier aux agents, corbeille
   * membre de la division du fichier :
       AUTEUR   a déposé le fichier                   -> voir, modifier, versions (PAS de suppression : corbeille/purge = chefs)
-      LECTEUR  un rôle commun avec le fichier, ou une exception ponctuelle valide -> lecture, commentaires
+      LECTEUR  le fichier lui a été AFFECTÉ manuellement (chef de division ou de service), ou une exception
+               ponctuelle valide                                      -> lecture, commentaires
       sinon    403 (« Demander l'accès »)
   * tout le reste : 404 (l'existence n'est pas révélée) — y compris le super administrateur : il ne fait
     qu'administrer (structure, comptes, dictionnaires de rôles, audit) et n'accède ni aux fichiers ni à l'IA ;
@@ -15,7 +16,8 @@ Pour un fichier, le rôle effectif est calculé à chaque requête :
     du référentiel), sans jamais consulter les fichiers ni utiliser l'IA.
 
 Les fichiers sont déposés DIRECTEMENT dans une division (plus de dossiers) : la division est la seule
-frontière d'accès, et les rôles (les « classes ») décident qui lit quoi.
+frontière d'accès, et l'affectation manuelle décide qui lit quoi — le chef affecte chaque fichier aux
+agents de sa division (fichiers déposés par les agents comme les siens).
 """
 
 from datetime import datetime, timezone
@@ -30,7 +32,7 @@ from app.db.metier import (
     AccesException,
     Agent,
     Division,
-    DocumentRole,
+    DocumentAffectation,
 )
 from app.db.vecteur import Document
 
@@ -51,13 +53,13 @@ AJOUTER_VERSION = "ajouter_version"
 MODIFIER = "modifier"  # titre, cases tableaux / images
 SUPPRIMER = "supprimer"  # corbeille, restauration — réservé au GERANT (chef de division / chef de service)
 PURGER = "purger"  # suppression définitive
-CLASSER = "classer"  # rôles du fichier
+AFFECTER = "affecter"  # affectation du fichier à des agents de sa division — réservé au GERANT (chef de division / chef de service)
 
-ACTIONS_ECRITURE = frozenset({AJOUTER_VERSION, MODIFIER, SUPPRIMER, PURGER, CLASSER})
+ACTIONS_ECRITURE = frozenset({AJOUTER_VERSION, MODIFIER, SUPPRIMER, PURGER, AFFECTER})
 
 _LECTURE = frozenset({VOIR, APERCU, TELECHARGER, CHAT})
 MATRICE: dict[str, frozenset[str]] = {
-    GERANT: _LECTURE | {COMMENTER, AJOUTER_VERSION, MODIFIER, SUPPRIMER, PURGER, CLASSER},
+    GERANT: _LECTURE | {COMMENTER, AJOUTER_VERSION, MODIFIER, SUPPRIMER, PURGER, AFFECTER},
     AUTEUR: _LECTURE | {COMMENTER, AJOUTER_VERSION, MODIFIER},  # pas de SUPPRIMER : seuls les chefs (GERANT) suppriment
     LECTEUR: _LECTURE | {COMMENTER},
     SUPERIEUR: _LECTURE,
@@ -131,7 +133,7 @@ def divisions_gerees(db: Session, principal: Principal) -> list[Division]:
 # --- Gestion d'une division -------------------------------------------------------------------------------------------
 
 def exiger_gestion_division(db: Session, principal: Principal, division_id: int) -> Division:
-    """Autorise la gestion du contenu d'une division (rôles, classement, demandes). 404 / 403.
+    """Autorise la gestion du contenu d'une division (rôles, affectations, demandes). 404 / 403.
     Le super administrateur franchit le premier seuil (il administre) mais reste soumis au second :
     avec un chef en poste, la gestion du contenu revient au chef."""
     division = _division(db, division_id)
@@ -163,13 +165,15 @@ def _exception_valide(db: Session, user_id: int, document_id: int) -> bool:
     )
 
 
-def _a_un_role_commun(db: Session, principal: Principal, document_id: int) -> bool:
-    if not principal.role_ids:
+def _est_affecte(db: Session, principal: Principal, document_id: int) -> bool:
+    """L'agent du compte a été affecté manuellement au fichier (chef de division ou de service)."""
+    agent_id = principal.user.agent_id
+    if agent_id is None:
         return False
     return (
         db.scalars(
-            select(DocumentRole.document_id).where(
-                DocumentRole.document_id == document_id, DocumentRole.role_division_id.in_(principal.role_ids)
+            select(DocumentAffectation.document_id).where(
+                DocumentAffectation.document_id == document_id, DocumentAffectation.agent_id == agent_id
             )
         ).first()
         is not None
@@ -181,7 +185,7 @@ def acces_refuse(document_id: int) -> HTTPException:
         status.HTTP_403_FORBIDDEN,
         detail={
             "code": "ACCES_FICHIER_REFUSE",
-            "message": "Vous n'avez pas le rôle requis pour ce fichier. Vous pouvez en demander l'accès.",
+            "message": "Ce fichier ne vous est pas affecté. Vous pouvez en demander l'accès.",
             "document_id": document_id,
         },
     )
@@ -198,7 +202,7 @@ def role_sur_document(db: Session, principal: Principal, document: Document) -> 
     if est_membre(principal, division.id):
         if document.cree_par == principal.user.id:
             return AUTEUR
-        if _a_un_role_commun(db, principal, document.id) or _exception_valide(db, principal.user.id, document.id):
+        if _est_affecte(db, principal, document.id) or _exception_valide(db, principal.user.id, document.id):
             return LECTEUR
         return None
     return None
@@ -226,9 +230,9 @@ def exiger_acces_document(db: Session, principal: Principal, document: Document 
 
 def condition_acces_fichiers(db: Session, principal: Principal) -> ColumnElement[bool]:
     """Condition SQL « ce compte peut LIRE ce fichier » : sert aux listes, à la recherche vectorielle et au chat.
-    Reprend exactement role_sur_document : fichiers de sa division selon son rôle ; le chef de division voit sa
-    division, le chef de service toutes les divisions de son service ; le super administrateur ne lit rien
-    (il n'administre pas le contenu — ni fichiers, ni IA)."""
+    Reprend exactement role_sur_document : fichiers de sa division selon les affectations reçues ; le chef de
+    division voit sa division, le chef de service toutes les divisions de son service ; le super administrateur
+    ne lit rien (il n'administre pas le contenu — ni fichiers, ni IA)."""
     clauses: list[ColumnElement[bool]] = []
     if principal.niveau == NIVEAU_SERVICE and principal.service_id is not None:
         clauses.append(
@@ -241,10 +245,11 @@ def condition_acces_fichiers(db: Session, principal: Principal) -> ColumnElement
         else:
             moi = principal.user.id
             sous: list[ColumnElement[bool]] = [Document.cree_par == moi]
-            if principal.role_ids:
+            agent_id = principal.user.agent_id
+            if agent_id is not None:
                 sous.append(
                     exists().where(
-                        DocumentRole.document_id == Document.id, DocumentRole.role_division_id.in_(principal.role_ids)
+                        DocumentAffectation.document_id == Document.id, DocumentAffectation.agent_id == agent_id
                     )
                 )
             sous.append(

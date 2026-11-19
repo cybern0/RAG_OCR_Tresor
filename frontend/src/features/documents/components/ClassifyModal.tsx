@@ -1,5 +1,6 @@
-// Classement manuel d'un ou de plusieurs fichiers : catégorie, type, confidentialité, étiquettes.
+// Métadonnées documentaires d'un ou de plusieurs fichiers : catégorie, type, confidentialité, étiquettes.
 // Seuls les champs renseignés sont modifiés ; un classement manuel n'est plus écrasé par les règles automatiques.
+// (N'a rien à voir avec l'accès : celui-ci se décide par l'affectation manuelle du chef — AffectationModal.)
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { errorMessage } from '../../../shared/api/client'
@@ -35,7 +36,7 @@ export default function ClassifyModal({ docs, onClose, onDone }: { docs: Documen
         tags: replaceTags ? tags.split(/[;,\n]+/).map((t) => t.trim()).filter(Boolean) : undefined,
       })
       if (result.forbidden.length) toast.error(`${plural(result.forbidden.length, 'fichier')} non modifié(s) : droits insuffisants.`)
-      if (result.ok.length) toast.success(`${plural(result.ok.length, 'fichier classé', 'fichiers classés')}.`)
+      if (result.ok.length) toast.success(`${plural(result.ok.length, 'fichier mis à jour', 'fichiers mis à jour')}.`)
       onDone?.()
       onClose()
     } catch (err) {
@@ -44,7 +45,7 @@ export default function ClassifyModal({ docs, onClose, onDone }: { docs: Documen
   }
 
   return (
-    <Modal title={single ? `Classer « ${single.titre} »` : `Classer ${plural(docs.length, 'fichier')}`} onClose={onClose}>
+    <Modal title={single ? `Métadonnées de « ${single.titre} »` : `Métadonnées de ${plural(docs.length, 'fichier')}`} onClose={onClose}>
       {ref.isPending ? <Loading /> : (
         <form onSubmit={(e) => void submit(e)} className="space-y-4">
           {!single && <p className="text-xs text-cream-300">Seuls les champs renseignés sont appliqués aux fichiers sélectionnés.</p>}
@@ -90,7 +91,7 @@ export default function ClassifyModal({ docs, onClose, onDone }: { docs: Documen
           <ErrorBox message={error} />
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>
-            <button className="btn" disabled={classer.isPending}>{classer.isPending ? 'Enregistrement…' : 'Classer'}</button>
+            <button className="btn" disabled={classer.isPending}>{classer.isPending ? 'Enregistrement…' : 'Enregistrer'}</button>
           </div>
         </form>
       )}

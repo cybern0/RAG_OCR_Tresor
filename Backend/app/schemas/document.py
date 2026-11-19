@@ -1,7 +1,7 @@
 """Schémas Pydantic des fichiers (documents) et de leurs versions : métadonnées, historique daté, statut d'ingestion.
 
 Le contenu d'un fichier n'est jamais renvoyé par ces schémas : il passe par les routes d'aperçu et de téléchargement,
-protégées par les rôles de classement du fichier.
+protégées par les affectations du fichier (l'accès se demande au chef).
 """
 
 from datetime import datetime
@@ -14,16 +14,22 @@ Statut = Literal["pending", "processing", "ready", "error"]
 ApercuMode = Literal["pdf", "image", "texte", "csv", "pdf_converti", "aucun"]
 
 
-class RoleBrief(BaseModel):
+class AffectationBrief(BaseModel):
+    """Agent affecté manuellement à un fichier (c'est lui, pas son rôle, qui décide de l'accès en lecture)."""
+
+    id: int  # id de l'agent
+    nom: str
+    prenom: str
+    matricule: str | None = None
+
+
+class AgentFiltreOut(BaseModel):
+    """Agent proposé dans le filtre « affecté à » de la liste des fichiers, avec sa division
+    (un chef de service filtre parmi les agents de plusieurs divisions)."""
+
     id: int
-    code: str
-    libelle: str
-
-
-class RoleFiltreOut(RoleBrief):
-    """Rôle proposé dans le filtre de la liste des fichiers, avec sa division (un chef de service
-    filtre parmi les rôles de plusieurs divisions)."""
-
+    nom: str
+    prenom: str
     division_id: int
     division_nom: str | None
 
@@ -31,13 +37,13 @@ class RoleFiltreOut(RoleBrief):
 class FiltresOut(BaseModel):
     """Options des filtres de la liste des fichiers selon le périmètre du compte."""
 
-    roles: list[RoleFiltreOut] = []
+    agents: list[AgentFiltreOut] = []
     divisions: list[dict] = []  # {id, nom}
     depot_divisions: list[int] = []
 
 
-class RolesDocumentIn(BaseModel):
-    role_ids: list[int] = Field(max_length=50)
+class AffectationsDocumentIn(BaseModel):
+    agent_ids: list[int] = Field(max_length=200)
     motif: str | None = Field(default=None, max_length=500)
 
 
@@ -73,8 +79,8 @@ class DocumentOut(BaseModel):
     version: VersionOut  # la version la plus récente (tous statuts), pour suivre l'indexation
     mon_role: str  # GERANT | AUTEUR | LECTEUR
     droits: list[str] = []  # actions permises par ce rôle (voir core/acces.py)
-    roles: list[RoleBrief] = []  # rôles de la division qui donnent accès au fichier
-    a_classer: bool = False  # aucun rôle : accès refusé par défaut, seul le gérant (et l'auteur) le voit
+    affectations: list[AffectationBrief] = []  # agents affectés manuellement : eux (et l'auteur) lisent le fichier
+    a_affecter: bool = False  # aucune affectation : accès refusé par défaut, le chef (et l'auteur) le voit
     cree_par_nom: str | None
     cree_le: datetime
     modifie_le: datetime
@@ -94,35 +100,6 @@ class DocumentPageOut(BaseModel):
     total: int
     page: int
     taille: int
-
-
-class DocumentLienPartageIn(BaseModel):
-    role: str = "LECTEUR"
-    expire_le: datetime | None = None
-    est_anonyme: bool = True
-    token: str | None = None
-
-
-class DocumentLienPartageOut(BaseModel):
-    id: int
-    document_id: int
-    role: str
-    est_anonyme: bool = True
-    expire_le: datetime | None = None
-    token_hash: str | None = None
-    token: str | None = None
-    cree_le: datetime
-
-
-class PartageRequestIn(BaseModel):
-    requested_role: str = "LECTEUR"
-    message: str = ""
-
-
-class AccessRequestDecisionIn(BaseModel):
-    decision: str
-    granted_role: str | None = None
-    message: str | None = None
 
 
 class CommentaireIn(BaseModel):

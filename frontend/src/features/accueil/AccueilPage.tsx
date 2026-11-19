@@ -30,7 +30,7 @@ function Fichiers({ titre, items }: { titre: string; items: FichierBrief[] }) {
 
 function Erreurs({ erreurs, restreint }: { erreurs: ErreursIndexation; restreint: boolean }) {
   if (erreurs.total === 0) return null
-  const groupes = [erreurs.par_service, erreurs.par_division, erreurs.par_role]
+  const groupes = [erreurs.par_service, erreurs.par_division, erreurs.par_auteur]
   return (
     <section className="card border-red-400/40 p-4" id="erreurs">
       <h2 className="mb-1 font-semibold text-gold-300">{restreint ? 'Mes fichiers en échec d’indexation' : 'Erreurs d’indexation'}</h2>
@@ -47,7 +47,7 @@ function Erreurs({ erreurs, restreint }: { erreurs: ErreursIndexation; restreint
         {erreurs.items.map((e) => (
           <li key={`${e.document_id}-${e.version_numero}`} className="py-2">
             <Link className="text-gold-300 hover:underline" to={`/fichiers/${e.document_id}`}>{e.titre}</Link>
-            <span className="text-cream-300"> · v{e.version_numero} · {e.division_nom}{e.service_nom ? ` (${e.service_nom})` : ''}{e.roles.length ? ` · ${e.roles.join(', ')}` : ''} · {formatDate(e.cree_le)}</span>
+            <span className="text-cream-300"> · v{e.version_numero} · {e.division_nom}{e.service_nom ? ` (${e.service_nom})` : ''}{e.depose_par ? ` · déposé par ${e.depose_par}` : ''} · {formatDate(e.cree_le)}</span>
             {e.message_erreur && <p className="mt-0.5 text-xs text-red-200">{e.message_erreur}</p>}
           </li>
         ))}
@@ -85,7 +85,7 @@ export function Component() {
               </tr>))}</tbody></table></section>
       )}
       {t.erreurs_indexation && <Erreurs erreurs={t.erreurs_indexation} restreint={t.niveau === 'AGENT'} />}
-      <Fichiers titre="Fichiers à classer" items={t.a_classer} />
+      <Fichiers titre="Fichiers à affecter" items={t.a_affecter} />
       <Fichiers titre="Mes fichiers récents" items={t.mes_fichiers} />
       {t.mes_roles.length > 0 && <section className="card p-4"><h2 className="mb-2 font-semibold text-gold-300">Mes rôles</h2><div className="flex flex-wrap gap-2">{t.mes_roles.map((r) => <Badge key={r.id} tone="gold">{r.libelle}</Badge>)}</div></section>}
       {t.acces_ponctuels.length > 0 && <section className="card p-4"><h2 className="mb-2 font-semibold text-gold-300">Accès ponctuels</h2><ul className="text-sm">{t.acces_ponctuels.map((a) => <li key={a.document_id}>{a.document_titre} <span className="text-cream-300">· jusqu’au {formatDate(a.expire_le)}</span></li>)}</ul></section>}

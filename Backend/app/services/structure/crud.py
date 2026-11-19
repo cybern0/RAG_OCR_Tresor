@@ -27,6 +27,7 @@ from app.db.metier import (
     DemandeAcces,
     Direction,
     Division,
+    DocumentAffectation,
     RoleDivision,
     Service,
     User,
@@ -383,6 +384,27 @@ def _retirer_roles_hors_division(db: Session, actor: User, agent: Agent) -> None
              reference_type="utilisateur", reference_id=user.id)
 
 
+def _purger_affectations_hors_division(db: Session, agent: Agent, division_nouvelle: int | None) -> None:
+    """Un agent qui change de division perd les affectations de fichiers de l'ancienne division :
+    l'affectation lie l'agent à un fichier de SA division (contrainte de base), elle n'a plus de sens
+    ailleurs. À appeler AVANT le changement de division (la clé composite agent+division est référencée)."""
+    rows = list(db.scalars(
+        select(DocumentAffectation.document_id).where(
+            DocumentAffectation.agent_id == agent.id,
+            DocumentAffectation.division_id.is_distinct_from(division_nouvelle),
+        )
+    ))
+    if not rows:
+        return
+    db.execute(delete(DocumentAffectation).where(
+        DocumentAffectation.agent_id == agent.id,
+        DocumentAffectation.division_id.is_distinct_from(division_nouvelle),
+    ))
+    for user in db.scalars(select(User).where(User.agent_id == agent.id)):
+        notifier(db, [user.id], "fichier_affecte", "Vous avez changé de division : les fichiers qui vous étaient affectés dans l'ancienne division ne le sont plus.",
+                 reference_type="agent", reference_id=agent.id)
+
+
 def _notifier_vacance(db: Session, agent: Agent) -> None:
     """Un poste de chef devient vacant : on prévient les super administrateurs et, pour une division,
     le chef de service (il en est le gérant en attendant la nomination d'un chef)."""
@@ -449,6 +471,8 @@ def update_agent(db: Session, actor: Principal, agent_id: int, data: AgentUpdate
             changes.update(_apply(obj, {key: values[key]}))
     if values.get("actif") is not None:
         changes.update(_apply(obj, {"actif": values["actif"]}))
+    if division_final != division_avant:
+        _purger_affectations_hors_division(db, obj, division_final)  # avant le changement : clé composite référencée
     obj.service_id, obj.division_id, obj.titre = service_final, division_final, titre_final
     if service_final != service_avant:
         changes["service_id"] = service_final

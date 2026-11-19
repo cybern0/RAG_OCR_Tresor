@@ -20,7 +20,7 @@ export const INTERMEDIATE_NAV: NavItem[] = [
 
 export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'Tableau de bord', icon: BarChart3, any: ['statistiques.globales'], end: true },
-  { to: '/roles', label: 'Rôles et classement', icon: Shield, any: ['utilisateur.lister', 'classement.gerer'] },
+  { to: '/roles', label: 'Rôles et affectation', icon: Shield, any: ['utilisateur.lister', 'classement.gerer'] },
   { to: '/admin/utilisateurs', label: 'Utilisateurs', icon: Users, any: ['utilisateur.lister'] },
   // la gestion des agents (personnes) et de la structure (directions, services, divisions) reste au
   // super administrateur : le chef de service a les MÊMES menus que le chef de division — il gère les

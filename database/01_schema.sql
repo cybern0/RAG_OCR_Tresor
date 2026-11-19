@@ -73,6 +73,7 @@ CREATE TABLE agent (
     titre VARCHAR(30) CHECK (titre IN ('CHEF_DIVISION', 'CHEF_SERVICE')),
     actif BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT fk_agent_division_service FOREIGN KEY (division_id, service_id) REFERENCES division (id, service_id),
+    CONSTRAINT uq_agent_id_division UNIQUE (id, division_id),  -- cible de la clé composite de document_affectation
     CONSTRAINT ck_agent_titre_division CHECK (
         titre IS NULL
         OR (titre = 'CHEF_DIVISION' AND division_id IS NOT NULL)
@@ -210,7 +211,7 @@ CREATE TABLE regle_classement (
 -- 5. Fichiers, versions, passages vectoriels ----------------------------------------------------------------------
 
 -- Un fichier est déposé DIRECTEMENT dans UNE division (plus de dossiers) : la division est la frontière
--- d'accès et ce sont les rôles de classement (document_role) qui décident qui lit quoi.
+-- d'accès et c'est l'affectation manuelle (document_affectation) qui décide qui lit quoi.
 CREATE TABLE document (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     division_id BIGINT NOT NULL REFERENCES division(id),
@@ -228,7 +229,7 @@ CREATE TABLE document (
     cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     modifie_par BIGINT REFERENCES _user(id) ON DELETE SET NULL,
     modifie_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_document_id_division UNIQUE (id, division_id)  -- cible des clés composites de document_role
+    CONSTRAINT uq_document_id_division UNIQUE (id, division_id)  -- cible des clés composites de document_affectation
 );
 CREATE INDEX idx_document_division ON document (division_id);
 CREATE INDEX idx_document_categorie ON document (categorie_id);
@@ -306,7 +307,7 @@ CREATE TABLE commentaire (
 );
 CREATE INDEX idx_commentaire_sujet ON commentaire (sujet_type, sujet_id);
 
--- 6. Rôles métier par division, classement des fichiers ---------------------------------------------------------------------
+-- 6. Rôles métier par division, affectation des fichiers ---------------------------------------------------------------------
 
 CREATE TABLE role_division (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -326,19 +327,21 @@ CREATE TABLE user_role_division (
 );
 CREATE INDEX idx_user_role_division_role ON user_role_division (role_division_id);
 
--- Rôles de classement d'un fichier : le rôle et le fichier sont de la MÊME division (clés composites).
-CREATE TABLE document_role (
+-- Affectation manuelle d'un fichier à un agent (décide de l'accès en lecture) : l'agent et le fichier
+-- sont de la MÊME division (clés composites), l'affectation est posée par le chef de division ou de service.
+CREATE TABLE document_affectation (
     document_id BIGINT NOT NULL,
-    role_division_id BIGINT NOT NULL,
+    agent_id BIGINT NOT NULL,
     division_id BIGINT NOT NULL,
     cree_le TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (document_id, role_division_id),
-    CONSTRAINT fk_document_role_document FOREIGN KEY (document_id, division_id)
+    cree_par_user_id BIGINT REFERENCES _user(id) ON DELETE SET NULL,
+    PRIMARY KEY (document_id, agent_id),
+    CONSTRAINT fk_document_affectation_document FOREIGN KEY (document_id, division_id)
         REFERENCES document (id, division_id) ON DELETE CASCADE,
-    CONSTRAINT fk_document_role_role FOREIGN KEY (role_division_id, division_id)
-        REFERENCES role_division (id, division_id) ON DELETE CASCADE
+    CONSTRAINT fk_document_affectation_agent FOREIGN KEY (agent_id, division_id)
+        REFERENCES agent (id, division_id) ON DELETE CASCADE
 );
-CREATE INDEX idx_document_role_role ON document_role (role_division_id);
+CREATE INDEX idx_document_affectation_agent ON document_affectation (agent_id);
 
 -- 7. Demandes d'accès et exceptions ponctuelles -----------------------------------------------------------------------------
 

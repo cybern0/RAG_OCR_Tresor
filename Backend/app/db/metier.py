@@ -204,15 +204,17 @@ class UserRoleDivision(Base):
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class DocumentRole(Base):
-    """Rôle de classement d'un fichier (le rôle et le fichier sont de la même division, garanti par la base)."""
+class DocumentAffectation(Base):
+    """Affectation manuelle d'un fichier à un agent : l'agent affecté lit le fichier (LECTEUR).
+    L'agent et le fichier sont de la même division — garanti par la base (clés composites)."""
 
-    __tablename__ = "document_role"
+    __tablename__ = "document_affectation"
 
     document_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    role_division_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    agent_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     division_id: Mapped[int] = mapped_column(BigInteger)
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    cree_par_user_id: Mapped[int | None] = mapped_column(ForeignKey("_user.id"))
 
 
 class DemandeAcces(Base):

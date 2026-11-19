@@ -1,18 +1,17 @@
 """Périmètre administratif des COMPTES dans la hiérarchie (lecture et gestion).
 
-Lecture  : ROOT tout ; chef de service les comptes de son service ; chef de division ceux de sa division.
-Gestion  : ROOT tout ; chef de service -> les agents de son service, y compris les CHEF DE DIVISION (création
-           de compte, mot de passe, rôles) mais pas l'autre chef de service ; chef de division (ou intérimaire)
-           -> les agents SANS titre de leurs divisions.
-           Les titres de chef et les super administrateurs ne se gèrent que par un super administrateur.
+Lecture et Gestion : ROOT tout ; chef de service ET chef de division les comptes de LEUR SERVICE —
+le chef de division attribue des agents comme le chef de service, qui fait comme le super
+administrateur (seule l'étendue change : le service, pas toute l'organisation). Les deux chefs gèrent
+les agents de leur service, y compris les CHEF DE DIVISION (création de compte, mot de passe, rôles),
+mais pas le chef de service ; les comptes sans agent lié ne sont visibles que du super administrateur.
+Les titres de chef et les super administrateurs ne se gèrent que par un super administrateur.
 Gérer un compte relève de l'identité, pas du contenu.
 """
 
 from fastapi import HTTPException, status
 from sqlalchemy import ColumnElement, false
-from sqlalchemy.orm import Session
 
-from app.core.acces import peut_gerer_division
 from app.core.permissions import (
     NIVEAU_DIVISION,
     NIVEAU_ROOT,
@@ -20,17 +19,17 @@ from app.core.permissions import (
     TITRE_CHEF_SERVICE,
     Principal,
 )
-from app.db.metier import Agent, Division, User
+from app.db.metier import Agent, User
+
+_CHEFS_COMPTES = (NIVEAU_SERVICE, NIVEAU_DIVISION)
 
 
 def filtre_comptes_visibles(principal: Principal) -> ColumnElement[bool] | None:
     """Condition à appliquer sur Agent (jointure externe depuis User). None = aucune restriction (ROOT)."""
     if principal.niveau == NIVEAU_ROOT:
         return None
-    if principal.niveau == NIVEAU_SERVICE:
+    if principal.niveau in _CHEFS_COMPTES:
         return Agent.service_id == principal.service_id
-    if principal.niveau == NIVEAU_DIVISION:
-        return Agent.division_id == principal.division_id
     return false()
 
 
@@ -39,32 +38,27 @@ def voit_agent(principal: Principal, agent: Agent | None) -> bool:
         return True
     if agent is None:
         return False
-    if principal.niveau == NIVEAU_SERVICE:
+    if principal.niveau in _CHEFS_COMPTES:
         return agent.service_id == principal.service_id
-    if principal.niveau == NIVEAU_DIVISION:
-        return agent.division_id is not None and agent.division_id == principal.division_id
     return False
 
 
-def gere_agent(db: Session, principal: Principal, agent: Agent | None) -> bool:
-    """Le chef de service gère les comptes de son service, y compris les chefs de division (création,
-    mot de passe, rôles) — pas l'autre chef de service ; le chef de division gère les agents sans titre
-    de sa division ; les super administrateurs tout."""
+def gere_agent(principal: Principal, agent: Agent | None) -> bool:
+    """Le chef de service ET le chef de division gèrent les comptes de leur service, y compris les
+    chefs de division (création, mot de passe, rôles) — pas le chef de service ; les super
+    administrateurs tout."""
     if principal.niveau == NIVEAU_ROOT:
         return True
     if agent is None:
         return False
-    if principal.niveau == NIVEAU_SERVICE:
+    if principal.niveau in _CHEFS_COMPTES:
         return agent.service_id == principal.service_id and agent.titre != TITRE_CHEF_SERVICE
-    if agent.titre is not None:
-        return False
-    division = db.get(Division, agent.division_id) if agent.division_id is not None else None
-    return division is not None and peut_gerer_division(db, principal, division)
+    return False
 
 
-def exiger_gestion_compte(db: Session, principal: Principal, user: User) -> User:
+def exiger_gestion_compte(principal: Principal, user: User) -> User:
     if not voit_agent(principal, user.agent):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Utilisateur introuvable.")
-    if not gere_agent(db, principal, user.agent):
+    if not gere_agent(principal, user.agent):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Ce compte n'est pas dans votre périmètre de gestion.")
     return user

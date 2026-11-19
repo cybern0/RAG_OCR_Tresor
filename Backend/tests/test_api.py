@@ -595,19 +595,24 @@ def test_memoire_dans_la_session_survit_a_la_reconnexion(client, world):
     assert not any(f"délai de paiement des factures {tag}" in str(m.content) for m in qa_calls()[-1][1:-1])
 
 
-def test_retrait_d_un_role_masque_l_historique_et_coupe_la_memoire(client, world):
+def test_retrait_d_une_affectation_masque_l_historique_et_coupe_la_memoire(client, world):
     chef, mix, R = world["cd1"]["h"], world["mix"], world["roles"]
     tag = world["tag"]
-    # le chef dépose un fichier classé AUDIT (mix n'a pas ce rôle) et un fichier classé PUBLIC (mix le lit toujours)
-    def depose(texte, titre, role):
-        r = upload(client, chef, world["A"]["id"], texte, titre=titre, role_ids=[role["id"]])
+    # le chef dépose deux fichiers sans classement : aucun agent n'y accède tant qu'il ne les a pas affectés
+    def depose(texte, titre):
+        r = upload(client, chef, world["A"]["id"], texte, titre=titre)
         assert r.status_code == 201, r.text
         assert wait_version(client, chef, r.json()["id"], 1)["statut"] == "ready"
         return r.json()
-    depose(f"Note publique {tag} sur les horaires.", "Note publique", R["PUBLIC"])
-    budget = depose(f"Le budget confidentiel {tag} de la mission est de 30 jours de travail.", "Budget audit", R["AUDIT"])
+    note = depose(f"Note publique {tag} sur les horaires.", "Note publique")
+    budget = depose(f"Le budget confidentiel {tag} de la mission est de 30 jours de travail.", "Budget audit")
     assert client.get(f"/documents/{budget['id']}", headers=mix["h"]).status_code == 403
-    set_roles(client, chef, mix["user"]["id"], [R["PUBLIC"]["id"], R["AUDIT"]["id"]])
+    # le chef affecte les fichiers à mix (affectation manuelle, même si le dépôt vient d'un autre) ;
+    # la note reste affectée en permanence pour que mix garde au moins un fichier accessible
+    client.put(f"/documents/{note['id']}/affectations", headers=chef, json={"agent_ids": [mix["agent"]["id"]]})
+    r = client.put(f"/documents/{budget['id']}/affectations", headers=chef,
+                   json={"agent_ids": [mix["agent"]["id"]], "motif": "Mission budget"})
+    assert r.status_code == 200 and [a["id"] for a in r.json()["affectations"]] == [mix["agent"]["id"]]
     assert client.put("/chat/preferences", headers=mix["h"], json={"memoire_inter_sessions": True}).json()["memoire_inter_sessions"] is True
     ev = ask(client, mix["h"], f"budget confidentiel {tag} mission")
     cid = conv_id(ev)
@@ -621,8 +626,9 @@ def test_retrait_d_un_role_masque_l_historique_et_coupe_la_memoire(client, world
     ask(client, mix["h"], f"budget confidentiel {tag} mission, rappel")
     assert "Résultat : " in str(qa_calls()[-1][-1].content)
 
-    # retrait du rôle AUDIT : l'historique affiché est masqué, la mémoire devient muette, le LLM ne reçoit plus rien du fichier
-    set_roles(client, chef, mix["user"]["id"], [R["PUBLIC"]["id"]])
+    # retrait de l'affectation : l'historique affiché est masqué, la mémoire devient muette, le LLM ne reçoit plus rien du fichier
+    r = client.put(f"/documents/{budget['id']}/affectations", headers=chef, json={"agent_ids": [], "motif": "Fin de mission"})
+    assert r.status_code == 200 and r.json()["a_affecter"] is True
     msgs = client.get(f"/chat/conversations/{cid}", headers=mix["h"]).json()
     assistant = [m for m in msgs if m["emetteur"] == "assistant"][0]
     assert assistant["masque"] is True and assistant["sources"] == [] and "masquée" in assistant["contenu"] and "30 jours" not in assistant["contenu"]
@@ -631,11 +637,10 @@ def test_retrait_d_un_role_masque_l_historique_et_coupe_la_memoire(client, world
     prompt = " ".join(str(m.content) for m in qa_calls()[-1])
     assert "30 jours" not in prompt and "Résultat : " not in prompt and "(aucune)" in prompt
     assert not any(s["document_id"] == budget["id"] for s in sources_of(ev))
-    # le rôle revient : l'historique réapparaît
-    set_roles(client, chef, mix["user"]["id"], [R["PUBLIC"]["id"], R["AUDIT"]["id"]])
+    # l'affectation revient : l'historique réapparaît
+    client.put(f"/documents/{budget['id']}/affectations", headers=chef, json={"agent_ids": [mix["agent"]["id"]]})
     assistant = [m for m in client.get(f"/chat/conversations/{cid}", headers=mix["h"]).json() if m["emetteur"] == "assistant"][0]
     assert assistant["masque"] is False and assistant["sources"]
-    set_roles(client, chef, mix["user"]["id"], [R["PUBLIC"]["id"]])
     client.put("/chat/preferences", headers=mix["h"], json={"memoire_inter_sessions": False})
 
 

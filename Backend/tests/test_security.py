@@ -57,8 +57,8 @@ def test_limitation_des_essais():
 
 
 def test_matrice_des_roles_effectifs_sur_un_fichier():
-    # le gérant fait tout ; le rôle de classement des fichiers et la purge lui sont réservés
-    assert {"classer", "purger"} <= MATRICE[GERANT] and not ({"classer", "purger"} & MATRICE[AUTEUR])
+    # le gérant fait tout ; l'affectation du fichier aux agents et la purge lui sont réservées
+    assert {"affecter", "purger"} <= MATRICE[GERANT] and not ({"affecter", "purger"} & MATRICE[AUTEUR])
     # l'auteur gère ses dépôts mais ne supprime jamais (corbeille et purge réservées au gérant)
     assert {"modifier", "ajouter_version"} <= MATRICE[AUTEUR] and not ({"supprimer", "purger"} & MATRICE[AUTEUR])
     assert "supprimer" in MATRICE[GERANT]

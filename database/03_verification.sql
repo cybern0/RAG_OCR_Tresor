@@ -29,8 +29,8 @@ JOIN _user u ON u.id = urd.user_id
 LEFT JOIN agent a ON a.id = u.agent_id
 WHERE a.division_id IS DISTINCT FROM rd.division_id
 UNION ALL
-SELECT 'role_de_fichier_hors_de_la_division_du_fichier', count(*)
-FROM document_role dr JOIN document d ON d.id = dr.document_id WHERE dr.division_id <> d.division_id
+SELECT 'affectation_hors_de_la_division_du_fichier', count(*)
+FROM document_affectation da JOIN document d ON d.id = da.document_id WHERE da.division_id <> d.division_id
 UNION ALL
 SELECT 'historique_chaine_alteree', CASE WHEN (SELECT ok FROM verifier_historique()) THEN 0 ELSE 1 END
 UNION ALL
@@ -56,5 +56,5 @@ UNION ALL
 SELECT 'divisions_actives_sans_chef', count(*) FROM division d
 WHERE d.actif AND NOT EXISTS (SELECT 1 FROM agent a WHERE a.division_id = d.id AND a.titre = 'CHEF_DIVISION' AND a.actif)
 UNION ALL
-SELECT 'fichiers_a_classer', count(*) FROM document d
-WHERE d.corbeille_le IS NULL AND NOT EXISTS (SELECT 1 FROM document_role r WHERE r.document_id = d.id);
+SELECT 'fichiers_a_affecter', count(*) FROM document d
+WHERE d.corbeille_le IS NULL AND NOT EXISTS (SELECT 1 FROM document_affectation r WHERE r.document_id = d.id);

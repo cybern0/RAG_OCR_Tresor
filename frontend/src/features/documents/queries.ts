@@ -39,7 +39,7 @@ export const useVersions = (id: number) =>
 
 export const useReferentiel = () => useQuery({ queryKey: docKeys.referentiel, queryFn: api.getReferentiel, staleTime: 60_000 })
 
-/** Options des filtres (rôles, divisions, dépôt) selon le périmètre du compte. */
+/** Options des filtres (agents, divisions, dépôt) selon le périmètre du compte. */
 export const useFiltres = () => useQuery({ queryKey: ['documents', 'filtres'], queryFn: api.getFiltres, staleTime: 60_000 })
 
 export const useComments = (id: number, enabled: boolean) => useQuery({ queryKey: docKeys.comments(id), queryFn: () => api.listComments(id), enabled })
@@ -63,6 +63,7 @@ export function useDocumentMutations() {
     restore: useMutation({ mutationFn: api.restoreDocument, ...settle }),
     removeVersion: useMutation({ mutationFn: (v: { id: number; numero: number }) => api.deleteVersion(v.id, v.numero), ...settle }),
     classer: useMutation({ mutationFn: api.classerLot, ...settle }),
+    affecter: useMutation({ mutationFn: (v: { id: number; agentIds: number[]; motif?: string }) => api.definirAffectations(v.id, v.agentIds, v.motif), ...settle }),
   }
 }
 

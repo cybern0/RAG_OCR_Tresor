@@ -46,8 +46,9 @@ export const router = createBrowserRouter([
                 { path: 'admin/utilisateurs', lazy: () => import('../features/admin/users/UsersPage') },
                 { path: 'admin/utilisateurs/:userId', lazy: () => import('../features/admin/users/UserDetailPage') },
               ]),
-              // agents (personnes) et structure : super administrateur seulement — le chef de service a les
-              // mêmes menus que le chef de division (il gère comptes et rôles via /admin/utilisateurs et /roles)
+              // agents (personnes) et structure : super administrateur seulement — chef de service et chef de
+              // division ont les mêmes menus : ils gèrent les comptes et les rôles de LEUR SERVICE via
+              // /admin/utilisateurs et /roles (le chef de division attribue des agents comme le chef de service)
               { path: 'admin/agents', element: <RequireRoot />, children: [{ index: true, lazy: () => import('../features/admin/structure/AgentsPage') }] },
               { path: 'admin/structure', element: <RequireRoot />, children: [{ index: true, lazy: () => import('../features/admin/structure/StructurePage') }] },
               guarded(['utilisateur.lister', 'classement.gerer'], [{ path: 'admin/classement', loader: () => redirect('/roles') }]),

@@ -6,7 +6,7 @@ export const getDocument = (id: number) => api<DocumentMeta>(`/documents/${id}`)
 export const getFiltres = () => api<FiltresListe>('/documents/filtres')
 export const getReferentiel = () => api<Referentiel>('/classement/referentiel')
 
-export interface AddDocumentInput { fichier: File; titre: string; divisionId: number; contientTableaux: boolean; contientImages: boolean; roleIds?: number[] }
+export interface AddDocumentInput { fichier: File; titre: string; divisionId: number; contientTableaux: boolean; contientImages: boolean }
 
 export function addDocument(input: AddDocumentInput) {
   const form = new FormData()
@@ -15,9 +15,12 @@ export function addDocument(input: AddDocumentInput) {
   form.append('division_id', String(input.divisionId))
   form.append('contient_tableaux', String(input.contientTableaux))
   form.append('contient_images', String(input.contientImages))
-  if (input.roleIds) { form.append('roles_explicites', 'true'); input.roleIds.forEach((r) => form.append('role_ids', String(r))) }
   return api<DocumentMeta>('/documents', { method: 'POST', form })
 }
+
+/** Affectation manuelle d'un fichier à des agents de sa division : chef de division ou chef de service. */
+export const definirAffectations = (id: number, agent_ids: number[], motif?: string) =>
+  api<DocumentMeta>(`/documents/${id}/affectations`, { method: 'PUT', json: { agent_ids, motif } })
 
 export interface UpdateDocumentInput { titre?: string; contientTableaux?: boolean; contientImages?: boolean }
 

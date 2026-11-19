@@ -1,7 +1,9 @@
 """Logique de gestion des comptes.
 
 Règles :
-- le périmètre (qui voit, qui gère quel compte) est dans core/portee.py : super administrateur tout, chef de service les agents de son service, chef de division les agents de sa division ;
+- le périmètre (qui voit, qui gère quel compte) est dans core/portee.py : super administrateur tout ; chef de
+  service ET chef de division les comptes de leur service (le chef de division attribue des agents comme le
+  chef de service) ;
 - un UTILISATEUR est lié à un agent actif (son service et sa division en découlent) ; un agent n'a qu'un seul compte ;
 - on ne change jamais un rôle au point de laisser le système sans super administrateur actif.
 """
@@ -84,7 +86,7 @@ def _query():
 
 
 def list_users(db: Session, principal: Principal) -> list[User]:
-    """Comptes du périmètre : tous (super administrateur), son service (chef de service), sa division (chef de division)."""
+    """Comptes du périmètre : tous (super administrateur), son service (chef de service, chef de division)."""
     stmt = _query().outerjoin(Agent, Agent.id == User.agent_id)
     perimetre = filtre_comptes_visibles(principal)
     if perimetre is not None:
@@ -125,7 +127,7 @@ def agents_disponibles(db: Session, principal: Principal) -> list[AgentBrief]:
             division_nom=a.division.nom if a.division else None, titre=a.titre,
         )
         for a in db.scalars(stmt).unique()
-        if gere_agent(db, principal, a)
+        if gere_agent(principal, a)
     ]
 
 
@@ -158,7 +160,7 @@ def create_user(db: Session, actor: Principal, data: UserCreate, ip: str | None)
         agent = _check_agent(db, data.agent_id)
         if not voit_agent(actor, agent):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent introuvable ou inactif.")
-        if not gere_agent(db, actor, agent):
+        if not gere_agent(actor, agent):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Vous ne pouvez pas créer le compte de cet agent.")
     if data.role_ids and (agent is None or agent.division_id is None):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Des rôles de division exigent un agent rattaché à une division.")
@@ -189,7 +191,7 @@ def _active_admin_count(db: Session) -> int:
 def update_user(db: Session, actor: Principal, user_id: int, data: UserUpdate, ip: str | None) -> User:
     user = get_user(db, user_id)
     if user.id != actor.user.id or data.role is not None or data.agent_id is not None or data.retirer_agent:
-        exiger_gestion_compte(db, actor, user)
+        exiger_gestion_compte(actor, user)
     if not actor.is_admin and (data.role is not None or data.agent_id is not None or data.retirer_agent):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul un super administrateur change le rôle ou l'agent d'un compte.")
     changes: dict = {}

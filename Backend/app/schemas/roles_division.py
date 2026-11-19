@@ -34,4 +34,13 @@ class RoleDivisionOut(BaseModel):
     libelle: str
     actif: bool
     nb_agents: int = 0
-    nb_fichiers: int = 0
+
+
+class AgentDivisionBrief(BaseModel):
+    """Agent d'une division (liste pour l'affectation manuelle des fichiers)."""
+
+    id: int
+    matricule: str
+    nom: str
+    prenom: str
+    actif: bool

@@ -1,8 +1,9 @@
 """Logique des fichiers (documents) déposés DIRECTEMENT dans une division, et de leurs versions :
-- création d'un fichier : version 1, hash, dédoublonnage dans la division, CLASSEMENT PAR RÔLE, mise en file d'ingestion ;
+- création d'un fichier : version 1, hash, dédoublonnage dans la division, mise en file d'ingestion ;
 - nouvelle version : AJOUT d'une version numérotée et datée, jamais de suppression de l'ancienne ;
 - modification : titre et cases « tableaux / images » (la réindexation de la version courante suit un changement de case) ;
-- rôles du fichier : réservés au gérant de la division ; suppression et purge selon la matrice de core/acces.py.
+- affectation du fichier aux agents de sa division : réservée au gérant (chef de division ou de service) ;
+  suppression et purge selon la matrice de core/acces.py.
 
 Droits : rôle effectif sur le fichier (core/acces.py) ; hors périmètre : 404 ; rôle insuffisant : 403 ;
 division désactivée : 409. Toute modification est tracée dans l'historique (hash chaîné).
@@ -21,20 +22,19 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.config import get_settings
 from app.core import acces
 from app.core.acces import (
-    AJOUTER_VERSION, CLASSER, MATRICE, MODIFIER, PURGER, SUPPRIMER, VOIR,
+    AJOUTER_VERSION, AFFECTER, MATRICE, MODIFIER, PURGER, SUPPRIMER, VOIR,
     condition_acces_fichiers, est_chef_nominal, exiger_acces_document, exiger_depot_division,
 )
 from app.core.permissions import NIVEAU_DIVISION, NIVEAU_SERVICE, Principal
-from app.db.metier import Division, DocumentRole, DocumentTag, RoleDivision
+from app.db.metier import Agent, Division, DocumentAffectation, DocumentTag, User
 from app.db.vecteur import Document, DocumentVersion
-from app.schemas.document import DocumentOut, RoleBrief, RoleFiltreOut, VersionOut
+from app.schemas.document import AffectationBrief, AgentFiltreOut, DocumentOut, VersionOut
 from app.services.audit import log_action
 from app.services.documents import apercu, reindexation
 from app.services.historique import ecrire_historique
 from app.services.ingestion.parser import ALLOWED_EXT, apply_flags, forced_flags
 from app.services.notifications import destinataires_gestion, notifier
 from app.services import stockage
-from app.services.roles_division import valider_roles
 from app.workers import ingestion_worker
 
 _CHUNK = 1024 * 1024
@@ -58,30 +58,30 @@ def _courante(doc: Document) -> int | None:
     return max(ready) if ready else None
 
 
-def roles_par_document(db: Session, document_ids: list[int]) -> dict[int, list[RoleBrief]]:
-    sortie: dict[int, list[RoleBrief]] = {}
+def affectations_par_document(db: Session, document_ids: list[int]) -> dict[int, list[AffectationBrief]]:
+    sortie: dict[int, list[AffectationBrief]] = {}
     if not document_ids:
         return sortie
     rows = db.execute(
-        select(DocumentRole.document_id, RoleDivision.id, RoleDivision.code, RoleDivision.libelle)
-        .join(RoleDivision, RoleDivision.id == DocumentRole.role_division_id)
-        .where(DocumentRole.document_id.in_(document_ids))
-        .order_by(RoleDivision.libelle)
+        select(DocumentAffectation.document_id, Agent.id, Agent.nom, Agent.prenom, Agent.matricule)
+        .join(Agent, Agent.id == DocumentAffectation.agent_id)
+        .where(DocumentAffectation.document_id.in_(document_ids))
+        .order_by(Agent.nom, Agent.prenom)
     )
-    for did, rid, code, libelle in rows:
-        sortie.setdefault(did, []).append(RoleBrief(id=rid, code=code, libelle=libelle))
+    for did, aid, nom, prenom, matricule in rows:
+        sortie.setdefault(did, []).append(AffectationBrief(id=aid, nom=nom, prenom=prenom, matricule=matricule))
     return sortie
 
 
-def to_out(doc: Document, role: str, roles: list[RoleBrief] | None = None) -> DocumentOut:
+def to_out(doc: Document, role: str, affectations: list[AffectationBrief] | None = None) -> DocumentOut:
     latest = doc.versions[-1]  # versions triées par numéro
     forced_t, forced_i = forced_flags(Path(latest.nom_fichier).suffix)
-    roles = roles or []
+    affectations = affectations or []
     return DocumentOut(
         id=doc.id, titre=doc.titre, division_id=doc.division_id, division_nom=doc.division.nom,
         has_tabular=doc.has_tabular, has_image=doc.has_image, tableaux_imposes=forced_t, images_imposees=forced_i,
         nb_versions=len(doc.versions), version=_version_out(latest, _courante(doc)), mon_role=role,
-        droits=sorted(MATRICE[role]), roles=roles, a_classer=not roles,
+        droits=sorted(MATRICE[role]), affectations=affectations, a_affecter=not affectations,
         cree_par_nom=doc.createur.nom_utilisateur if doc.createur else None,
         cree_le=doc.cree_le, modifie_le=doc.modifie_le,
         categorie_id=doc.categorie_id, categorie_nom=doc.categorie.nom if doc.categorie else None,
@@ -96,7 +96,7 @@ def _fresh(db: Session, principal: Principal, document_id: int) -> DocumentOut:
     """Relit le fichier après une écriture (la session garde sinon l'ancienne liste de versions)."""
     db.expire_all()
     doc, role = get_document(db, principal, document_id, VOIR)
-    return to_out(doc, role, roles_par_document(db, [doc.id]).get(doc.id))
+    return to_out(doc, role, affectations_par_document(db, [doc.id]).get(doc.id))
 
 
 def versions_out(doc: Document) -> list[VersionOut]:
@@ -233,18 +233,18 @@ def list_documents(
     page: int | None = None,
     taille: int | None = None,
     corbeille: bool = False,
-    a_classer: bool = False,
-    role_id: int | None = None,
+    a_affecter: bool = False,
+    agent_id: int | None = None,
     division_id: int | None = None,
 ) -> list[DocumentOut] | dict:
     """Fichiers que le compte peut LIRE (condition SQL unique, la même que pour la recherche et le chat),
-    à plat sur toutes ses divisions ; filtres facultatifs par rôle (classe) et par division."""
+    à plat sur toutes ses divisions ; filtres facultatifs par agent affecté et par division."""
     doc_filter = [condition_acces_fichiers(db, principal)]
     doc_filter.append(Document.corbeille_le.is_not(None) if corbeille else Document.corbeille_le.is_(None))
-    if a_classer:
-        doc_filter.append(~select(DocumentRole.document_id).where(DocumentRole.document_id == Document.id).exists())
-    if role_id is not None:
-        doc_filter.append(select(DocumentRole.document_id).where(DocumentRole.document_id == Document.id, DocumentRole.role_division_id == role_id).exists())
+    if a_affecter:
+        doc_filter.append(~select(DocumentAffectation.document_id).where(DocumentAffectation.document_id == Document.id).exists())
+    if agent_id is not None:
+        doc_filter.append(select(DocumentAffectation.document_id).where(DocumentAffectation.document_id == Document.id, DocumentAffectation.agent_id == agent_id).exists())
     if division_id is not None:
         doc_filter.append(Document.division_id == division_id)
 
@@ -253,9 +253,9 @@ def list_documents(
         ordered_docs, q=q, tag_ids=tag_ids,
         statut=statut, extension=extension, du=du, au=au, auteur_id=auteur_id, tri=tri, page=page, taille=taille,
     )
-    roles_docs = roles_par_document(db, [d.id for d in filtered["items"]])
+    affectations_docs = affectations_par_document(db, [d.id for d in filtered["items"]])
     cache: dict[int, str] = {}
-    items = [to_out(d, _role_pour_liste(db, principal, d, cache), roles_docs.get(d.id)) for d in filtered["items"]]
+    items = [to_out(d, _role_pour_liste(db, principal, d, cache), affectations_docs.get(d.id)) for d in filtered["items"]]
     if page is not None or taille is not None:
         return {"items": items, "total": filtered["total"], "page": filtered["page"], "taille": filtered["taille"]}
     return items
@@ -268,27 +268,19 @@ def list_versions(db: Session, principal: Principal, document_id: int) -> list[V
 
 def filtres_liste(db: Session, principal: Principal) -> dict:
     """Options des filtres de la liste des fichiers, selon le périmètre du compte :
-    - roles : les rôles (« classes ») filtrables — les siens (agent), ceux de sa division (chef de division),
-      ceux des divisions de son service (chef de service) ;
+    - agents : les agents des divisions visibles (filtre « affecté à ») ;
     - divisions : ses divisions (une seule pour un agent ou un chef de division, plusieurs pour un chef de service) ;
     - depot_divisions : où il peut déposer."""
     divisions = condition_divisions(db, principal)
     ids = [d.id for d in divisions]
-    if principal.role_ids:
-        rows = db.execute(
-            select(RoleDivision.id, RoleDivision.code, RoleDivision.libelle, RoleDivision.division_id)
-            .where(RoleDivision.id.in_(principal.role_ids)).order_by(RoleDivision.libelle)
-        ).all()
-    elif principal.niveau in (NIVEAU_DIVISION, NIVEAU_SERVICE):
-        rows = db.execute(
-            select(RoleDivision.id, RoleDivision.code, RoleDivision.libelle, RoleDivision.division_id)
-            .where(RoleDivision.division_id.in_(ids or [-1]), RoleDivision.actif.is_(True)).order_by(RoleDivision.libelle)
-        ).all()
-    else:
-        rows = []
+    rows = db.execute(
+        select(Agent.id, Agent.nom, Agent.prenom, Agent.division_id)
+        .where(Agent.division_id.in_(ids or [-1]), Agent.actif.is_(True))
+        .order_by(Agent.nom, Agent.prenom)
+    ).all()
     noms = {d.id: d.nom for d in divisions}
     return {
-        "roles": [RoleFiltreOut(id=i, code=c, libelle=l, division_id=did, division_nom=noms.get(did)) for i, c, l, did in rows],
+        "agents": [AgentFiltreOut(id=i, nom=n, prenom=p, division_id=did, division_nom=noms.get(did)) for i, n, p, did in rows],
         "divisions": [{"id": d.id, "nom": d.nom} for d in divisions],
         "depot_divisions": [d.id for d in divisions if d.actif],
     }
@@ -360,29 +352,13 @@ def _remove_version_files(version: DocumentVersion) -> None:
     apercu.remove_cache(version.id)
 
 
-def _roles_au_depot(
-    db: Session, principal: Principal, division: Division, role_ids: list[int] | None, explicite: bool
-) -> list[RoleDivision]:
-    """Classement par rôle au dépôt.
-    Agent : tous ses rôles par défaut ; il peut en retirer, jamais en ajouter un qu'il n'a pas.
-    Chef de division ou de service : il choisit dans le dictionnaire de la division ; sans choix, le fichier est
-    « à classer » (accès refusé par défaut)."""
-    if est_chef_nominal(db, principal, division.id):
-        return valider_roles(db, division.id, role_ids or [])
-    demandes = list(principal.role_ids) if role_ids is None and not explicite else (role_ids or [])
-    en_trop = set(demandes) - set(principal.role_ids)
-    if en_trop:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Vous ne pouvez classer un fichier qu'avec vos propres rôles.")
-    return valider_roles(db, division.id, demandes, deja_detenus=set(principal.role_ids))
-
-
 def create_document(
     db: Session, principal: Principal, upload: UploadFile, titre: str, division_id: int,
     contient_tableaux: bool, contient_images: bool, ip: str | None,
-    role_ids: list[int] | None = None, roles_explicites: bool = False,
 ) -> DocumentOut:
+    """Dépose un fichier SANS classement : l'accès des autres agents se décide ensuite par l'affectation
+    manuelle du chef (admin division ou admin service), quel que soit l'auteur du dépôt."""
     division = exiger_depot_division(db, principal, division_id)  # membres et chefs de la division
-    roles = _roles_au_depot(db, principal, division, role_ids, roles_explicites)
     path, sha, size, name = _save_upload(upload)  # à plat dans upload_dir (services/stockage.py)
     # Deux dépôts CONCURRENTS du même contenu (double-clic) : le test puis l'insertion sont sérialisés
     # par division et contenu, sinon les deux transactions passent le test avant que la première ne
@@ -412,20 +388,18 @@ def create_document(
     db.add(doc)
     try:
         db.flush()
-        for r in roles:
-            db.add(DocumentRole(document_id=doc.id, role_division_id=r.id, division_id=division.id))
-        db.flush()
         log_action(db, principal.user.id, "document.creer", "document", doc.id,
                    {"titre": doc.titre, "division_id": division.id, "version": 1, "taille": size}, ip)
         ecrire_historique(
             db, acteur=principal.user, cible_type="document", cible_id=doc.id, action="fichier_depose",
-            apres={"titre": doc.titre, "fichier": name, "roles": [r.libelle for r in roles]},
+            apres={"titre": doc.titre, "fichier": name},
             service_id=division.service_id, division_id=division.id,
         )
-        if not roles:
+        if not est_chef_nominal(db, principal, division.id):
+            # déposé par un agent : il attend l'affectation manuelle du chef (l'auteur, lui, le voit déjà)
             notifier(
-                db, destinataires_gestion(db, division), "fichier_a_classer",
-                f"Un fichier est à classer dans la division « {division.nom} » : « {doc.titre} ».",
+                db, destinataires_gestion(db, division), "fichier_a_affecter",
+                f"Un fichier est à affecter dans la division « {division.nom} » : « {doc.titre} ».",
                 reference_type="document", reference_id=doc.id, sauf_user_id=principal.user.id,
             )
         db.commit()
@@ -444,26 +418,54 @@ def create_document(
     return _fresh(db, principal, doc.id)
 
 
-def definir_roles_document(
-    db: Session, principal: Principal, document_id: int, role_ids: list[int], motif: str | None
+def _valider_agents_division(db: Session, division_id: int, agent_ids: list[int]) -> list[Agent]:
+    """Les agents existent, sont actifs et appartiennent à la division du fichier (affectation de sa propre division)."""
+    ids = list(dict.fromkeys(agent_ids))
+    agents = list(db.scalars(select(Agent).where(Agent.id.in_(ids)))) if ids else []
+    if len(agents) != len(ids) or any(a.division_id != division_id for a in agents):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Agent inconnu ou d'une autre division.")
+    inactifs = [f"{a.prenom} {a.nom}".strip() for a in agents if not a.actif]
+    if inactifs:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Agent inactif : {', '.join(inactifs)}.")
+    return agents
+
+
+def definir_affectations_document(
+    db: Session, principal: Principal, document_id: int, agent_ids: list[int], motif: str | None
 ) -> DocumentOut:
-    """Remplace les rôles de classement d'un fichier : réservé au gérant de la division. Sans rôle = accès refusé par défaut."""
-    doc, _ = get_document(db, principal, document_id, CLASSER)
+    """Affecte manuellement le fichier à des agents de sa division (remplace la liste) : réservé au gérant de la
+    division — chef de division ou chef de service, même si le fichier vient d'un agent. Liste vide = accès
+    refusé par défaut (l'auteur et les chefs le voient toujours)."""
+    doc, _ = get_document(db, principal, document_id, AFFECTER)
     division = db.get(Division, doc.division_id)
-    actuels = roles_par_document(db, [doc.id]).get(doc.id, [])
-    cibles = valider_roles(db, doc.division_id, role_ids, deja_detenus={r.id for r in actuels})
-    if {r.id for r in cibles} != {r.id for r in actuels}:
-        db.execute(delete(DocumentRole).where(DocumentRole.document_id == doc.id))
+    actuels = affectations_par_document(db, [doc.id]).get(doc.id, [])
+    cibles = _valider_agents_division(db, doc.division_id, agent_ids)
+    ids_cibles = {a.id for a in cibles}
+    ids_actuels = {b.id for b in actuels}
+    if ids_cibles != ids_actuels:
+        db.execute(delete(DocumentAffectation).where(DocumentAffectation.document_id == doc.id))
         db.flush()
-        for r in cibles:
-            db.add(DocumentRole(document_id=doc.id, role_division_id=r.id, division_id=doc.division_id))
+        for a in cibles:
+            db.add(DocumentAffectation(document_id=doc.id, agent_id=a.id, division_id=doc.division_id,
+                                       cree_par_user_id=principal.user.id))
         doc.modifie_par = principal.user.id
         db.flush()
+        libelle = lambda a: f"{a.prenom} {a.nom}".strip()  # noqa: E731
         ecrire_historique(
-            db, acteur=principal.user, cible_type="document", cible_id=doc.id, action="roles_fichier_modifies",
-            avant=[r.libelle for r in actuels], apres=[r.libelle for r in cibles], motif=motif,
+            db, acteur=principal.user, cible_type="document", cible_id=doc.id, action="affectations_fichier_modifiees",
+            avant=[f"{b.prenom} {b.nom}".strip() for b in actuels], apres=[libelle(a) for a in cibles], motif=motif,
             service_id=division.service_id, division_id=division.id,
         )
+        nouveaux = [a for a in cibles if a.id not in ids_actuels]
+        if nouveaux:
+            notifier(
+                db, [u.id for u in db.scalars(
+                    select(User).where(User.agent_id.in_([a.id for a in nouveaux]))
+                )],
+                "fichier_affecte",
+                f"Un fichier vous a été affecté : « {doc.titre} ».",
+                reference_type="document", reference_id=doc.id, sauf_user_id=principal.user.id,
+            )
         db.commit()
     return _fresh(db, principal, document_id)
 

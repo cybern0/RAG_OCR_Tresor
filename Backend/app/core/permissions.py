@@ -8,8 +8,11 @@ Deux sources, évaluées à CHAQUE requête (aucun cache : un retrait de droit o
    Le chef de service a le MÊME rôle que le chef de division, étendu à toutes les divisions de son service.
    Les niveaux SERVICE et DIVISION ajoutent les permissions utilisateur.* ; le SERVICE ajoute structure.gerer,
    limité à SON service (agents, divisions et postes de chef de division — le périmètre est appliqué par
-   core/portee.py et services/structure). Le chef de service peut aussi créer les comptes des chefs de division
-   et réinitialiser leur mot de passe (un agent sans chef s'adresse à l'un ou à l'autre).
+   core/portee.py et services/structure). Pour la gestion des COMPTES (/admin/utilisateurs), le chef de
+   division a le même périmètre que le chef de service : les comptes de son service (attribution d'agents,
+   création, mots de passe, rôles de division) — cf. core/portee.py. Le chef de service peut aussi créer les
+   comptes des chefs de division et réinitialiser leur mot de passe (un agent sans chef s'adresse à l'un ou à
+   l'autre).
    Le super administrateur ADMINISTRE SEULEMENT : document.lister et chat.utiliser lui sont retirés
    (structure, comptes, dictionnaires de rôles, audit — ni fichiers ni IA).
 

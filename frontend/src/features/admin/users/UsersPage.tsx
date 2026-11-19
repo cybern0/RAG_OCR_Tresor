@@ -75,7 +75,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
             </select>
           )}
         </Field>
-        <Field label={`Agent${role === 'UTILISATEUR' ? '' : ' (facultatif)'}`} hint={free.length === 0 ? 'Aucun agent disponible : créer d’abord un agent (menu Agents).' : undefined}>
+        <Field label={`Agent${role === 'UTILISATEUR' ? '' : ' (facultatif)'}`} hint={free.length === 0 ? (me?.niveau === 'ROOT' ? 'Aucun agent disponible : créer d’abord un agent (menu Agents).' : 'Aucun agent disponible dans votre service : demandez au super administrateur de le créer.') : undefined}>
           {(id) => (
             <select id={id} className="input" required={role === 'UTILISATEUR'} value={agentId} onChange={(e) => { const nextId = e.target.value ? Number(e.target.value) : ''; setAgentId(nextId); setRoleIds([]) }}>
               <option value="">— Choisir —</option>

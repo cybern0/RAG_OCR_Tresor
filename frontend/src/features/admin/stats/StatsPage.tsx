@@ -103,7 +103,7 @@ function ErreursIndexation({ erreurs }: { erreurs: ErreursIndexation }) {
   const groupes = [
     { titre: 'Par service', data: erreurs.par_service },
     { titre: 'Par division', data: erreurs.par_division },
-    { titre: 'Par rôle', data: erreurs.par_role },
+    { titre: 'Par auteur', data: erreurs.par_auteur },
   ]
   return (
     <section className="card border-red-400/40 p-4" id="erreurs">
@@ -130,13 +130,13 @@ function ErreursIndexation({ erreurs }: { erreurs: ErreursIndexation }) {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead><tr><th className="th">Fichier</th><th className="th">Division / service</th><th className="th">Rôles</th><th className="th">Erreur</th><th className="th">Déposé le</th></tr></thead>
+              <thead><tr><th className="th">Fichier</th><th className="th">Division / service</th><th className="th">Déposé par</th><th className="th">Erreur</th><th className="th">Déposé le</th></tr></thead>
               <tbody className="divide-y divide-gold-500/10">
                 {erreurs.items.map((e) => (
                   <tr key={`${e.document_id}-${e.version_numero}`} className="hover:bg-leaf-700/40">
                     <td className="td"><Link className="font-medium text-gold-300 hover:underline" to={`/fichiers/${e.document_id}`}>{e.titre}</Link><p className="text-xs text-cream-300">v{e.version_numero} · {e.nom_fichier}</p></td>
                     <td className="td text-sm">{e.division_nom}{e.service_nom ? <><br /><span className="text-xs text-cream-300">{e.service_nom}</span></> : null}</td>
-                    <td className="td text-sm text-cream-200">{e.roles.length ? e.roles.join(', ') : '—'}</td>
+                    <td className="td text-sm text-cream-200">{e.depose_par ?? '—'}</td>
                     <td className="td max-w-64 text-xs text-red-200">{e.message_erreur ?? 'Erreur inconnue'}</td>
                     <td className="td whitespace-nowrap text-xs text-cream-300">{formatDate(e.cree_le)}</td>
                   </tr>

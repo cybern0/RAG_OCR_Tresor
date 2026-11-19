@@ -1,5 +1,5 @@
-// Fiche d'un fichier : aperçu de la version choisie, informations, classement, historique des versions, commentaires.
-import { ArrowLeft, Download, FileUp, Pencil, Tags, Trash2 } from 'lucide-react'
+// Fiche d'un fichier : aperçu de la version choisie, informations, affectations aux agents, historique des versions, commentaires.
+import { ArrowLeft, Download, FileUp, Pencil, Tags, Trash2, UserSquare } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { errorMessage } from '../../shared/api/client'
@@ -13,6 +13,7 @@ import { useToast } from '../../shared/hooks/useToast'
 import { downloadVersion } from './api'
 import { ClassementBadges } from './components/ClassementBadges'
 import ClassifyModal from './components/ClassifyModal'
+import AffectationModal from './components/AffectationModal'
 import { CommentsPanel } from './components/CommentsPanel'
 import EditDocumentModal from './components/EditDocumentModal'
 import NewVersionModal from './components/NewVersionModal'
@@ -22,7 +23,7 @@ import { StatusBadge } from './components/StatusBadge'
 import { VersionsPanel } from './components/VersionsPanel'
 import { useDocument, useDocumentMutations, useVersions } from './queries'
 
-type Dialog = 'edit' | 'version' | 'classify' | 'delete' | 'reindex' | null
+type Dialog = 'edit' | 'version' | 'classify' | 'affect' | 'delete' | 'reindex' | null
 
 export function Component() {
   const documentId = Number(useParams().documentId)
@@ -73,13 +74,26 @@ export function Component() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-gold-400">Informations</h2>
               <div className="flex gap-0.5">
-                {mayAdd && <button className="btn-icon" title="Classer" aria-label="Classer" onClick={() => setDialog('classify')}><Tags className="h-4 w-4" /></button>}
+                {mayAdd && <button className="btn-icon" title="Métadonnées" aria-label="Métadonnées" onClick={() => setDialog('classify')}><Tags className="h-4 w-4" /></button>}
                 {mayAdd && <button className="btn-icon" title="Modifier" aria-label="Modifier" onClick={() => setDialog('edit')}><Pencil className="h-4 w-4" /></button>}
                 {mayDelete && <button className="btn-icon text-red-300" title="Mettre à la corbeille" aria-label="Mettre à la corbeille" onClick={() => setDialog('delete')}><Trash2 className="h-4 w-4" /></button>}
               </div>
             </div>
             <dl className="space-y-2 text-sm">
-              <div><dt className="text-xs text-cream-300">Classement</dt><dd className="mt-1"><ClassementBadges doc={d} max={8} /></dd></div>
+              <div>
+                <dt className="text-xs text-cream-300">Affectations</dt>
+                <dd className="mt-1">
+                  <div className="flex flex-wrap items-center gap-1">
+                    {d.affectations.length === 0 ? <Badge tone="amber">À affecter</Badge>
+                      : d.affectations.map((a) => <Badge key={a.id} tone="green">{a.prenom} {a.nom}</Badge>)}
+                    {d.droits.includes('affecter') && (
+                      <button className="btn-icon" title="Affecter à des agents" aria-label="Affecter à des agents" onClick={() => setDialog('affect')}><UserSquare className="h-4 w-4" /></button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-cream-300">Les agents affectés (par le chef) lisent ce fichier ; sans affectation, l'accès se demande.</p>
+                </dd>
+              </div>
+              <div><dt className="text-xs text-cream-300">Métadonnées</dt><dd className="mt-1"><ClassementBadges doc={d} max={8} /></dd></div>
               <div><dt className="text-xs text-cream-300">Fichier</dt><dd>{d.version.nom_fichier} · {formatSize(d.version.taille_octets)}</dd></div>
               <div><dt className="text-xs text-cream-300">Lecture</dt><dd>{[d.has_tabular && 'tableaux', d.has_image && 'images', d.version.ocr_utilise && 'OCR'].filter(Boolean).join(' · ') || 'Texte seul'}</dd></div>
               <div><dt className="text-xs text-cream-300">Créé par</dt><dd>{d.cree_par_nom ?? '—'} le {formatDate(d.cree_le)}</dd></div>
@@ -110,6 +124,7 @@ export function Component() {
         <ReindexModal doc={d} version={list.find((v) => v.numero === reindexOf)!} onClose={() => setDialog(null)} />
       )}
       {dialog === 'classify' && <ClassifyModal docs={[d]} onClose={() => setDialog(null)} />}
+      {dialog === 'affect' && <AffectationModal doc={d} onClose={() => setDialog(null)} />}
       {dialog === 'delete' && (
         <ConfirmDialog title="Mettre à la corbeille" confirmLabel="Mettre à la corbeille" onClose={() => setDialog(null)}
           onConfirm={async () => { await remove.mutateAsync(d.id); toast.success('Fichier placé dans la corbeille.'); navigate('/fichiers', { replace: true }) }}>

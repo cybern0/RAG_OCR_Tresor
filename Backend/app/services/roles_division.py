@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.core.acces import est_chef_nominal, est_membre, exiger_gestion_division
 from app.core.permissions import Principal
-from app.db.metier import Agent, Division, DocumentRole, RoleDivision, User, UserRoleDivision
-from app.schemas.roles_division import RoleDivisionIn, RoleDivisionOut, RoleDivisionUpdate
+from app.db.metier import Agent, Division, RoleDivision, User, UserRoleDivision
+from app.schemas.roles_division import AgentDivisionBrief, RoleDivisionIn, RoleDivisionOut, RoleDivisionUpdate
 from app.services.historique import ecrire_historique
 from app.services.notifications import notifier
 
@@ -34,11 +34,23 @@ def _division(db: Session, division_id: int) -> Division:
 
 def _out(db: Session, role: RoleDivision) -> RoleDivisionOut:
     nb_agents = db.scalar(select(func.count()).select_from(UserRoleDivision).where(UserRoleDivision.role_division_id == role.id)) or 0
-    nb_fichiers = db.scalar(select(func.count()).select_from(DocumentRole).where(DocumentRole.role_division_id == role.id)) or 0
     return RoleDivisionOut(
         id=role.id, division_id=role.division_id, code=role.code, libelle=role.libelle, actif=role.actif,
-        nb_agents=nb_agents, nb_fichiers=nb_fichiers,
+        nb_agents=nb_agents,
     )
+
+
+def lister_agents(db: Session, principal: Principal, division_id: int) -> list[AgentDivisionBrief]:
+    """Agents actifs d'une division, pour l'affectation manuelle des fichiers. Lisible par les membres de la
+    division, par les chefs (de la division, ou du service qui la couvre) et par le super administrateur :
+    mêmes seuils que le dictionnaire de rôles."""
+    division = _division(db, division_id)
+    if not (est_membre(principal, division_id) or est_chef_nominal(db, principal, division_id) or principal.is_admin):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Division introuvable.")
+    agents = db.scalars(
+        select(Agent).where(Agent.division_id == division_id, Agent.actif.is_(True)).order_by(Agent.nom, Agent.prenom)
+    )
+    return [AgentDivisionBrief(id=a.id, matricule=a.matricule, nom=a.nom, prenom=a.prenom, actif=a.actif) for a in agents]
 
 
 def lister_roles(db: Session, principal: Principal, division_id: int, *, inclure_inactifs: bool = True) -> list[RoleDivisionOut]:
@@ -109,10 +121,10 @@ def supprimer_role(db: Session, actor: Principal, division_id: int, role_id: int
     division = exiger_gestion_division(db, actor, division_id)
     role = _role_de_division(db, division_id, role_id)
     out = _out(db, role)
-    if out.nb_agents or out.nb_fichiers:
+    if out.nb_agents:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"Ce rôle est utilisé par {out.nb_agents} agent(s) et {out.nb_fichiers} fichier(s) : réaffectez-les ou désactivez le rôle.",
+            f"Ce rôle est utilisé par {out.nb_agents} agent(s) : réaffectez-les ou désactivez le rôle.",
         )
     ecrire_historique(
         db, acteur=actor.user, cible_type="role_division", cible_id=role.id, action="role_supprime",

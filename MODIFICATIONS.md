@@ -1,3 +1,89 @@
+# Affectation manuelle des fichiers aux agents : le classement par rôle disparaît
+
+(11/2026)
+
+- **Le modèle change** : un fichier n'a plus de « classes » (`document_role` supprimé) — il est
+  **affecté manuellement à un ou plusieurs agents de sa division**, par le chef de division ou le chef de
+  service (l'admin de division ou de service), **même si le fichier vient d'un agent**. L'agent affecté lit
+  le fichier (LECTEUR) ; sans affectation, l'accès se demande (« à affecter »). La règle « agents de sa
+  propre division » est garantie PAR LA BASE : nouvelle table `document_affectation` avec clés composites
+  (fichier+division / agent+division) — un agent d'une autre division est refusé (422) par le serveur ET par
+  la contrainte. L'auteur et les chefs voient toujours le fichier. Les demandes d'accès ponctuelles
+  (exceptions) et les demandes de rôle ne changent pas ; les rôles de division restent le dictionnaire qui
+  décrit les agents (plus aucun effet sur les fichiers).
+- **Dépôt sans classement** : les champs `role_ids`/`roles_explicites` disparaissent de POST /documents et du
+  modal d'ajout — tout fichier déposé (par un agent ou un chef) démarre « à affecter » ; un dépôt PAR UN
+  AGENT notifie les chefs (`fichier_a_affecter`, ex-`fichier_a_classer`). Les agents affectés sont notifiés
+  (`fichier_affecte`).
+- **API** : `PUT /documents/{id}/affectations` (remplace `PUT /documents/{id}/roles`, action « affecter » de
+  la matrice GERANT, ex-« classer ») ; `GET /documents` : `a_classer`→`a_affecter`, `role_id`→`agent_id` ;
+  `GET /documents/filtres` : `roles`→`agents` ; **nouveau** `GET /divisions/{id}/agents` (agents actifs de la
+  division, visibles des membres/chefs/admin — sert aux modals d'affectation). Changer de division purge les
+  affectations de l'ancienne (AVANT la modification : la clé composite est référencée par la FK).
+- **Interface** : /fichiers — onglet « À affecter », filtre « Affecté à » (agents), colonne « Affectations »
+  (badges agents) à côté de « Métadonnées », bouton « Affecter à des agents » pour le gérant (fiche et liste) ;
+  /roles — page « Rôles et affectation » : le dictionnaire de rôles (agents) + la liste des fichiers de la
+  division avec affectation en un clic ; fiche fichier : section « Affectations » ; modal d'affectation
+  (AffectationModal) ; dépôt sans choix de rôles. Tableau de bord : « Fichiers à affecter », répartition
+  « Par rôle » limitée aux agents, erreurs d'indexation regroupées « Par auteur » (plus par classe).
+- **Base** : `database/01_schema.sql` — `document_role` remplacée par `document_affectation`
+  (document_id, agent_id, division_id, cree_le, cree_par_user_id) + `uq_agent_id_division` sur agent ;
+  `database/03_verification.sql` — invariant `affectation_hors_de_la_division_du_fichier`, avertissement
+  `fichiers_a_affecter`. Aucune migration : recréer la base (scripts 01-03). Le classement documentaire
+  (catégorie, type, étiquettes, confidentialité) reste des métadonnées : règles automatiques à l'ingestion et
+  bouton « Métadonnées » — il ne décide plus de rien côté accès.
+- **Tests** : `test_affectation_manuelle_des_fichiers` (dépôt sans classement, affectation par le chef,
+  refus 403/404/422, notifications, historique, retrait), `test_404_403...` et `test_privileges...` réécrits
+  (accès par affectation, filtres agents), `test_retrait_d_une_affectation_masque_l_historique_et_coupe_la_memoire`
+  (chat : la mémoire devient muette au retrait de l'affectation), tableau de bord aligné. Sans base :
+  « 93 réussis, 3 ignorés » ; avec PostgreSQL : 142 réussis — les 8 échecs (6 tests auth_os périmés +
+  2 tests hiérarchie sensibles à l'ordre) préexistent à l'identique sur le code d'avant modification.
+
+---
+
+# /admin/utilisateurs : le chef de division gère les comptes de son service ; fichiers morts classés et supprimés
+
+(11/2026)
+
+- **Comptes — chef de division = chef de service** : le périmètre administratif des comptes
+  (`core/portee.py`) n'est plus limité à la division du chef de division : comme le chef de service,
+  il **voit et gère les comptes de SON SERVICE** — il attribue des agents (création de compte avec
+  l'agent de n'importe quelle division du service, y compris un chef de division), réinitialise les
+  mots de passe et attribue les rôles de division, **de la même façon que le super administrateur**
+  (seule l'étendue change : le service, pas toute l'organisation). Le compte du chef de service reste
+  géré par le super administrateur seul ; les comptes sans agent lié aussi. Les fichiers et les rôles
+  de division restent, eux, cloisonnés par division (`core/acces.py` inchangé). `gere_agent` et
+  `exiger_gestion_compte` perdent leur paramètre `db` devenu inutile.
+- **Fichiers morts — classement et suppression** : analyse d'atteignabilité (imports depuis
+  `app/main.py` et `src/main.tsx`). **Backend supprimé** (jamais montés dans `main.py`, donc jamais
+  appelables — `routes/partage.py` n'importait même plus) : `routes/dossiers.py`, `routes/me.py`,
+  `routes/partage.py`, `routes/securite.py`, `services/dossiers/`, `services/partage.py`,
+  `services/securite.py`, `schemas/dossier.py`, `schemas/securite.py`, `schemas/role_division.py`
+  (doublon du renommage vers `schemas/roles_division.py`) et leur test
+  `tests/test_partage_collaboration.py`, **dont l'import cassé bloquait toute la suite pytest**
+  (`services/partage.py` importait des tables supprimées à la refonte). **Frontend supprimé** (59
+  fichiers, non atteignables depuis `src/main.tsx`) : ancienne racine `src/App.tsx`/`App.css`,
+  ancienne couche API `src/api/*`, anciens hooks `src/hooks/*`, anciens utilitaires `src/lib/*`,
+  anciens composants `src/components/ui/*`, anciens types `src/types/*` et les pages remplacées
+  (AdminPage, GedDashboardPanel, AuditPage/AuditPanel, ClassementPage, les deux DemandesPage,
+  AdminDossiersPage, Chatbot, DashboardDocuments et formulaires documents, tout `features/dossiers/`,
+  `features/securite/`, `features/structure/`, `features/users/`) — **la compilation `npm run build`
+  échouait sur 5 d'entre eux** (App.tsx, admin/demandes/DemandesPage, admin/dossiers/AdminDossiersPage,
+  dossiers/DossierPage, dossiers/SousDossiers) ; elle repasse (tsc + vite). Restent isolés (non appelés par l'API,
+  à reconnecter ou supprimer un jour) : `services/auth_os.py` et ses 6 tests (le réglage
+  `auth_mode` n'existe plus dans Settings).
+- **Tests** : `test_perimetre_de_creation_et_de_gestion_des_comptes` réécrit pour le nouveau périmètre
+  (sous-ensembles d'agents disponibles, création dans une autre division du même service, compte d'un
+  chef de division d'une autre division géré, chef de service refusé 403, service voisin 404). Suite
+  sans base : « 93 réussis, 3 ignorés ». Suite avec PostgreSQL+pgvector : 143 réussis — les 8 échecs
+  constatés (6 tests auth_os périmés + 2 tests hiérarchie sensibles à l'ordre) existent à l'identique
+  sur le code d'avant modification.
+- **Note** : les 3 tests hiérarchie « en échec » sur une base fraîche sans
+  `database/03_verification.sql` (vue `verification_invariants` absente) passent une fois les scripts
+  01 à 03 appliqués — la doc de test ne listait que 01-02.
+
+---
+
 # « Retirer le poste » retiré de /admin/agents ; nettoyage des notifications (résolues et lues)
 
 (11/2026)

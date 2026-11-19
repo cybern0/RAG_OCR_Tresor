@@ -1,7 +1,7 @@
 """Routes des fichiers déposés directement dans les divisions, et de leurs versions.
 
 Les droits se vérifient dans services/documents avec le rôle effectif (core/acces.py) : GERANT, AUTEUR, LECTEUR.
-Hors périmètre : 404 ; sans rôle sur le fichier : 403 (« Demander l'accès »).
+Hors périmètre : 404 ; fichier non affecté (et pas auteur) : 403 (« Demander l'accès »).
 Ajouter une version AJOUTE : l'ancienne reste indexée, téléchargeable et interrogeable.
 """
 
@@ -16,7 +16,7 @@ from app.core.acces import APERCU, MODIFIER, TELECHARGER, VOIR, exiger_acces_doc
 from app.core.permissions import Principal
 from app.db.vecteur import Document
 from app.schemas.document import (
-    ClasserLotIn, ClasserLotOut, DocumentOut, DocumentPageOut, FiltresOut, RolesDocumentIn, VersionOut,
+    AffectationsDocumentIn, ClasserLotIn, ClasserLotOut, DocumentOut, DocumentPageOut, FiltresOut, VersionOut,
 )
 from app.schemas.historique import HistoriqueOut
 from app.services.historique import to_out as historique_to_out
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 @router.get("/filtres", response_model=FiltresOut)
 def filtres(principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
-    """Options des filtres de la liste des fichiers (rôles, divisions) et divisions de dépôt, selon le périmètre."""
+    """Options des filtres de la liste des fichiers (agents affectables, divisions) et divisions de dépôt, selon le périmètre."""
     return crud.filtres_liste(db, principal)
 
 
@@ -41,18 +41,19 @@ def list_documents(
     du: datetime | None = None,
     au: datetime | None = None,
     auteur_id: int | None = None,
-    role_id: int | None = None,
     division_id: int | None = None,
     tri: str = "date_desc",
     page: int | None = Query(default=None),
     taille: int | None = Query(default=None),
     corbeille: bool = Query(default=False),
-    a_classer: bool = Query(default=False),
+    a_affecter: bool = Query(default=False),
+    agent_id: int | None = None,
     principal: Principal = Depends(get_principal),
     db: Session = Depends(get_db),
 ):
     """Filtres catégorie / type / confidentialité retirés : ces champs restent des métadonnées de classement
-    (badges, statistiques, règles automatiques) mais ne filtrent plus la liste."""
+    (badges, statistiques, règles automatiques) mais ne filtrent plus la liste. « a_affecter » = fichiers sans
+    affectation ; « agent_id » = fichiers affectés à cet agent."""
     return crud.list_documents(
         db,
         principal,
@@ -67,8 +68,8 @@ def list_documents(
         page=page,
         taille=taille,
         corbeille=corbeille,
-        a_classer=a_classer,
-        role_id=role_id,
+        a_affecter=a_affecter,
+        agent_id=agent_id,
         division_id=division_id,
     )
 
@@ -81,15 +82,12 @@ def create_document(
     titre: str = Form(""),
     contient_tableaux: bool = Form(False),
     contient_images: bool = Form(False),
-    role_ids: list[int] | None = Form(None),
-    roles_explicites: bool = Form(False),
     principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
 ):
-    """Dépose un fichier directement dans une division. Classement par rôle : un agent reçoit ses rôles par
-    défaut (il peut en retirer) ; le chef de division choisit, sans choix le fichier est « à classer »."""
+    """Dépose un fichier directement dans une division, sans classement : l'accès des autres agents
+    se décide ensuite par l'affectation manuelle du chef (admin division ou admin service)."""
     return crud.create_document(
         db, principal, fichier, titre, division_id, contient_tableaux, contient_images, client_ip(request),
-        role_ids=role_ids, roles_explicites=roles_explicites,
     )
 
 
@@ -137,16 +135,17 @@ def classer_lot(
 def get_document(document_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
     """Un fichier (lien profond de l'interface) ; hors des accès : 404."""
     doc, role = crud.get_document(db, principal, document_id, VOIR)
-    return crud.to_out(doc, role, crud.roles_par_document(db, [doc.id]).get(doc.id))
+    return crud.to_out(doc, role, crud.affectations_par_document(db, [doc.id]).get(doc.id))
 
 
-@router.put("/{document_id}/roles", response_model=DocumentOut)
-def definir_roles(
-    document_id: int, data: RolesDocumentIn,
+@router.put("/{document_id}/affectations", response_model=DocumentOut)
+def definir_affectations(
+    document_id: int, data: AffectationsDocumentIn,
     principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
 ):
-    """Rôles de classement du fichier : gérant de la division uniquement. Liste vide = accès refusé par défaut."""
-    return crud.definir_roles_document(db, principal, document_id, data.role_ids, data.motif)
+    """Affectation manuelle du fichier à des agents de sa division : gérant de la division uniquement
+    (chef de division ou chef de service), même si le fichier vient d'un agent. Liste vide = accès refusé par défaut."""
+    return crud.definir_affectations_document(db, principal, document_id, data.agent_ids, data.motif)
 
 
 @router.get("/{document_id}/historique", response_model=list[HistoriqueOut])

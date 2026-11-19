@@ -1,6 +1,6 @@
 """Règles de la GED hiérarchique : chef de division unique et transfert de poste, intérim du super administrateur,
-accès aux fichiers (404 / 403), classement par rôle au dépôt, dépôt direct sans dossier, demandes d'accès et exceptions,
-historique chaîné, périmètres de gestion, notifications, tableaux de bord.
+accès aux fichiers (404 / 403) par affectation manuelle aux agents, dépôt direct sans dossier, demandes d'accès
+et exceptions, historique chaîné, périmètres de gestion, notifications, tableaux de bord.
 
 Le chef de service a le même rôle que le chef de division, étendu à toutes les divisions de son service ;
 il gère les comptes de son service (y compris les chefs de division : compte, mot de passe, rôles) mais pas
@@ -104,73 +104,85 @@ def test_404_403_selon_la_position_de_l_appelant(client, world):
     a, lect, mix, b, cd1, adm = (world[k]["h"] if k != "admin" else world[k] for k in ("a", "lect", "mix", "b", "cd1", "admin"))
     f = fichier(client, a, world["A"]["id"], f"Compte rendu comptable {world['tag']}.", titre="Compte rendu")
     fid = f["id"]
-    assert f["mon_role"] == "AUTEUR" and [r["code"] for r in f["roles"]] == ["COMPTA"] and f["a_classer"] is False
-    assert client.get(f"/documents/{fid}", headers=lect).json()["mon_role"] == "LECTEUR"         # rôle commun
-    assert client.get(f"/documents/{fid}", headers=cd1).json()["mon_role"] == "GERANT"           # chef de la division
-    r = client.get(f"/documents/{fid}", headers=mix)                                           # même division, pas le rôle
+    assert f["mon_role"] == "AUTEUR" and f["affectations"] == [] and f["a_affecter"] is True   # le dépôt ne classe plus
+    # sans affectation, aucun autre agent de la division ne lit le fichier (rôles d'agent compris)
+    assert client.get(f"/documents/{fid}", headers=lect).status_code == 403
+    r = client.get(f"/documents/{fid}", headers=mix)                                           # même division, non affecté
     assert r.status_code == 403 and r.json()["detail"]["code"] == "ACCES_FICHIER_REFUSE" and r.json()["detail"]["document_id"] == fid
     assert client.get(f"/documents/{fid}/versions/1/telecharger", headers=mix).status_code == 403
+    assert client.get(f"/documents/{fid}", headers=cd1).json()["mon_role"] == "GERANT"           # chef de la division
     assert client.get(f"/documents/{fid}", headers=b).status_code == 404                        # autre division : l'existence n'est pas révélée
     assert client.get(f"/documents/{fid}", headers=world["cd3"]["h"]).status_code == 404         # même un chef d'une autre division
-    # liste à plat, sans dossier : le filtre par rôle (classe) — mix (PUBLIC) ne voit pas le fichier COMPTA, lect le voit
-    ids_mix = ids(client.get("/documents", headers=mix, params={"role_id": world["roles"]["PUBLIC"]["id"]}).json())
-    assert fid not in ids_mix and fid in ids(client.get("/documents", headers=lect, params={"role_id": world["roles"]["COMPTA"]["id"]}).json())
-    # filtres disponibles du compte : l'agent voit sa division et ses rôles ; un chef de service, ses divisions
+    # liste à plat, sans dossier : le filtre « affecté à » — rien pour lect tant que le chef n'a pas affecté
+    assert fid not in ids(client.get("/documents", headers=lect, params={"agent_id": world["lect"]["agent"]["id"]}).json())
+    r = client.put(f"/documents/{fid}/affectations", headers=cd1, json={"agent_ids": [world["lect"]["agent"]["id"]]})
+    assert r.status_code == 200 and [x["id"] for x in r.json()["affectations"]] == [world["lect"]["agent"]["id"]]
+    assert client.get(f"/documents/{fid}", headers=lect).json()["mon_role"] == "LECTEUR"         # agent affecté
+    assert fid in ids(client.get("/documents", headers=lect, params={"agent_id": world["lect"]["agent"]["id"]}).json())
+    # filtres disponibles du compte : l'agent voit sa division et ses agents ; un chef de service, ses divisions
     filtres_mix = client.get("/documents/filtres", headers=mix).json()
     assert [d["id"] for d in filtres_mix["divisions"]] == [world["div"]["v1"]["id"]]
-    assert {r["code"] for r in filtres_mix["roles"]} == {"PUBLIC"}
+    assert {x["id"] for x in filtres_mix["agents"]} >= {world["a"]["agent"]["id"], world["mix"]["agent"]["id"]}
     assert filtres_mix["depot_divisions"] == [world["div"]["v1"]["id"]]
     # super administrateur : il ne fait qu'administrer — ni fichiers, ni téléchargement, ni dépôt
     assert client.get(f"/documents/{fid}", headers=adm).status_code == 404
     assert client.get(f"/documents/{fid}/versions/1/telecharger", headers=adm).status_code == 404
-    assert client.get("/documents/filtres", headers=adm).json() == {"roles": [], "divisions": [], "depot_divisions": []}  # le super administrateur ne liste pas de fichiers
+    assert client.get("/documents/filtres", headers=adm).json() == {"agents": [], "divisions": [], "depot_divisions": []}  # le super administrateur ne liste pas de fichiers
     assert upload(client, adm, world["A"]["id"], "x" + world["tag"]).status_code == 404          # l'administration ne dépose pas (existence non révélée)
     assert client.post(f"/documents/{fid}/commentaires", headers=lect, json={"contenu": "ok"}).status_code == 201
 
 
-# --- classement par rôle au dépôt ---------------------------------------------------------------------------------------------
+# --- affectation manuelle des fichiers aux agents ---------------------------------------------------------------------------------
 
-def test_classement_automatique_selon_l_utilisateur_qui_depose(client, world):
-    a, lect, mix, cd1, tag, R = world["a"]["h"], world["lect"]["h"], world["mix"]["h"], world["cd1"]["h"], world["tag"], world["roles"]
-    A = world["A"]["id"]
-    # agent : tous ses rôles par défaut ; lect en a deux
+def test_affectation_manuelle_des_fichiers(client, world):
+    """Plus de classement par rôle : le dépôt (agent ou chef) ne donne accès à personne d'autre que l'auteur
+    et les chefs. Le chef de division (ou de service) AFFECTE ensuite manuellement le fichier à un ou
+    plusieurs agents de SA division, même si le fichier vient d'un agent — en une opération tracée."""
+    a, lect, mix, cd1, tag = world["a"]["h"], world["lect"]["h"], world["mix"]["h"], world["cd1"]["h"], world["tag"]
+    A, v1 = world["A"]["id"], world["div"]["v1"]["id"]
+    # dépôt par un agent : « à affecter », l'auteur le voit, les autres agents de la division non
     f = fichier(client, lect, A, f"Rapport d'audit comptable {tag}")
-    assert sorted(r["code"] for r in f["roles"]) == ["AUDIT", "COMPTA"]
-    # il peut en retirer un, jamais en ajouter un qu'il n'a pas
-    f = fichier(client, lect, A, f"Seulement compta {tag}", role_ids=[R["COMPTA"]["id"]])
-    assert [r["code"] for r in f["roles"]] == ["COMPTA"]
-    assert upload(client, a, A, f"Intrus {tag}", role_ids=[R["AUDIT"]["id"]]).status_code == 403
-    assert upload(client, a, A, f"Autre division {tag}", role_ids=[world["roles"]["RH"]["id"]]).status_code in (403, 422)
-    # aucun rôle conservé : « à classer », le chef est notifié, l'auteur le voit, mix non
-    r = upload(client, a, A, f"Sans rôle {tag}", titre="Sans rôle", roles_explicites="true")
-    assert r.status_code == 201 and r.json()["a_classer"] is True
-    sans = r.json()
-    assert any(n["type_evenement"] == "fichier_a_classer" for n in client.get("/notifications", headers=cd1).json()["items"])
-    assert client.get(f"/documents/{sans['id']}", headers=a).status_code == 200
-    assert client.get(f"/documents/{sans['id']}", headers=mix).status_code == 403
-    assert sans["id"] in ids(client.get("/documents", headers=cd1, params={"a_classer": True}).json())
-    # administrateur (chef de division) : choisit ; sans choix = accès refusé par défaut (métadonnée vide)
-    admin_f = upload(client, cd1, A, f"Dépôt du chef sans choix {tag}", titre="Chef sans choix")
-    assert admin_f.status_code == 201 and admin_f.json()["a_classer"] is True
-    assert client.get(f"/documents/{admin_f.json()['id']}", headers=lect).status_code == 403
-    choisi = upload(client, cd1, A, f"Dépôt du chef classé {tag}", role_ids=[R["PUBLIC"]["id"]])
-    assert [x["code"] for x in choisi.json()["roles"]] == ["PUBLIC"] and client.get(f"/documents/{choisi.json()['id']}", headers=mix).status_code == 200
-    # rôles inactifs ou inconnus
-    assert upload(client, cd1, A, f"Rôle inconnu {tag}", role_ids=[99999999]).status_code == 422
-    # changer les rôles d'un fichier existant : le chef seulement, tracé ; liste vide = accès refusé par défaut
-    fid = sans["id"]
-    assert client.put(f"/documents/{fid}/roles", headers=a, json={"role_ids": [R["COMPTA"]["id"]]}).status_code == 403   # même l'auteur
-    assert client.put(f"/documents/{fid}/roles", headers=cd1, json={"role_ids": [R["COMPTA"]["id"], world["roles"]["RH"]["id"]]}).status_code == 422
-    r = client.put(f"/documents/{fid}/roles", headers=cd1, json={"role_ids": [R["COMPTA"]["id"]], "motif": "Reclassement"})
-    assert r.status_code == 200 and r.json()["a_classer"] is False and client.get(f"/documents/{fid}", headers=lect).status_code == 200
-    h = client.get(f"/documents/{fid}/historique", headers=lect).json()
-    assert [e["action"] for e in h][:2] == ["roles_fichier_modifies", "fichier_depose"] and h[0]["motif"] == "Reclassement"
-    client.put(f"/documents/{fid}/roles", headers=cd1, json={"role_ids": []})
-    assert client.get(f"/documents/{fid}", headers=lect).status_code == 403
-    # pas de reclassement rétroactif : retirer COMPTA à lect ne change aucun fichier
-    set_roles(client, cd1, world["lect"]["user"]["id"], [R["AUDIT"]["id"]])
-    assert [x["code"] for x in client.get(f"/documents/{f['id']}", headers=cd1).json()["roles"]] == ["COMPTA"]
-    set_roles(client, cd1, world["lect"]["user"]["id"], [R["COMPTA"]["id"], R["AUDIT"]["id"]])
+    assert f["affectations"] == [] and f["a_affecter"] is True and f["mon_role"] == "AUTEUR"
+    fid = f["id"]
+    assert client.get(f"/documents/{fid}", headers=lect).status_code == 200
+    assert client.get(f"/documents/{fid}", headers=mix).status_code == 403
+    assert any(n["type_evenement"] == "fichier_a_affecter" for n in client.get("/notifications", headers=cd1).json()["items"])
+    assert fid in ids(client.get("/documents", headers=cd1, params={"a_affecter": True}).json())
+    # l'affectation se règle par le chef seulement ; agents de sa division seulement
+    assert client.put(f"/documents/{fid}/affectations", headers=lect, json={"agent_ids": [world["lect"]["agent"]["id"]]}).status_code == 403
+    assert client.put(f"/documents/{fid}/affectations", headers=cd1, json={"agent_ids": [world["b"]["agent"]["id"]]}).status_code == 422
+    assert client.put(f"/documents/{fid}/affectations", headers=cd1, json={"agent_ids": [99999999]}).status_code == 422
+    r = client.put(f"/documents/{fid}/affectations", headers=cd1,
+                   json={"agent_ids": [world["lect"]["agent"]["id"], world["mix"]["agent"]["id"]], "motif": "Mission audit"})
+    assert r.status_code == 200 and r.json()["a_affecter"] is False
+    assert {x["id"] for x in r.json()["affectations"]} == {world["lect"]["agent"]["id"], world["mix"]["agent"]["id"]}
+    assert client.get(f"/documents/{fid}", headers=mix).json()["mon_role"] == "LECTEUR"
+    assert client.get(f"/documents/{fid}", headers=lect).json()["mon_role"] == "AUTEUR"   # l'auteur garde son rôle (l'affectation ne le rétrograde pas)
+    h = client.get(f"/documents/{fid}/historique", headers=mix).json()
+    assert [e["action"] for e in h][:2] == ["affectations_fichier_modifiees", "fichier_depose"] and h[0]["motif"] == "Mission audit"
+    assert any(n["type_evenement"] == "fichier_affecte" for n in client.get("/notifications", headers=mix).json()["items"])
+    # l'affectation ne dépend plus des rôles : retirer COMPTA à lect ne change aucun accès
+    set_roles(client, cd1, world["lect"]["user"]["id"], [world["roles"]["AUDIT"]["id"]])
+    assert client.get(f"/documents/{fid}", headers=lect).status_code == 200
+    set_roles(client, cd1, world["lect"]["user"]["id"], [world["roles"]["COMPTA"]["id"], world["roles"]["AUDIT"]["id"]])
+    # liste vide = accès refusé par défaut (l'auteur et les chefs le voient toujours)
+    client.put(f"/documents/{fid}/affectations", headers=cd1, json={"agent_ids": [], "motif": "Retrait"})
+    assert client.get(f"/documents/{fid}", headers=mix).status_code == 403
+    assert client.get(f"/documents/{fid}", headers=lect).status_code == 200
+    # dépôt du chef : lui aussi doit affecter ensuite ; il n'est pas notifié pour son propre dépôt
+    avant = client.get("/notifications", headers=cd1).json()["items"]
+    chef_f = upload(client, cd1, A, f"Dépôt du chef {tag}", titre="Chef dépose")
+    assert chef_f.status_code == 201 and chef_f.json()["a_affecter"] is True
+    assert len(client.get("/notifications", headers=cd1).json()["items"]) == len(avant)
+    r = client.put(f"/documents/{chef_f.json()['id']}/affectations", headers=cd1, json={"agent_ids": [world["mix"]["agent"]["id"]]})
+    assert r.status_code == 200 and client.get(f"/documents/{chef_f.json()['id']}", headers=mix).status_code == 200
+    # les agents de la division (pour l'affectation) : visibles des membres et des chefs, pas du voisin
+    agents = client.get(f"/divisions/{v1}/agents", headers=lect).json()
+    assert {x["id"] for x in agents} >= {world["a"]["agent"]["id"], world["lect"]["agent"]["id"], world["mix"]["agent"]["id"]}
+    assert all(x["actif"] for x in agents)
+    assert client.get(f"/divisions/{v1}/agents", headers=world["b"]["h"]).status_code == 404
+    assert client.get(f"/divisions/{v1}/agents", headers=world["cd3"]["h"]).status_code == 404
+    assert client.get(f"/divisions/{v1}/agents", headers=world["cs"]["h"]).status_code == 200      # le chef de service couvre v1
 
 
 def test_depot_direct_sans_dossier_et_division_desactivee(client, world):
@@ -258,9 +270,7 @@ def test_demande_de_role_et_demande_d_acces_ponctuel(client, world):
     assert d5["cible_libelle"] == "Compta"
     assert client.post(f"/demandes/{d5['id']}/decision", headers=cd1, json={"accepter": True}).status_code == 200
     assert sorted(x["code"] for x in client.get("/auth/me", headers=mix).json()["roles_division"]) == ["COMPTA", "PUBLIC"]
-    assert client.get(f"/documents/{fid}", headers=mix).status_code == 200
-    set_roles(client, cd1, world["mix"]["user"]["id"], [R["PUBLIC"]["id"]])
-    assert client.get(f"/documents/{fid}", headers=mix).status_code == 403
+    assert client.get(f"/documents/{fid}", headers=mix).status_code == 403   # un rôle ne donne plus accès : seule l'affectation décide
     mes = client.get("/demandes", headers=mix).json()
     assert {d["statut"] for d in mes} >= {"acceptee", "refusee", "annulee"}
 
@@ -283,12 +293,11 @@ def test_dictionnaire_de_roles_par_division(client, world):
     nouveau = r.json()
     # le même code peut exister dans une autre division
     assert client.post(f"/divisions/{world['div']['v3']['id']}/roles", headers=cd3, json={"code": "COMPTA", "libelle": "Compta v3"}).status_code == 201
-    # renommer ne casse aucun accès (références par identifiant)
-    f = fichier(client, a, world["A"]["id"], f"Renommage de rôle {tag}")
+    # renommer ne casse rien (références par identifiant) : les rôles des agents restent en place
     assert client.patch(f"/divisions/{v1}/roles/{world['roles']['COMPTA']['id']}", headers=cd1, json={"libelle": "Comptabilité"}).status_code == 200
-    assert client.get(f"/documents/{f['id']}", headers=world["lect"]["h"]).status_code == 200
+    assert "Comptabilité" in [x["libelle"] for x in client.get("/auth/me", headers=world["lect"]["h"]).json()["roles_division"]]
     client.patch(f"/divisions/{v1}/roles/{world['roles']['COMPTA']['id']}", headers=cd1, json={"libelle": "Compta"})
-    # suppression : refusée tant que le rôle est utilisé (fichier ou agent) ; désactivation : plus attribuable
+    # suppression : refusée tant que le rôle est porté par un agent ; désactivation : plus attribuable
     assert client.delete(f"/divisions/{v1}/roles/{world['roles']['COMPTA']['id']}", headers=cd1).status_code == 409
     assert client.patch(f"/divisions/{v1}/roles/{nouveau['id']}", headers=cd1, json={"actif": False}).status_code == 200
     assert client.put(f"/users/{world['mix']['user']['id']}/roles", headers=cd1, json={"role_ids": [world["roles"]["PUBLIC"]["id"], nouveau["id"]]}).status_code == 422
@@ -312,24 +321,30 @@ def test_perimetre_de_creation_et_de_gestion_des_comptes(client, world):
     ch = mk_agent(client, adm, "ch", tag, s1, v2)                 # futur chef de division de v2
     def creer(h, agent, nom):
         return client.post("/users", headers=h, json={"nom_utilisateur": f"{nom}_{tag}", "mot_de_passe": PWD, "role": "UTILISATEUR", "agent_id": agent["id"]})
-    # agents disponibles : chacun voit ce qu'il peut doter d'un compte
-    assert [a["id"] for a in client.get("/users/agents-disponibles", headers=cd1).json()] == [p1["id"]]
-    # le chef de division crée les comptes des agents de sa division, pas les autres
+    # agents disponibles : chacun voit ce qu'il peut doter d'un compte — le chef de division comme le
+    # chef de service voit TOUT son service (le monde est partagé entre les tests du module : sous-ensembles)
+    dispo_cd1 = {a["id"] for a in client.get("/users/agents-disponibles", headers=cd1).json()}
+    assert {ch["id"], p1["id"], p2["id"]} <= dispo_cd1
+    assert p3["id"] not in dispo_cd1
+    assert {p3["id"]} <= {a["id"] for a in client.get("/users/agents-disponibles", headers=cd3).json()}
+    # le chef de division attribue les agents de SON SERVICE (comme le chef de service), pas ceux du service voisin
     assert creer(cd1, p3, "x3").status_code == 404
-    assert creer(cd1, p2, "x2").status_code == 404
+    r = creer(cd1, p2, "x2")
+    assert r.status_code == 201 and r.json()["niveau"] == "AGENT"
     r = creer(cd1, p1, "n1")
     assert r.status_code == 201 and r.json()["niveau"] == "AGENT"
-    # division vacante (v2) : le super administrateur assure l'intérim et crée ces comptes ; après nomination, il reste le seul à tout gérer
-    assert creer(adm, p2, "n2").status_code == 201
+    # y compris le compte d'un chef de division d'une autre division de son service (même règle que le chef de service)
     assert client.put(f"/structure/divisions/{v2}/chef", headers=adm, json={"agent_id": ch["id"]}).status_code == 200
-    assert creer(adm, ch, "nch").json()["niveau"] == "DIVISION"
+    r = creer(cd1, ch, "nch")
+    assert r.status_code == 201 and r.json()["niveau"] == "DIVISION"
     p2b = mk_agent(client, adm, "p2b", tag, s1, v2)
-    assert creer(cd1, p2b, "n2b").status_code == 404           # v2 n'est pas la division de cd1
+    assert creer(cd1, p2b, "n2b").status_code == 201           # v2 est dans son service : il y attribue des agents
     assert creer(cd3, p3, "n3").status_code == 201
-    # listes cloisonnées
+    # listes cloisonnées par service
     noms = lambda h: {u["nom_utilisateur"] for u in client.get("/users", headers=h).json()}  # noqa: E731
-    assert f"n1_{tag}" in noms(cd1) and f"n3_{tag}" not in noms(cd1) and f"n2_{tag}" not in noms(cd1)
-    assert {f"n1_{tag}", f"n3_{tag}", f"n2_{tag}"} <= noms(adm)
+    assert {f"n1_{tag}", f"x2_{tag}", f"nch_{tag}", f"n2b_{tag}"} <= noms(cd1)
+    assert f"n3_{tag}" not in noms(cd1)
+    assert {f"n1_{tag}", f"x2_{tag}", f"nch_{tag}", f"n2b_{tag}", f"n3_{tag}"} <= noms(adm)
     u_n3 = next(u for u in client.get("/users", headers=adm).json() if u["nom_utilisateur"] == f"n3_{tag}")
     assert client.get(f"/users/{u_n3['id']}", headers=cd1).status_code == 404
     # gestion : désactiver et réinitialiser dans son périmètre seulement ; jamais un supérieur
@@ -339,6 +354,11 @@ def test_perimetre_de_creation_et_de_gestion_des_comptes(client, world):
     assert client.patch(f"/users/{u_n3['id']}", headers=cd1, json={"actif": False}).status_code == 404
     assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=cd1, json={"actif": False}).status_code in (403, 409)   # pas soi-même
     assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=cd3, json={"mot_de_passe": "tentative-hors-perimetre-1"}).status_code == 404
+    # le chef de division réinitialise le mot de passe du chef de division d'une autre division de son service,
+    # mais pas le compte du chef de service (même règle que le chef de service)
+    u_nch = next(u for u in client.get("/users", headers=cd1).json() if u["nom_utilisateur"] == f"nch_{tag}")
+    assert client.patch(f"/users/{u_nch['id']}", headers=cd1, json={"mot_de_passe": "mdp-chef-division-1"}).status_code == 200
+    assert client.patch(f"/users/{world['cs']['user']['id']}", headers=cd1, json={"mot_de_passe": "tentative-cs-123456"}).status_code == 403
     # le super administrateur gère tous les comptes, y compris les chefs de division
     assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=adm, json={"mot_de_passe": "mdp-du-chef-123"}).status_code == 200
     assert client.patch(f"/users/{world['cd1']['user']['id']}", headers=cd3, json={"role": "ADMIN"}).status_code == 404
@@ -429,7 +449,7 @@ def test_tableaux_de_bord_par_niveau(client, world):
 
 
 def test_tracage_des_erreurs_d_indexation_par_niveau(client, world):
-    """Le dashboard trace les échecs d'indexation par service, division et rôle : ROOT voit tout,
+    """Le dashboard trace les échecs d'indexation par service, division et auteur : ROOT voit tout,
     le chef de service ses divisions, le chef de division sa division, l'agent SES fichiers seulement."""
     adm, cs, cd1, cd3 = world["admin"], world["cs"]["h"], world["cd1"]["h"], world["cd3"]["h"]
     a, b, tag = world["a"]["h"], world["b"]["h"], world["tag"]
@@ -445,7 +465,7 @@ def test_tracage_des_erreurs_d_indexation_par_niveau(client, world):
     assert any(e["document_id"] == doc_id for e in root["items"])
     assert {g["nom"] for g in root["par_division"]} >= {f"Division v1 {tag}"}
     assert any(f"Service s1" in g["nom"] or True for g in root["par_service"]) and root["par_service"]
-    assert {g["nom"] for g in root["par_role"]} >= {"Compta"}                        # le fichier porte COMPTA
+    assert {g["nom"] for g in root["par_auteur"]} >= {world["a"]["name"]}            # le fichier a été déposé par a
     # chef de service : les échecs de SON service ; chef de division : sa division ; le service voisin : rien
     srv = client.get("/tableau-de-bord", headers=cs).json()["erreurs_indexation"]
     assert any(e["document_id"] == doc_id for e in srv["items"])
@@ -454,7 +474,7 @@ def test_tracage_des_erreurs_d_indexation_par_niveau(client, world):
     # agent : très restreint — ses fichiers seulement, avec le message, sans regroupement
     ag = client.get("/tableau-de-bord", headers=a).json()["erreurs_indexation"]
     assert any(e["document_id"] == doc_id and e["message_erreur"] for e in ag["items"])
-    assert ag["par_service"] == [] and ag["par_division"] == [] and ag["par_role"] == []
+    assert ag["par_service"] == [] and ag["par_division"] == [] and ag["par_auteur"] == []
     # l'agent d'une autre division : aucun de ses fichiers n'est en échec ici
     ag_b = client.get("/tableau-de-bord", headers=b).json()["erreurs_indexation"]
     assert all(e["document_id"] != doc_id for e in ag_b["items"])
@@ -523,13 +543,15 @@ def test_privileges_inchanges_et_listes_par_division(client, world):
     a, lect, mix, b, cd1 = world["a"]["h"], world["lect"]["h"], world["mix"]["h"], world["b"]["h"], world["cd1"]["h"]
     tag, R = world["tag"], world["roles"]
     A, B = world["A"]["id"], world["B"]["id"]
-    # dépôt d'un agent : classement automatique (tous ses rôles par défaut), privilèges inchangés
+    # dépôt d'un agent sans classement, puis affectation par le chef : privilèges inchangés
     f = upload(client, a, A, f"Pièce courante {tag}").json()
-    assert [r["code"] for r in f["roles"]] == ["COMPTA"]          # organisation prévue : COMPTA
+    assert f["affectations"] == [] and f["a_affecter"] is True
     assert client.get(f"/documents/{f['id']}", headers=a).json()["mon_role"] == "AUTEUR"
+    assert client.get(f"/documents/{f['id']}", headers=lect).status_code == 403   # pas encore affecté
+    assert client.put(f"/documents/{f['id']}/affectations", headers=cd1, json={"agent_ids": [world["lect"]["agent"]["id"]]}).status_code == 200
     assert client.get(f"/documents/{f['id']}", headers=lect).json()["mon_role"] == "LECTEUR"
     assert client.get(f"/documents/{f['id']}", headers=cd1).json()["mon_role"] == "GERANT"
-    assert client.get(f"/documents/{f['id']}", headers=mix).status_code == 403    # rôle PUBLIC absent
+    assert client.get(f"/documents/{f['id']}", headers=mix).status_code == 403    # pas affecté à mix
     assert client.get(f"/documents/{f['id']}", headers=b).status_code == 404      # autre division : existence cachée
     # la liste à plat est cloisonnée : l'agent a les fichiers de SA division, jamais ceux de l'autre service
     assert f["id"] in ids(client.get("/documents", headers=a).json())
@@ -545,34 +567,9 @@ def test_privileges_inchanges_et_listes_par_division(client, world):
     assert client.get("/documents", headers=world["cs"]["h"], params={"division_id": B}).json() == []
 
 
-def test_deux_modes_de_classement(client, world):
-    """Mode 1 (automatique) : un agent dépose sans préciser les rôles, le fichier reçoit tous ses rôles.
-    Mode 2 (manuel) : le chef de division attribue explicitement le fichier à un ou plusieurs agents
-    de sa division, via les rôles du dictionnaire — y compris après le dépôt (« à classer »)."""
-    a, lect, mix, b, cd1 = world["a"]["h"], world["lect"]["h"], world["mix"]["h"], world["b"]["h"], world["cd1"]["h"]
-    tag, R = world["tag"], world["roles"]
-    A = world["A"]["id"]
-    # mode automatique : dépôt sans role_ids -> tous les rôles de l'agent, visible des détenteurs
-    f = upload(client, a, A, f"Classement automatique {tag}").json()
-    assert f["a_classer"] is False and [r["code"] for r in f["roles"]] == ["COMPTA"]
-    assert client.get(f"/documents/{f['id']}", headers=lect).status_code == 200       # détenteur COMPTA
-    assert client.get(f"/documents/{f['id']}", headers=mix).status_code == 403        # hors organisation prévue
-    # mode manuel : dépôt du chef sans choix -> « à classer », invisible de tous les agents
-    m = upload(client, cd1, A, f"Attribution manuelle {tag}").json()
-    assert m["a_classer"] is True and m["roles"] == []
-    assert client.get(f"/documents/{m['id']}", headers=lect).status_code == 403
-    assert client.get(f"/documents/{m['id']}", headers=mix).status_code == 403
-    # le chef attribue explicitement à plusieurs agents (rôles COMPTA + PUBLIC), en une opération tracée
-    r = client.put(f"/documents/{m['id']}/roles", headers=cd1, json={"role_ids": [R["COMPTA"]["id"], R["PUBLIC"]["id"]], "motif": "Attribution manuelle"})
-    assert r.status_code == 200 and sorted(x["code"] for x in r.json()["roles"]) == ["COMPTA", "PUBLIC"]
-    assert client.get(f"/documents/{m['id']}", headers=lect).status_code == 200       # agent COMPTA
-    assert client.get(f"/documents/{m['id']}", headers=mix).status_code == 200        # agent PUBLIC
-    assert client.get(f"/documents/{m['id']}", headers=b).status_code == 404          # hors de la division
-
-
 def test_le_chef_de_service_meme_role_sur_toutes_les_divisions(client, world):
     """Le chef de service a le même rôle que le chef de division, étendu à toutes les divisions de son service :
-    GERANT sur les fichiers, classement manuel, comptes des agents sans titre, décisions de demandes ;
+    GERANT sur les fichiers, affectation manuelle, comptes des agents sans titre, décisions de demandes ;
     ni les chefs, ni le service voisin."""
     adm, cs, tag, R = world["admin"], world["cs"]["h"], world["tag"], world["roles"]
     s1, s2, v1, v2 = world["svc"]["s1"]["id"], world["svc"]["s2"]["id"], world["div"]["v1"]["id"], world["div"]["v2"]["id"]
@@ -586,15 +583,13 @@ def test_le_chef_de_service_meme_role_sur_toutes_les_divisions(client, world):
     # GERANT sur les fichiers des divisions de son service, sans déverrouillage
     f1 = upload(client, world["a"]["h"], world["A"]["id"], f"Sous la houlette du chef de service {tag}").json()
     assert client.get(f"/documents/{f1['id']}", headers=cs).json()["mon_role"] == "GERANT"
-    # dans la division v2, il dépose un fichier « à classer », puis le classe avec un rôle DE v2
+    # dans la division v2, il dépose un fichier « à affecter », puis l'affecte à un agent DE v2
     f2 = upload(client, cs, v2, f"Pièce relancée {tag}", titre="Relance").json()
-    assert f2["a_classer"] is True
+    assert f2["a_affecter"] is True
     assert client.get(f"/documents/{f2['id']}", headers=world["cd1"]["h"]).status_code == 404
-    r_v2 = client.post(f"/divisions/{v2}/roles", headers=cs, json={"code": "RELANCE", "libelle": "Relance"})
-    assert r_v2.status_code == 201, r_v2.text
-    assert client.put(f"/documents/{f2['id']}/roles", headers=cs, json={"role_ids": [r_v2.json()["id"]], "motif": "Relance"}).status_code == 200
-    # un rôle d'une autre division est refusé (clés composites)
-    assert client.put(f"/documents/{f2['id']}/roles", headers=cs, json={"role_ids": [R["PUBLIC"]["id"]]}).status_code == 422
+    # un agent d'une autre division est refusé (clés composites) ; celui de v2 passe
+    assert client.put(f"/documents/{f2['id']}/affectations", headers=cs, json={"agent_ids": [world["a"]["agent"]["id"]]}).status_code == 422
+    assert client.put(f"/documents/{f2['id']}/affectations", headers=cs, json={"agent_ids": [99999999]}).status_code == 422
     # demandes d'accès de sa division : il décide comme un chef de division
     dem = client.post("/demandes", headers=world["mix"]["h"], json={"type_demande": "fichier", "cible_id": f1["id"], "motif": "Périmètre", "duree_heures": 4}).json()
     assert dem["id"] in ids(client.get("/demandes", headers=cs, params={"vue": "a_traiter", "statut": "en_attente"}).json())
@@ -613,10 +608,10 @@ def test_le_chef_de_service_meme_role_sur_toutes_les_divisions(client, world):
     assert login(client, world["cd1"]["name"], "mdp-reinitialise-1").status_code == 200
     hs = mk_agent(client, adm, "hsx", tag, s2, world["div"]["v3"]["id"])       # agent du service voisin : hors périmètre
     assert client.post("/users", headers=cs, json={"nom_utilisateur": f"autre_service_{tag}", "mot_de_passe": PWD, "role": "UTILISATEUR", "agent_id": hs["id"]}).status_code == 404
-    # attribution manuelle complète : rôle de v2 au compte créé, le fichier classé RELANCE devient visible
+    # attribution manuelle complète : le chef de service affecte le fichier de v2 au nouvel agent de v2
     client.patch(f"/users/{world['cd1']['user']['id']}", headers=adm, json={"mot_de_passe": PWD})
     world["cd1"]["h"] = auth(client, world["cd1"]["name"])
-    set_roles(client, cs, u_pcs["user"]["id"], [r_v2.json()["id"]])
+    assert client.put(f"/documents/{f2['id']}/affectations", headers=cs, json={"agent_ids": [p_cs["id"]], "motif": "Relance"}).status_code == 200
     assert client.get(f"/documents/{f2['id']}", headers=u_pcs["h"]).status_code == 200
     assert client.get(f"/documents/{f2['id']}", headers=world["mix"]["h"]).status_code == 404
     # le chef de service ne touche pas au poste de chef de service ni aux directions/services/divisions
