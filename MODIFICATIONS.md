@@ -1,4 +1,35 @@
+# Conversion : LibreOffice seul moteur — Microsoft Office abandonné
+
+(11/2026)
+
+Décision : Microsoft Office n'est plus utilisé pour la conversion des fichiers Office/OpenDocument (docx, xlsx, pptx,
+odt, ods, odp, rtf...) en PDF — **LibreOffice est le moteur unique, sur tous les systèmes**, comme le sera la production
+Linux. La bascule Word → LibreOffice (`CONVERSION_MOTEUR_WORD`) avait débloqué l'indexation ; plutôt que de garder deux
+moteurs dont un bloqué, tout passe par LibreOffice.
+- **`services/conversion_office.py` réécrit** (~500 lignes → ~120) : plus de script PowerShell, plus de pilotage COM,
+  plus d'imprimante à imposer à Word, plus d'application Office à fermer après un blocage ; `convertir_vers_pdf` appelle
+  directement `soffice` (Linux) ou `soffice.exe` aux chemins standards (Windows, LiteParse cherche les mêmes). Le stderr
+  de LibreOffice est remonté dans le message « refusé » : la cause réelle devient lisible.
+- **Réglages retirés** : `CONVERSION_WORD_IMPRIMANTE`, `CONVERSION_MOTEUR_WORD`, `CONVERSION_WORD_DELAI_OFFICE_S`,
+  `CONVERSION_OFFICE_VISIBLE`, `CONVERSION_WORD_METHODE` (les retirer d'un `.env` existant est facultatif : ils sont
+  simplement ignorés). Restent `CONVERSION_TIMEOUT_*` (délai selon la taille).
+- **`scripts/diagnostic_conversion.py` simplifié** : plus d'imprimantes, de Spooler, de `--visible`/`--methode`/
+  `--moteur` ; affiche le soffice trouvé, convertit chaque fichier donné (ou `--temoin`) et remonte l'erreur réelle.
+- **Restes de partage supprimés** (décision déjà prise à la refonte « classes » mais incomplètement appliquée dans le
+  dépôt) : `services/partage.py`, `api/routes/partage.py` (route non montée) et `tests/test_partage_collaboration.py`
+  importaient des modèles inexistants (`DocumentLienPartage`...) : la collecte des tests échouait.
+- **Tests** : `tests/test_conversion_office.py` réécrit (LibreOffice seul, Windows compris ; pré-conversion d'ingestion,
+  délai dynamique) — plus de moteur Office à tester. Suite complète verte.
+- **Déploiement** : LibreOffice doit être installé sur le serveur Windows aussi (`C:\Program Files\LibreOffice\program\
+  soffice.exe`) ; sous Linux, rien ne change. Détails : `docs/livraison_libreoffice_seul.md`.
+
+---
+
 # Word bloqué à l'export : imprimante écartée — fenêtres d'Office relevées, document témoin
+
+> **ABANDONNÉ (11/2026, décision « LibreOffice seul »)** : le pilotage COM de Microsoft Office est retiré du code —
+> plus de Word piloté, plus d'imprimante à imposer, plus de journal d'étapes PowerShell. Voir l'entrée
+> ci-dessus et `docs/livraison_libreoffice_seul.md`. Le texte ci-dessous est conservé pour l'historique.
 
 (11/2026)
 

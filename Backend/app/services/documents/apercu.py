@@ -4,8 +4,8 @@ Sécurité (le contenu est servi par l'API, jamais exécuté) :
 - seuls des types sûrs sont servis « inline » : PDF, PNG/JPEG/WebP/BMP, texte brut (txt, md, csv servis en text/plain) ;
 - le type MIME est DÉDUIT DE L'EXTENSION validée au dépôt, jamais du type envoyé par le client ;
 - jamais de HTML ni de SVG rendus tels quels ; X-Content-Type-Options: nosniff ; CSP « sandbox » sur toute réponse ;
-- Word, PowerPoint, Excel, ODF : convertis en PDF avant affichage (Microsoft Office sous Windows,
-  LibreOffice sinon ; voir services/conversion_office.py ; conversion mise en cache, une version ne changeant jamais) ;
+- Word, PowerPoint, Excel, ODF : convertis en PDF avant affichage (LibreOffice sur tous les systèmes ;
+  voir services/conversion_office.py ; conversion mise en cache, une version ne changeant jamais) ;
 - téléchargement : Content-Disposition: attachment avec le nom d'origine, en application/octet-stream.
 """
 
@@ -80,7 +80,7 @@ def remove_cache(version_id: int) -> None:
 
 
 def convert_to_pdf(version: DocumentVersion) -> Path:
-    """PDF de la version (cache ; conversion au premier appel : Microsoft Office sous Windows, LibreOffice sinon).
+    """PDF de la version (cache ; conversion au premier appel via LibreOffice, moteur unique).
     Le plus souvent le PDF existe déjà : il est préparé à l'indexation (preparer_apercu). Le délai de conversion
     dépend de la taille du fichier (conversion_office.timeout_pour)."""
     target = cache_path(version.id)

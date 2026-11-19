@@ -1,5 +1,9 @@
 # Livraison : conversion Word → PDF débloquée par LibreOffice
 
+> **SUPERSEDÉE (11/2026)** : Microsoft Office a ensuite été abandonné comme moteur (LibreOffice sur tous les
+> systèmes) — les réglages `CONVERSION_MOTEUR_WORD` et `CONVERSION_WORD_DELAI_OFFICE_S` décrits ci-dessous
+> n'existent plus. Voir `docs/livraison_libreoffice_seul.md` et `MODIFICATIONS.md`.
+
 Suite au diagnostic mesuré sur le serveur (Word figé à l'étape `export_pdf` dès qu'il est piloté par COM,
 pour tout document y compris le témoin minimal, sans boîte de dialogue, alors qu'Excel convertit en ~2,5 s) :
 le moteur de conversion sait maintenant contourner Word avec LibreOffice au lieu d'attendre le délai complet.

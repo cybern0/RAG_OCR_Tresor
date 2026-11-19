@@ -27,8 +27,8 @@ winget install Microsoft.VisualStudioCode   # facultatif
 Installer aussi (téléchargements officiels) :
 
 - **Microsoft Visual C++ Redistributable 2015-2022 x64** — requis par Paddle sous Windows.
-- **Microsoft Office** (facultatif) : aperçu des fichiers Word/Excel/PowerPoint par conversion COM.
-  Sans lui, l'aperçu répond 501 et le téléchargement reste possible ; LibreOffice (`soffice.exe`) sert de repli.
+- **LibreOffice** : aperçu et indexation des fichiers Word/Excel/PowerPoint/OpenDocument (moteur unique de
+  conversion, Microsoft Office n'est plus utilisé). Sans lui, l'aperçu répond 501 et le téléchargement reste possible.
 
 ## 2. PostgreSQL + pgvector
 

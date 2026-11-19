@@ -58,21 +58,17 @@ Pour contrôler que les embeddings sont bien normalisés : `psql -U postgres -d 
 
 ## Serveur Linux ou Windows
 
-Le backend peut être déployé sur l'un ou l'autre ; la conversion bureautique s'adapte automatiquement à l'OS
-(`Backend/app/services/conversion_office.py`, détection au démarrage du process) :
+Le backend peut être déployé sur l'un ou l'autre ; la conversion bureautique utilise **LibreOffice sur tous les
+systèmes** (`Backend/app/services/conversion_office.py`) — **Microsoft Office n'est plus utilisé** : son export PDF
+piloté par COM se bloquait sur le serveur Windows, pour tout document (voir `MODIFICATIONS.md`) :
 
 - **Linux** : LibreOffice doit être installé (`soffice`) — il sert à l'aperçu des fichiers Word, PowerPoint,
   Excel et OpenDocument (conversion en PDF) et est appelé en interne par LiteParse pour l'indexation.
-- **Windows** : Microsoft Office doit être installé sur le serveur — l'aperçu et l'ingestion convertissent les
-  fichiers Office/OpenDocument en PDF via Office piloté en COM/PowerShell (Word, Excel, PowerPoint selon le type) ;
-  LibreOffice (`soffice.exe`) sert de repli si Office est indisponible. PowerShell est présent par défaut sur
-  Windows Server, rien à installer. Pour les documents Word, installer aussi LibreOffice est recommandé :
-  l'export PDF de Word piloté par COM peut se bloquer sur un serveur, pour tout document — en réglage
-  `CONVERSION_MOTEUR_WORD=auto` (défaut, voir `.env.example`), Word reçoit un délai court puis LibreOffice
-  termine la conversion ; `libreoffice` contourne Word dès le départ. Diagnostic :
-  `python scripts/diagnostic_conversion.py --temoin` (depuis `Backend/`).
+- **Windows** (démo, développement) : LibreOffice doit aussi être installé — `soffice.exe` est détecté aux
+  chemins standards (`C:\Program Files\LibreOffice\program\soffice.exe`) ; plus aucun pilotage COM/PowerShell.
+  Diagnostic : `python scripts/diagnostic_conversion.py --temoin` (depuis `Backend/`).
 
-Sans aucune suite bureautique, l'aperçu de ces types répond par un message clair (501) et le téléchargement reste possible.
+Sans LibreOffice, l'aperçu de ces types répond par un message clair (501) et le téléchargement reste possible.
 
 La démo et le développement peuvent tourner **entièrement sur Windows 11** (Python, PostgreSQL, OCR, API :
 rien ne dépend du système), la **cible de production est Linux** — même code, mêmes commandes, LibreOffice
@@ -97,8 +93,8 @@ Authentification gérée **par l'application elle-même** : comptes créés par 
 CLI), mots de passe hachés (scrypt) dans la base — aucun compte du système d'exploitation, aucune
 intégration PAM ni annuaire. Décision de refonte et modèle d'accès : `docs/refonte_classes.md`.
 
-L'aperçu des fichiers Word, PowerPoint, Excel et OpenDocument demande une suite bureautique sur le serveur — Microsoft Office sous Windows, LibreOffice sous Linux (voir « Serveur Linux ou Windows ») ;
-sans elle, l'aperçu de ces types répond par un message clair et le téléchargement reste possible.
+L'aperçu des fichiers Word, PowerPoint, Excel et OpenDocument demande LibreOffice sur le serveur, sous Linux comme sous Windows (voir « Serveur Linux ou Windows ») ;
+sans lui, l'aperçu de ces types répond par un message clair et le téléchargement reste possible.
 
 Chaque formulaire de l'interface a un bouton « Remplir avec exemple » qui le remplit de fausses informations (champs vides tant qu'on ne clique pas).
 
