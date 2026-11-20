@@ -26,6 +26,12 @@
   division avec affectation en un clic ; fiche fichier : section « Affectations » ; modal d'affectation
   (AffectationModal) ; dépôt sans choix de rôles. Tableau de bord : « Fichiers à affecter », répartition
   « Par rôle » limitée aux agents, erreurs d'indexation regroupées « Par auteur » (plus par classe).
+- **Script `04_migration_affectation.sql` supprimé** : base vierge uniquement, aucune migration. Tout ce qu'il
+  apportait figure déjà, sans `ALTER`, dans les scripts d'installation : `uq_agent_id_division` et la table
+  `document_affectation` dans `01_schema.sql`, la vue `verification_invariants` (définition identique) dans
+  `03_verification.sql` ; `02_donnees_reference.sql` n'avait rien à recevoir (la conversion des classes en
+  affectations, la suppression de `document_role` et le renommage de l'événement `fichier_a_classer` n'ont de
+  sens que sur une ancienne base, qui se recrée).
 - **Base** : `database/01_schema.sql` — `document_role` remplacée par `document_affectation`
   (document_id, agent_id, division_id, cree_le, cree_par_user_id) + `uq_agent_id_division` sur agent ;
   `database/03_verification.sql` — invariant `affectation_hors_de_la_division_du_fichier`, avertissement
