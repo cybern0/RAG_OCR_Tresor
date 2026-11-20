@@ -3,7 +3,7 @@
 import { createBrowserRouter, redirect } from 'react-router'
 import type { RouteObject } from 'react-router'
 import { Component as NotFound, ErrorPage } from './ErrorPage'
-import { RequireAuth, RequireIntermediateAdmin, RequirePermission, RequireRoot } from './guards'
+import { RequireAuth, RequireIntermediateAdmin, RequireNiveau, RequirePermission, RequireRoot } from './guards'
 
 const guarded = (any: string[], children: RouteObject[]): RouteObject => ({
   element: <RequirePermission any={any} />,
@@ -23,6 +23,12 @@ export const router = createBrowserRouter([
             children: [
               { index: true, lazy: () => import('../features/accueil/AccueilPage') },
               guarded(['utilisateur.lister', 'classement.gerer'], [{ path: 'roles', lazy: () => import('../features/roles/RolesPage') }]),
+              // affectation des fichiers : chef de service et chef de division seulement (l'API reste l'autorité)
+              guarded(['utilisateur.lister', 'classement.gerer'], [{
+                path: 'affectation',
+                element: <RequireNiveau niveaux={['SERVICE', 'DIVISION']} />,
+                children: [{ index: true, lazy: () => import('../features/roles/AffectationPage') }],
+              }]),
               {
                 path: 'historique',
                 element: <RequireIntermediateAdmin />,
@@ -48,7 +54,7 @@ export const router = createBrowserRouter([
               ]),
               // agents (personnes) et structure : super administrateur seulement — chef de service et chef de
               // division ont les mêmes menus : ils gèrent les comptes et les rôles de LEUR SERVICE via
-              // /admin/utilisateurs et /roles (le chef de division attribue des agents comme le chef de service)
+              // /admin/utilisateurs, /roles et /affectation (le chef de division attribue des agents comme le chef de service)
               { path: 'admin/agents', element: <RequireRoot />, children: [{ index: true, lazy: () => import('../features/admin/structure/AgentsPage') }] },
               { path: 'admin/structure', element: <RequireRoot />, children: [{ index: true, lazy: () => import('../features/admin/structure/StructurePage') }] },
               guarded(['utilisateur.lister', 'classement.gerer'], [{ path: 'admin/classement', loader: () => redirect('/roles') }]),

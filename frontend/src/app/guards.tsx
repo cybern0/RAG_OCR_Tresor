@@ -31,6 +31,13 @@ export function RequireRoot() {
   return <Outlet />
 }
 
+/** Réservé aux comptes dont le niveau hiérarchique est listé (ex. chef de service, chef de division). */
+export function RequireNiveau({ niveaux }: { niveaux: string[] }) {
+  const { user } = useAuth()
+  if (!user || !niveaux.includes(user.niveau)) return <Navigate to="/" replace />
+  return <Outlet />
+}
+
 /** Page d'accueil : première page accessible au compte. */
 export function Home() {
   const { user, can } = useAuth()

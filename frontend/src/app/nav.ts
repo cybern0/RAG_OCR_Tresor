@@ -1,10 +1,10 @@
 // Navigation principale : une entrée par page, avec les permissions qui l'ouvrent. La même table sert à la barre latérale,
 // aux gardes de routes et à la page d'accueil par défaut. Le super administrateur n'a pas d'Accueil : il arrive
 // directement sur son tableau de bord /admin (il n'a accès ni aux fichiers ni à l'assistant).
-import { BarChart3, Building2, FileText, History, Home, Shield, MessageSquare, Users, UserSquare } from 'lucide-react'
+import { BarChart3, Building2, FileText, FileUser, History, Home, Shield, MessageSquare, Users, UserSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-export interface NavItem { to: string; label: string; icon: LucideIcon; any: string[]; end?: boolean; rootOnly?: boolean }
+export interface NavItem { to: string; label: string; icon: LucideIcon; any: string[]; end?: boolean; rootOnly?: boolean; niveaux?: string[] }
 
 export const MAIN_NAV: NavItem[] = [
   // pas de statistiques.globales ici : le super administrateur n'a pas d'Accueil, il arrive sur /admin
@@ -20,17 +20,19 @@ export const INTERMEDIATE_NAV: NavItem[] = [
 
 export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'Tableau de bord', icon: BarChart3, any: ['statistiques.globales'], end: true },
-  { to: '/roles', label: 'Rôles et affectation', icon: Shield, any: ['utilisateur.lister', 'classement.gerer'] },
+  { to: '/roles', label: 'Rôles', icon: Shield, any: ['utilisateur.lister', 'classement.gerer'] },
+  // affectation des fichiers aux agents : chef de service et chef de division seulement (pas le super administrateur)
+  { to: '/affectation', label: 'Affectation', icon: FileUser, any: ['utilisateur.lister', 'classement.gerer'], niveaux: ['SERVICE', 'DIVISION'] },
   { to: '/admin/utilisateurs', label: 'Utilisateurs', icon: Users, any: ['utilisateur.lister'] },
   // la gestion des agents (personnes) et de la structure (directions, services, divisions) reste au
   // super administrateur : le chef de service a les MÊMES menus que le chef de division — il gère les
-  // comptes et les rôles via /admin/utilisateurs et /roles
+  // comptes et les rôles via /admin/utilisateurs, /roles et /affectation
   { to: '/admin/agents', label: 'Agents', icon: UserSquare, any: ['structure.gerer'], rootOnly: true },
   { to: '/admin/structure', label: 'Directions, services et divisions', icon: Building2, any: ['structure.gerer'], rootOnly: true },
 ]
 
 export const allowed = (item: NavItem, can: (p: string) => boolean, niveau?: string | null) =>
-  item.any.some(can) && (!item.rootOnly || niveau === 'ROOT')
+  item.any.some(can) && (!item.rootOnly || niveau === 'ROOT') && (!item.niveaux || (!!niveau && item.niveaux.includes(niveau)))
 
 export const isIntermediateAdmin = (user: { niveau?: string | null; role?: string | null } | null): boolean => {
   if (!user) return false
