@@ -1,10 +1,12 @@
 // Cadre de l'application connectée : barre latérale fixe sur grand écran, tiroir mobile, et menu utilisateur flottant draggable.
-import { Leaf, LogOut, Menu, MessageSquare, UserCircle, X } from 'lucide-react'
+import { LogOut, Menu, MessageSquare, UserCircle, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import NotificationBell from '../../features/notifications/NotificationBell'
 import { signOut, useAuth } from '../../features/auth/session'
 import { cn } from '../../shared/lib/cn'
+import Logo from '../../shared/ui/Logo'
+import { APP_NAME } from '../brand'
 import { ADMIN_NAV, INTERMEDIATE_NAV, MAIN_NAV, allowed, isIntermediateAdmin } from '../nav'
 import type { NavItem } from '../nav'
 
@@ -83,8 +85,8 @@ export function Component() {
   const sidebar = (
     <div className="flex h-full flex-col text-white">
       <div className="on-navy flex items-center gap-2 px-4 py-4">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-navy-900"><Leaf className="h-5 w-5" /></span>
-        <span className="flex-1 text-lg font-bold text-white">Trésor RAG</span><span className="hidden lg:block"><NotificationBell /></span>
+        <Logo className="h-11 w-11 shrink-0" />
+        <span className="flex-1 text-lg font-bold text-white">{APP_NAME}</span><span className="hidden lg:block"><NotificationBell /></span>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Navigation principale">
         <NavSection items={main} onNavigate={() => setOpen(false)} />
@@ -99,7 +101,7 @@ export function Component() {
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-navy-950/40 bg-navy-900 text-white shadow-float lg:block">{sidebar}</aside>
 
       <header className="sticky top-0 z-20 flex items-center justify-between on-navy border-b border-navy-950/40 bg-navy-900 px-4 py-2.5 text-white shadow-sm lg:hidden">
-        <span className="flex items-center gap-2 font-bold text-white"><Leaf className="h-5 w-5" /> Trésor RAG</span>
+        <span className="flex items-center gap-2 font-bold text-white"><Logo className="h-8 w-8 shrink-0" /> {APP_NAME}</span>
         <span className="flex items-center gap-1"><NotificationBell /><button className="btn-icon" onClick={() => setOpen(true)} aria-label="Ouvrir le menu"><Menu className="h-5 w-5" /></button></span>
       </header>
 

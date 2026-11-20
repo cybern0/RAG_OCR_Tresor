@@ -1,4 +1,3 @@
-import { Leaf } from 'lucide-react'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Navigate, useLocation } from 'react-router'
@@ -7,6 +6,8 @@ import { exempleIdentifiant, exempleMotDePasse } from '../../shared/lib/exemples
 import ExampleButton from '../../shared/ui/ExampleButton'
 import Field from '../../shared/ui/Field'
 import { ErrorBox } from '../../shared/ui/Feedback'
+import Logo from '../../shared/ui/Logo'
+import { APP_NAME } from '../../app/brand'
 import { signIn, useAuth } from './session'
 
 export function Component() {
@@ -36,8 +37,8 @@ export function Component() {
     <main className="flex min-h-svh items-center justify-center bg-page p-4">
       <form onSubmit={(e) => void submit(e)} className="card w-full max-w-sm animate-pop space-y-4 p-8">
         <div className="text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-navy-700 text-white"><Leaf className="h-6 w-6" /></div>
-          <h1 className="text-2xl font-bold text-navy-900">Trésor RAG</h1>
+          <Logo className="mx-auto mb-3 h-16 w-16" />
+          <h1 className="text-2xl font-bold text-navy-900">{APP_NAME}</h1>
           <p className="mt-1 text-sm text-slate-600">Assistant documentaire de vos fichiers</p>
         </div>
         <div className="flex justify-end">
