@@ -7,7 +7,7 @@ import { signOut, useAuth } from '../../features/auth/session'
 import { cn } from '../../shared/lib/cn'
 import Logo from '../../shared/ui/Logo'
 import { APP_NAME } from '../brand'
-import { ADMIN_NAV, INTERMEDIATE_NAV, MAIN_NAV, allowed, isIntermediateAdmin } from '../nav'
+import { ADMIN_NAV, MAIN_NAV, allowed } from '../nav'
 import type { NavItem } from '../nav'
 
 type Point = { x: number; y: number }
@@ -78,7 +78,6 @@ export function Component() {
   )
 
   const main = MAIN_NAV.filter((i) => allowed(i, can, user?.niveau))
-  const intermediate = isIntermediateAdmin(user) ? INTERMEDIATE_NAV : []
   // rootOnly : la gestion des agents et de la structure ne se montre qu'au super administrateur
   const admin = ADMIN_NAV.filter((i) => allowed(i, can, user?.niveau))
 
@@ -90,7 +89,6 @@ export function Component() {
       </div>
       <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Navigation principale">
         <NavSection items={main} onNavigate={() => setOpen(false)} />
-        <NavSection title="Administration intermédiaire" items={intermediate} onNavigate={() => setOpen(false)} />
         <NavSection title="Administration" items={admin} onNavigate={() => setOpen(false)} />
       </nav>
     </div>

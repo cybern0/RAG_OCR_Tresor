@@ -13,31 +13,27 @@ export const MAIN_NAV: NavItem[] = [
   { to: '/chat', label: 'Assistant', icon: MessageSquare, any: ['chat.utiliser'] },
 ]
 
-export const INTERMEDIATE_NAV: NavItem[] = [
-  // l'historique est de l'administration : le super administrateur l'a aussi, alors qu'il ne liste pas les fichiers
-  { to: '/historique', label: 'Historique', icon: History, any: ['document.lister', 'audit.consulter'] },
-]
-
+// Une seule catégorie « Administration » : les menus du super administrateur (tableau de bord, agents,
+// structure) viennent d'abord, puis la gestion intermédiaire des chefs (rôles, affectation, comptes),
+// et enfin l'historique, dernier élément de la catégorie.
 export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'Tableau de bord', icon: BarChart3, any: ['statistiques.globales'], end: true },
-  { to: '/roles', label: 'Rôles', icon: Shield, any: ['utilisateur.lister', 'classement.gerer'] },
-  // affectation des fichiers aux agents : chef de service et chef de division seulement (pas le super administrateur)
-  { to: '/affectation', label: 'Affectation', icon: FileUser, any: ['utilisateur.lister', 'classement.gerer'], niveaux: ['SERVICE', 'DIVISION'] },
-  { to: '/admin/utilisateurs', label: 'Utilisateurs', icon: Users, any: ['utilisateur.lister'] },
   // la gestion des agents (personnes) et de la structure (directions, services, divisions) reste au
   // super administrateur : le chef de service a les MÊMES menus que le chef de division — il gère les
   // comptes et les rôles via /admin/utilisateurs, /roles et /affectation
   { to: '/admin/agents', label: 'Agents', icon: UserSquare, any: ['structure.gerer'], rootOnly: true },
   { to: '/admin/structure', label: 'Directions, services et divisions', icon: Building2, any: ['structure.gerer'], rootOnly: true },
+  { to: '/roles', label: 'Rôles', icon: Shield, any: ['utilisateur.lister', 'classement.gerer'] },
+  // affectation des fichiers aux agents : chef de service et chef de division seulement (pas le super administrateur)
+  { to: '/affectation', label: 'Affectation', icon: FileUser, any: ['utilisateur.lister', 'classement.gerer'], niveaux: ['SERVICE', 'DIVISION'] },
+  { to: '/admin/utilisateurs', label: 'Utilisateurs', icon: Users, any: ['utilisateur.lister'] },
+  // l'historique est de l'administration : réservé aux niveaux ROOT, SERVICE et DIVISION (le super administrateur
+  // l'a aussi, alors qu'il ne liste pas les fichiers)
+  { to: '/historique', label: 'Historique', icon: History, any: ['document.lister', 'audit.consulter'], niveaux: ['ROOT', 'SERVICE', 'DIVISION'] },
 ]
 
 export const allowed = (item: NavItem, can: (p: string) => boolean, niveau?: string | null) =>
   item.any.some(can) && (!item.rootOnly || niveau === 'ROOT') && (!item.niveaux || (!!niveau && item.niveaux.includes(niveau)))
-
-export const isIntermediateAdmin = (user: { niveau?: string | null; role?: string | null } | null): boolean => {
-  if (!user) return false
-  return user.niveau === 'ROOT' || user.niveau === 'SERVICE' || user.niveau === 'DIVISION' || user.role === 'ADMIN'
-}
 
 /** Première page accessible au compte (page d'accueil). Le super administrateur arrive sur /admin. */
 export function homePath(can: (p: string) => boolean, niveau?: string | null): string | null {

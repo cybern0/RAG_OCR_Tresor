@@ -45,7 +45,7 @@ export default function NewVersionForm({ doc, onClose, onDone }: Props) {
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm text-slate-600">
             Version actuelle : <span className="font-medium text-navy-600">v{doc.version.numero}</span>. La nouvelle version s’ajoute :
-            l’ancienne reste consultable, téléchargeable et interrogeable par le chatbot.
+            l’ancienne reste consultable, téléchargeable et interrogeable par l'assistant.
           </p>
           <ExampleButton className="shrink-0" onFill={() => { setFile(exempleFichier()); setTableaux(false); setImages(false) }} />
         </div>

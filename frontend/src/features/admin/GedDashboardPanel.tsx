@@ -371,7 +371,7 @@ export default function GedDashboardPanel() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2" role="tablist">
-        <button className={tab === 'dashboard' ? 'btn' : 'btn-ghost'} onClick={() => setTab('dashboard')}>Dashboard</button>
+        <button className={tab === 'dashboard' ? 'btn' : 'btn-ghost'} onClick={() => setTab('dashboard')}>Tableau de bord</button>
         <button className={tab === 'gestion' ? 'btn' : 'btn-ghost'} onClick={() => setTab('gestion')}>Gestion GED</button>
         <button className={tab === 'partage' ? 'btn' : 'btn-ghost'} onClick={() => setTab('partage')}>Partage et collaboration</button>
       </div>

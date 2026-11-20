@@ -18,7 +18,8 @@ export function RequirePermission({ any }: { any: string[] }) {
   return canAny(...any) ? <Outlet /> : <Navigate to="/" replace />
 }
 
-export function RequireIntermediateAdmin() {
+/** Historique : réservé aux niveaux d'administration (ROOT, SERVICE, DIVISION), comme le menu du même nom. */
+export function RequireNiveauAdmin() {
   const { user } = useAuth()
   if (!user || user.niveau === 'AGENT') return <Navigate to="/" replace />
   return <Outlet />

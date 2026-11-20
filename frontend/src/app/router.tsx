@@ -3,7 +3,7 @@
 import { createBrowserRouter, redirect } from 'react-router'
 import type { RouteObject } from 'react-router'
 import { Component as NotFound, ErrorPage } from './ErrorPage'
-import { RequireAuth, RequireIntermediateAdmin, RequireNiveau, RequirePermission, RequireRoot } from './guards'
+import { RequireAuth, RequireNiveau, RequireNiveauAdmin, RequirePermission, RequireRoot } from './guards'
 
 const guarded = (any: string[], children: RouteObject[]): RouteObject => ({
   element: <RequirePermission any={any} />,
@@ -31,7 +31,7 @@ export const router = createBrowserRouter([
               }]),
               {
                 path: 'historique',
-                element: <RequireIntermediateAdmin />,
+                element: <RequireNiveauAdmin />,
                 children: [{ index: true, lazy: () => import('../features/historique/HistoriquePage') }],
               },
               { path: 'profil', lazy: () => import('../features/auth/ProfilePage') },

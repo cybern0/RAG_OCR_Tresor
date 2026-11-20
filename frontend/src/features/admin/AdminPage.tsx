@@ -17,7 +17,7 @@ export default function AdminPage() {
     { id: 'users', label: 'Utilisateurs', allowed: can('utilisateur.lister') },
     { id: 'agents', label: 'Agents', allowed: can('structure.gerer') },
     { id: 'services', label: 'Services', allowed: can('structure.gerer') },
-    { id: 'ged', label: 'GED / Dashboard', allowed: can('statistiques.globales') || can('classement.gerer') },
+    { id: 'ged', label: 'GED / Tableau de bord', allowed: can('statistiques.globales') || can('classement.gerer') },
     { id: 'audit', label: "Journal d'audit", allowed: can('audit.consulter') },
   ]
   const visible = tabs.filter((t) => t.allowed)

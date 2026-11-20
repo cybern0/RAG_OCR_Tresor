@@ -1,4 +1,4 @@
-// Racine de l'interface : connexion, puis navigation entre Dossiers et fichiers, Chatbot et Administration
+// Racine de l'interface : connexion, puis navigation entre Dossiers et fichiers, Assistant et Administration
 // selon les permissions du compte.
 import { useState } from 'react'
 import { Loading } from './components/ui/Feedback'
@@ -19,7 +19,7 @@ export default function App() {
 
   const pages: { id: Page; label: string; allowed: boolean }[] = [
     { id: 'documents', label: 'Dossiers et fichiers', allowed: can('document.lister') },
-    { id: 'chat', label: 'Chatbot', allowed: can('chat.utiliser') },
+    { id: 'chat', label: 'Assistant', allowed: can('chat.utiliser') },
     { id: 'admin', label: 'Administration', allowed: can('dossier.gerer') || can('utilisateur.lister') || can('structure.gerer') || can('audit.consulter') || can('statistiques.globales') || can('classement.gerer') },
   ]
   const visible = pages.filter((p) => p.allowed)
@@ -32,7 +32,7 @@ export default function App() {
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-2 text-lg font-bold text-navy-700">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-navy-700 text-white">❦</span>
-              Trésor RAG
+              Trésor GED
             </span>
             <nav className="flex gap-1" aria-label="Navigation principale">
               {visible.map((p) => (

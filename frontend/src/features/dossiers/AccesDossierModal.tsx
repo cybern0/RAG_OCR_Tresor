@@ -1,6 +1,6 @@
 // Accès à un dossier (ADMIN) : rôle donné à des utilisateurs, ou à un service entier (tous ses agents actifs).
 // Le rôle effectif d'un utilisateur est le plus élevé entre son rôle direct et celui de son service.
-// Un retrait prend effet immédiatement (fichiers, aperçu, chatbot, historique).
+// Un retrait prend effet immédiatement (fichiers, aperçu, assistant, historique).
 import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { errorMessage } from '../../api/client'
