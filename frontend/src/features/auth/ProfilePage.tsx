@@ -32,7 +32,7 @@ function IdentityForm({ username }: { username: string }) {
   return (
     <form onSubmit={(e) => void submit(e)} className="card space-y-4 p-5">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-semibold text-gold-400">Nom d’utilisateur</h2>
+        <h2 className="font-semibold text-navy-700">Nom d’utilisateur</h2>
         <ExampleButton onFill={() => setValue(exempleIdentifiant())} />
       </div>
       <Field label="Nom d’utilisateur" hint="Minuscules, chiffres, point, tiret (3 à 80 caractères). C’est l’identifiant de connexion.">
@@ -71,7 +71,7 @@ function PasswordForm() {
   return (
     <form onSubmit={(e) => void submit(e)} className="card space-y-4 p-5">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-semibold text-gold-400">Mot de passe</h2>
+        <h2 className="font-semibold text-navy-700">Mot de passe</h2>
         <ExampleButton onFill={() => { const p = exempleMotDePasse(); setNewPwd(p); setConfirm(p) }} />
       </div>
       <Field label="Mot de passe actuel">
@@ -80,14 +80,14 @@ function PasswordForm() {
       <Field label="Nouveau mot de passe" hint={tooShort ? undefined : `${MIN} caractères minimum.`}>
         {(id) => <input id={id} type="password" className="input" autoComplete="new-password" required minLength={MIN} aria-invalid={tooShort} value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />}
       </Field>
-      {tooShort && <p className="-mt-2 text-xs text-red-200">Encore {MIN - newPwd.length} caractère(s).</p>}
+      {tooShort && <p className="-mt-2 text-xs text-red-700">Encore {MIN - newPwd.length} caractère(s).</p>}
       <Field label="Confirmer le nouveau mot de passe">
         {(id) => <input id={id} type="password" className="input" autoComplete="new-password" required aria-invalid={mismatch} value={confirm} onChange={(e) => setConfirm(e.target.value)} />}
       </Field>
-      {mismatch && <p className="-mt-2 text-xs text-red-200">La confirmation ne correspond pas.</p>}
+      {mismatch && <p className="-mt-2 text-xs text-red-700">La confirmation ne correspond pas.</p>}
       <ErrorBox message={error} />
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-cream-300">Vous restez connecté sur cet appareil ; les autres sessions ouvertes seront fermées.</p>
+        <p className="text-xs text-slate-600">Vous restez connecté sur cet appareil ; les autres sessions ouvertes seront fermées.</p>
         <button className="btn shrink-0" disabled={busy || !ready}>{busy ? 'Enregistrement…' : 'Changer le mot de passe'}</button>
       </div>
     </form>
@@ -103,14 +103,14 @@ export function Component() {
       <div className="grid max-w-5xl gap-5 lg:grid-cols-2">
         <div className="space-y-5">
           <section className="card p-5">
-            <h2 className="mb-3 font-semibold text-gold-400">Compte</h2>
+            <h2 className="mb-3 font-semibold text-navy-700">Compte</h2>
             <dl className="space-y-2 text-sm">
-              <div className="flex justify-between gap-3"><dt className="text-cream-300">Rôle</dt><dd><Badge tone={user.role === 'ADMIN' ? 'gold' : 'gray'}>{user.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur'}</Badge></dd></div>
-              {user.agent && <div className="flex justify-between gap-3"><dt className="text-cream-300">Agent</dt><dd>{user.agent.nom} {user.agent.prenom}</dd></div>}
-              {user.service_nom && <div className="flex justify-between gap-3"><dt className="text-cream-300">Service</dt><dd>{user.service_nom}</dd></div>}
-              <div className="flex justify-between gap-3"><dt className="text-cream-300">Dernière connexion</dt><dd>{formatDate(user.derniere_connexion)}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-slate-600">Rôle</dt><dd><Badge tone={user.role === 'ADMIN' ? 'gold' : 'gray'}>{user.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur'}</Badge></dd></div>
+              {user.agent && <div className="flex justify-between gap-3"><dt className="text-slate-600">Agent</dt><dd>{user.agent.nom} {user.agent.prenom}</dd></div>}
+              {user.service_nom && <div className="flex justify-between gap-3"><dt className="text-slate-600">Service</dt><dd>{user.service_nom}</dd></div>}
+              <div className="flex justify-between gap-3"><dt className="text-slate-600">Dernière connexion</dt><dd>{formatDate(user.derniere_connexion)}</dd></div>
             </dl>
-            <p className="mt-3 text-xs text-cream-300">Le rôle, l’agent et le service sont gérés par un administrateur.</p>
+            <p className="mt-3 text-xs text-slate-600">Le rôle, l’agent et le service sont gérés par un administrateur.</p>
           </section>
           <IdentityForm key={user.nom_utilisateur} username={user.nom_utilisateur} />
         </div>

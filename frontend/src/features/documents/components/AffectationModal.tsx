@@ -40,16 +40,16 @@ export default function AffectationModal({ doc, onClose }: { doc: DocumentMeta; 
     <Modal title={`Affecter « ${doc.titre} »`} onClose={onClose}>
       {agents.isPending ? <Loading /> : (
         <form onSubmit={(e) => void submit(e)} className="space-y-4">
-          <p className="text-xs text-cream-300">
+          <p className="text-xs text-slate-600">
             Agents de la division « {doc.division_nom} » — les agents cochés pourront lire ce fichier ; l'auteur et
             les chefs y accèdent de toute façon. Sans affectation, l'accès reste refusé par défaut.
           </p>
-          {(agents.data ?? []).length === 0 ? <p className="text-sm text-cream-300">Aucun agent actif dans cette division.</p> : (
+          {(agents.data ?? []).length === 0 ? <p className="text-sm text-slate-600">Aucun agent actif dans cette division.</p> : (
             <ul className="space-y-1">{(agents.data ?? []).map((a) => (
               <li key={a.id}><label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" className="h-4 w-4 accent-gold-500" checked={sel.has(a.id)}
+                <input type="checkbox" className="h-4 w-4 accent-navy-700" checked={sel.has(a.id)}
                   onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(a.id); else n.delete(a.id); setEdit(n) }} />
-                {a.prenom} {a.nom} <span className="text-cream-300">· {a.matricule}</span>
+                {a.prenom} {a.nom} <span className="text-slate-600">· {a.matricule}</span>
               </label></li>
             ))}</ul>
           )}

@@ -33,12 +33,12 @@ export function Component() {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-gradient-to-br from-leaf-950 via-leaf-900 to-leaf-800 p-4">
+    <main className="flex min-h-svh items-center justify-center bg-page p-4">
       <form onSubmit={(e) => void submit(e)} className="card w-full max-w-sm animate-pop space-y-4 p-8">
         <div className="text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gold-500 text-leaf-950"><Leaf className="h-6 w-6" /></div>
-          <h1 className="text-2xl font-bold text-gold-400">Trésor RAG</h1>
-          <p className="mt-1 text-sm text-cream-300">Assistant documentaire de vos fichiers</p>
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-navy-700 text-white"><Leaf className="h-6 w-6" /></div>
+          <h1 className="text-2xl font-bold text-navy-900">Trésor RAG</h1>
+          <p className="mt-1 text-sm text-slate-600">Assistant documentaire de vos fichiers</p>
         </div>
         <div className="flex justify-end">
           <ExampleButton onFill={() => { setUsername(exempleIdentifiant()); setPassword(exempleMotDePasse()) }} />

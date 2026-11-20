@@ -2,11 +2,11 @@ import type { ReactNode } from 'react'
 import { cn } from '../lib/cn'
 
 const TONES = {
-  gold: 'border-gold-500/60 text-gold-300',
-  green: 'border-emerald-300/60 bg-emerald-400/10 text-emerald-100',
-  red: 'border-red-300/60 bg-red-400/10 text-red-100',
-  gray: 'border-cream-300/40 text-cream-100',
-  amber: 'border-amber-300/50 bg-amber-400/10 text-amber-100',
+  gold: 'border-navy-600/40 bg-navy-50 text-navy-700',
+  green: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  red: 'border-red-300 bg-red-50 text-red-800',
+  gray: 'border-slate-300 bg-white text-slate-700',
+  amber: 'border-amber-300 bg-amber-50 text-amber-800',
 } as const
 
 export default function Badge({ tone = 'gray', children, className }: { tone?: keyof typeof TONES; children: ReactNode; className?: string }) {

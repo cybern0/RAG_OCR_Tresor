@@ -24,11 +24,11 @@ export function CommentsPanel({ documentId }: { documentId: number }) {
 
   return (
     <div className="space-y-3">
-      {comments.isPending ? <Loading className="py-3" /> : (comments.data ?? []).length === 0 ? <p className="text-sm text-cream-300">Aucun commentaire.</p> : (
+      {comments.isPending ? <Loading className="py-3" /> : (comments.data ?? []).length === 0 ? <p className="text-sm text-slate-600">Aucun commentaire.</p> : (
         <ul className="space-y-2">
           {(comments.data ?? []).map((c) => (
-            <li key={c.id} className="rounded-lg border border-gold-500/25 bg-leaf-950/40 p-2.5 text-sm">
-              <p className="text-xs text-cream-300"><span className="font-medium text-gold-300">{c.auteur_nom}</span> · {formatDate(c.cree_le)}</p>
+            <li key={c.id} className="rounded-lg border border-line bg-slate-50 p-2.5 text-sm">
+              <p className="text-xs text-slate-600"><span className="font-medium text-navy-600">{c.auteur_nom}</span> · {formatDate(c.cree_le)}</p>
               <p className="mt-1 whitespace-pre-wrap">{c.contenu}</p>
             </li>
           ))}

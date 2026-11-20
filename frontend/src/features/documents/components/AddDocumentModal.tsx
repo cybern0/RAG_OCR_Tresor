@@ -44,13 +44,13 @@ export default function AddDocumentModal({ divisions, onClose }: { divisions: { 
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           {divisions.length > 1 ? (
-            <label className="flex flex-1 items-center gap-2 text-sm text-cream-300">Division
+            <label className="flex flex-1 items-center gap-2 text-sm text-slate-600">Division
               <select className="input w-auto" aria-label="Division de dépôt" value={divisionId} onChange={(e) => setDivisionId(e.target.value ? Number(e.target.value) : '')}>
                 {divisions.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}
               </select>
             </label>
           ) : (
-            <p className="text-sm text-cream-300">Division : <span className="font-medium text-gold-300">{divisionNom}</span></p>
+            <p className="text-sm text-slate-600">Division : <span className="font-medium text-navy-600">{divisionNom}</span></p>
           )}
           <ExampleButton onFill={() => { setFile(exempleFichier()); setTitre(exempleTitreFichier()); setTableaux(false); setImages(false) }} />
         </div>
@@ -61,10 +61,10 @@ export default function AddDocumentModal({ divisions, onClose }: { divisions: { 
           {(id) => <input id={id} className="input" maxLength={250} placeholder="Par défaut : nom du fichier" value={titre} onChange={(e) => setTitre(e.target.value)} />}
         </Field>
         <FlagsFields idPrefix="add" fileName={file?.name ?? null} tableaux={tableaux} images={images} onTableaux={setTableaux} onImages={setImages} />
-        <p className="text-xs text-cream-300">Vous (et les chefs de la division) verrez toujours ce fichier. Pour donner l'accès à d'autres agents, le chef utilise « Affecter » sur la fiche du fichier.</p>
+        <p className="text-xs text-slate-600">Vous (et les chefs de la division) verrez toujours ce fichier. Pour donner l'accès à d'autres agents, le chef utilise « Affecter » sur la fiche du fichier.</p>
         {file && (
-          <details className="rounded-lg border border-gold-500/30 p-3">
-            <summary className="cursor-pointer text-sm text-gold-400">Aperçu du fichier avant l'envoi</summary>
+          <details className="rounded-lg border border-line p-3">
+            <summary className="cursor-pointer text-sm text-navy-700">Aperçu du fichier avant l'envoi</summary>
             <div className="mt-3"><PreviewLocal file={file} /></div>
           </details>
         )}

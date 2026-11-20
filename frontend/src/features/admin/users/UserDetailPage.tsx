@@ -57,7 +57,7 @@ function AccountForm({ target, canEdit, canChangeRole, isSelf }: { target: UserO
 
   return (
     <form onSubmit={(e) => void submit(e)} className="card space-y-4 p-5">
-      <h2 className="font-semibold text-gold-400">Compte</h2>
+      <h2 className="font-semibold text-navy-700">Compte</h2>
       <Field label="Rôle">
         {(id) => (
           <select id={id} className="input" disabled={!canChangeRole || isSelf} value={role} onChange={(e) => setRole(e.target.value as Role)}>
@@ -75,9 +75,9 @@ function AccountForm({ target, canEdit, canChangeRole, isSelf }: { target: UserO
         )}
       </Field>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" className="h-4 w-4 accent-gold-500" disabled={!canEdit || isSelf} checked={actif} onChange={(e) => setActif(e.target.checked)} /> Compte actif
+        <input type="checkbox" className="h-4 w-4 accent-navy-700" disabled={!canEdit || isSelf} checked={actif} onChange={(e) => setActif(e.target.checked)} /> Compte actif
       </label>
-      {isSelf && <p className="text-xs text-cream-300">Vous ne pouvez pas modifier votre propre rôle ni désactiver votre propre compte.</p>}
+      {isSelf && <p className="text-xs text-slate-600">Vous ne pouvez pas modifier votre propre rôle ni désactiver votre propre compte.</p>}
       <ErrorBox message={error} />
       {canEdit && <div className="flex justify-end"><button className="btn" disabled={save.isPending || !changed}>{save.isPending ? 'Enregistrement…' : 'Enregistrer'}</button></div>}
     </form>
@@ -94,8 +94,8 @@ function PasswordReset({ target, isSelf }: { target: UserOut; isSelf: boolean })
   if (isSelf) {
     return (
       <section className="card space-y-3 p-5">
-        <h2 className="font-semibold text-gold-400">Mot de passe</h2>
-        <p className="text-sm text-cream-300">Pour votre propre compte, le changement exige votre mot de passe actuel et une confirmation.</p>
+        <h2 className="font-semibold text-navy-700">Mot de passe</h2>
+        <p className="text-sm text-slate-600">Pour votre propre compte, le changement exige votre mot de passe actuel et une confirmation.</p>
         <Link className="btn-ghost w-fit" to="/profil"><KeyRound className="h-4 w-4" /> Changer mon mot de passe</Link>
       </section>
     )
@@ -114,10 +114,10 @@ function PasswordReset({ target, isSelf }: { target: UserOut; isSelf: boolean })
   return (
     <form onSubmit={(e) => void submit(e)} className="card space-y-4 p-5">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-semibold text-gold-400">Mot de passe</h2>
+        <h2 className="font-semibold text-navy-700">Mot de passe</h2>
         <ExampleButton onFill={() => { setPassword(exempleMotDePasse()); setRevealed(true) }} />
       </div>
-      <p className="text-sm text-cream-300">Définit directement un nouveau mot de passe, sans demander l’ancien. Ses sessions ouvertes seront fermées ; communiquez-lui le nouveau mot de passe.</p>
+      <p className="text-sm text-slate-600">Définit directement un nouveau mot de passe, sans demander l’ancien. Ses sessions ouvertes seront fermées ; communiquez-lui le nouveau mot de passe.</p>
       <Field label="Nouveau mot de passe" hint="10 caractères minimum.">
         {(id) => (
           <div className="flex gap-2">
@@ -149,7 +149,7 @@ export function Component() {
   return (
     <>
       <PageHeader
-        back={<Link to="/admin/utilisateurs" className="mb-2 inline-flex items-center gap-1 text-sm text-cream-300 hover:text-gold-300"><ArrowLeft className="h-4 w-4" /> Tous les utilisateurs</Link>}
+        back={<Link to="/admin/utilisateurs" className="mb-2 inline-flex items-center gap-1 text-sm text-slate-600 hover:text-navy-600"><ArrowLeft className="h-4 w-4" /> Tous les utilisateurs</Link>}
         title={u.nom_utilisateur}
         description={<span className="flex flex-wrap items-center gap-2">{u.actif ? <Badge tone="green">Actif</Badge> : <Badge tone="red">Désactivé</Badge>}<Badge tone={u.role === 'ADMIN' ? 'gold' : 'gray'}>{u.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur'}</Badge>{isSelf && <span>(vous)</span>} · dernière connexion : {formatDate(u.derniere_connexion)}</span>} />
       <div className="grid max-w-5xl gap-5 lg:grid-cols-2">

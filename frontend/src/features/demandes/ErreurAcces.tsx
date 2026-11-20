@@ -15,7 +15,7 @@ export default function ErreurAcces({ error, documentId }: { error: unknown; doc
     return (
       <div className="card space-y-2 p-4">
         <p className="text-sm">{error.message}</p>
-        {envoye ? <p className="text-sm text-emerald-200">Demande envoyée : vous serez notifié de la réponse.</p> : (
+        {envoye ? <p className="text-sm text-emerald-700">Demande envoyée : vous serez notifié de la réponse.</p> : (
           <div className="flex flex-wrap gap-2">
             <input className="input w-72" placeholder="Motif de la demande" aria-label="Motif" value={motif} onChange={(e) => setMotif(e.target.value)} />
             <input className="input w-24" type="number" min={1} max={720} aria-label="Durée en heures" value={heures} onChange={(e) => setHeures(Number(e.target.value))} />

@@ -44,7 +44,7 @@ export default function ServicesPanel() {
 
       <section className="card space-y-3 p-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-semibold text-gold-400">Directions</h2>
+          <h2 className="font-semibold text-navy-700">Directions</h2>
           <ExampleButton onFill={() => setDir({ code: exempleCode('DIR'), nom: exempleNomDirection() })} />
         </div>
         <form onSubmit={addDirection} className="flex flex-wrap gap-2">
@@ -52,10 +52,10 @@ export default function ServicesPanel() {
           <input aria-label="Nom de la direction" className="input min-w-0 flex-1" placeholder="Nom de la direction" required value={dir.nom} onChange={(e) => setDir({ ...dir, nom: e.target.value })} />
           <button className="btn">Ajouter</button>
         </form>
-        <ul className="divide-y divide-leaf-700">
+        <ul className="divide-y divide-slate-200">
           {(directions.data ?? []).map((d) => (
             <li key={d.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-              <span><span className="mr-2 text-xs text-gold-300">{d.code}</span>{d.nom}</span>
+              <span><span className="mr-2 text-xs text-navy-600">{d.code}</span>{d.nom}</span>
               <button className={d.actif ? 'btn-ghost' : 'btn-danger'} onClick={() => void run(() => updateDirection(d.id, { actif: !d.actif }))}>{d.actif ? 'Active' : 'Inactive'}</button>
             </li>
           ))}
@@ -64,7 +64,7 @@ export default function ServicesPanel() {
 
       <section className="card space-y-3 p-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-semibold text-gold-400">Services</h2>
+          <h2 className="font-semibold text-navy-700">Services</h2>
           <ExampleButton onFill={() => {
             setSrv({ code: exempleCode('SRV'), nom: exempleNomService() })
             setSrvDirection((directions.data ?? []).find((d) => d.actif)?.id ?? '')
@@ -79,10 +79,10 @@ export default function ServicesPanel() {
           </select>
           <button className="btn">Ajouter</button>
         </form>
-        <ul className="divide-y divide-leaf-700">
+        <ul className="divide-y divide-slate-200">
           {(services.data ?? []).map((s) => (
             <li key={s.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-              <span><span className="mr-2 text-xs text-gold-300">{s.code}</span>{s.nom}<span className="block text-xs text-cream-300">{s.direction_nom}</span></span>
+              <span><span className="mr-2 text-xs text-navy-600">{s.code}</span>{s.nom}<span className="block text-xs text-slate-600">{s.direction_nom}</span></span>
               <button className={s.actif ? 'btn-ghost' : 'btn-danger'} onClick={() => void run(() => updateService(s.id, { actif: !s.actif }))}>{s.actif ? 'Actif' : 'Inactif'}</button>
             </li>
           ))}

@@ -48,7 +48,7 @@ export default function ClassifyModal({ docs, onClose, onDone }: { docs: Documen
     <Modal title={single ? `Métadonnées de « ${single.titre} »` : `Métadonnées de ${plural(docs.length, 'fichier')}`} onClose={onClose}>
       {ref.isPending ? <Loading /> : (
         <form onSubmit={(e) => void submit(e)} className="space-y-4">
-          {!single && <p className="text-xs text-cream-300">Seuls les champs renseignés sont appliqués aux fichiers sélectionnés.</p>}
+          {!single && <p className="text-xs text-slate-600">Seuls les champs renseignés sont appliqués aux fichiers sélectionnés.</p>}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Catégorie">
               {(id) => (
@@ -80,7 +80,7 @@ export default function ClassifyModal({ docs, onClose, onDone }: { docs: Documen
               <>
                 {!single && (
                   <label className="mb-2 flex items-center gap-2 text-sm">
-                    <input type="checkbox" className="h-4 w-4 accent-gold-500" checked={replaceTags} onChange={(e) => setReplaceTags(e.target.checked)} /> Remplacer les étiquettes manuelles
+                    <input type="checkbox" className="h-4 w-4 accent-navy-700" checked={replaceTags} onChange={(e) => setReplaceTags(e.target.checked)} /> Remplacer les étiquettes manuelles
                   </label>
                 )}
                 <input id={id} className="input" list="tags-connus" disabled={!replaceTags} placeholder="finance, rh" value={tags} onChange={(e) => setTags(e.target.value)} />

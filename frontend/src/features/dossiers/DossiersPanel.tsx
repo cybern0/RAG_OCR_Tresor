@@ -31,7 +31,7 @@ export default function DossiersPanel() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-cream-300">Les dossiers sont plats et isolés : chacun a ses propres accès, indépendants des directions et des services.</p>
+        <p className="text-sm text-slate-600">Les dossiers sont plats et isolés : chacun a ses propres accès, indépendants des directions et des services.</p>
         <button className="btn" onClick={() => setForm('new')}>+ Nouveau dossier</button>
       </div>
       <ErrorBox message={error ?? dossiers.error} />
@@ -42,9 +42,9 @@ export default function DossiersPanel() {
             <tbody>
               {(dossiers.data ?? []).map((d) => (
                 <tr key={d.id}>
-                  <td className="td"><p className="font-medium">{d.nom}</p>{d.description && <p className="text-xs text-cream-300">{d.description}</p>}</td>
+                  <td className="td"><p className="font-medium">{d.nom}</p>{d.description && <p className="text-xs text-slate-600">{d.description}</p>}</td>
                   <td className="td text-sm">{d.nb_fichiers}</td>
-                  <td className="td text-sm">{d.archive ? <span className="badge border-cream-300/60 text-cream-100">Archivé</span> : <span className="badge border-emerald-300/70 bg-emerald-400/15 text-emerald-100">Actif</span>}</td>
+                  <td className="td text-sm">{d.archive ? <span className="badge border-slate-300 text-black">Archivé</span> : <span className="badge border-emerald-300 bg-emerald-50 text-emerald-800">Actif</span>}</td>
                   <td className="td">
                     <div className="flex flex-wrap justify-end gap-2">
                       <button className="btn" onClick={() => setAccess(d)}>Accès</button>

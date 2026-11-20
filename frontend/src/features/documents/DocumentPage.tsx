@@ -51,7 +51,7 @@ export function Component() {
   return (
     <>
       <PageHeader
-        back={<Link to="/fichiers" className="mb-2 inline-flex items-center gap-1 text-sm text-cream-300 hover:text-gold-300"><ArrowLeft className="h-4 w-4" /> Tous les fichiers</Link>}
+        back={<Link to="/fichiers" className="mb-2 inline-flex items-center gap-1 text-sm text-slate-600 hover:text-navy-600"><ArrowLeft className="h-4 w-4" /> Tous les fichiers</Link>}
         title={d.titre}
         description={<span className="flex flex-wrap items-center gap-2"><Badge tone="gray">{d.division_nom}</Badge> <StatusBadge statut={d.version.statut} /> {plural(d.nb_versions, 'version')} · modifié le {formatDate(d.modifie_le)}</span>}
         actions={(
@@ -61,27 +61,27 @@ export function Component() {
           </>
         )}
       />
-      {d.corbeille_le && <p className="card mb-4 border-amber-300/40 p-3 text-sm text-amber-100">Ce fichier est dans la corbeille.</p>}
+      {d.corbeille_le && <p className="card mb-4 border-amber-300 p-3 text-sm text-amber-800">Ce fichier est dans la corbeille.</p>}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_22rem]">
         <section className="card min-w-0 p-4">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Aperçu{current ? ` · version ${current.numero}` : ''}</h2>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-700">Aperçu{current ? ` · version ${current.numero}` : ''}</h2>
           {current ? <PreviewStored key={`${d.id}-${current.numero}-${current.statut === 'error' ? 'erreur' : 'ok'}`} documentId={d.id} numero={current.numero} mode={current.apercu} tall /> : <Loading />}
         </section>
 
         <aside className="space-y-5">
           <section className="card p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-gold-400">Informations</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-navy-700">Informations</h2>
               <div className="flex gap-0.5">
                 {mayAdd && <button className="btn-icon" title="Métadonnées" aria-label="Métadonnées" onClick={() => setDialog('classify')}><Tags className="h-4 w-4" /></button>}
                 {mayAdd && <button className="btn-icon" title="Modifier" aria-label="Modifier" onClick={() => setDialog('edit')}><Pencil className="h-4 w-4" /></button>}
-                {mayDelete && <button className="btn-icon text-red-300" title="Mettre à la corbeille" aria-label="Mettre à la corbeille" onClick={() => setDialog('delete')}><Trash2 className="h-4 w-4" /></button>}
+                {mayDelete && <button className="btn-icon text-red-600" title="Mettre à la corbeille" aria-label="Mettre à la corbeille" onClick={() => setDialog('delete')}><Trash2 className="h-4 w-4" /></button>}
               </div>
             </div>
             <dl className="space-y-2 text-sm">
               <div>
-                <dt className="text-xs text-cream-300">Affectations</dt>
+                <dt className="text-xs text-slate-600">Affectations</dt>
                 <dd className="mt-1">
                   <div className="flex flex-wrap items-center gap-1">
                     {d.affectations.length === 0 ? <Badge tone="amber">À affecter</Badge>
@@ -90,18 +90,18 @@ export function Component() {
                       <button className="btn-icon" title="Affecter à des agents" aria-label="Affecter à des agents" onClick={() => setDialog('affect')}><UserSquare className="h-4 w-4" /></button>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-cream-300">Les agents affectés (par le chef) lisent ce fichier ; sans affectation, l'accès se demande.</p>
+                  <p className="mt-1 text-xs text-slate-600">Les agents affectés (par le chef) lisent ce fichier ; sans affectation, l'accès se demande.</p>
                 </dd>
               </div>
-              <div><dt className="text-xs text-cream-300">Métadonnées</dt><dd className="mt-1"><ClassementBadges doc={d} max={8} /></dd></div>
-              <div><dt className="text-xs text-cream-300">Fichier</dt><dd>{d.version.nom_fichier} · {formatSize(d.version.taille_octets)}</dd></div>
-              <div><dt className="text-xs text-cream-300">Lecture</dt><dd>{[d.has_tabular && 'tableaux', d.has_image && 'images', d.version.ocr_utilise && 'OCR'].filter(Boolean).join(' · ') || 'Texte seul'}</dd></div>
-              <div><dt className="text-xs text-cream-300">Créé par</dt><dd>{d.cree_par_nom ?? '—'} le {formatDate(d.cree_le)}</dd></div>
+              <div><dt className="text-xs text-slate-600">Métadonnées</dt><dd className="mt-1"><ClassementBadges doc={d} max={8} /></dd></div>
+              <div><dt className="text-xs text-slate-600">Fichier</dt><dd>{d.version.nom_fichier} · {formatSize(d.version.taille_octets)}</dd></div>
+              <div><dt className="text-xs text-slate-600">Lecture</dt><dd>{[d.has_tabular && 'tableaux', d.has_image && 'images', d.version.ocr_utilise && 'OCR'].filter(Boolean).join(' · ') || 'Texte seul'}</dd></div>
+              <div><dt className="text-xs text-slate-600">Créé par</dt><dd>{d.cree_par_nom ?? '—'} le {formatDate(d.cree_le)}</dd></div>
             </dl>
           </section>
 
           <section className="card p-4">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Versions</h2>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-700">Versions</h2>
             {versions.isPending ? <Loading className="py-4" /> : current && (
               <VersionsPanel documentId={d.id} versions={list} selected={current.numero} onSelect={setSelected} canDelete={mayDelete}
                 onReindex={mayReindex ? (n) => { setReindexOf(n); setDialog('reindex') } : undefined} />
@@ -111,7 +111,7 @@ export function Component() {
 
           {d.droits.includes('ajouter_version') && (
             <section className="card p-4">
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Commentaires</h2>
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-700">Commentaires</h2>
               <CommentsPanel documentId={d.id} />
             </section>
           )}
@@ -128,7 +128,7 @@ export function Component() {
       {dialog === 'delete' && (
         <ConfirmDialog title="Mettre à la corbeille" confirmLabel="Mettre à la corbeille" onClose={() => setDialog(null)}
           onConfirm={async () => { await remove.mutateAsync(d.id); toast.success('Fichier placé dans la corbeille.'); navigate('/fichiers', { replace: true }) }}>
-          Mettre <span className="font-semibold text-gold-300">« {d.titre} »</span> dans la corbeille ?
+          Mettre <span className="font-semibold text-navy-600">« {d.titre} »</span> dans la corbeille ?
         </ConfirmDialog>
       )}
     </>

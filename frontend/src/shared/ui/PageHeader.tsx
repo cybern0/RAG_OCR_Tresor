@@ -5,8 +5,8 @@ export default function PageHeader({ title, description, actions, back }: { titl
     <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
         {back}
-        <h1 className="truncate text-2xl font-bold tracking-tight text-gold-400">{title}</h1>
-        {description && <p className="mt-1 text-sm text-cream-300">{description}</p>}
+        <h1 className="truncate text-2xl font-bold tracking-tight text-navy-900">{title}</h1>
+        {description && <p className="mt-1 text-sm text-slate-600">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>

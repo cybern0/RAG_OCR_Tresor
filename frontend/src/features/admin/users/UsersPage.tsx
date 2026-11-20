@@ -86,10 +86,10 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         {divisionId !== null && roleQuery.data && roleQuery.data.length > 0 && (
           <div>
             <label className="label">Rôles de division</label>
-            <div className="space-y-2 rounded-lg border border-gold-500/30 bg-ink-900/40 p-3">
+            <div className="space-y-2 rounded-lg border border-line bg-ink-900/40 p-3">
               {roleQuery.data.map((option) => (
-                <label key={option.id} className="flex items-center gap-2 text-sm text-cream-200">
-                  <input type="checkbox" checked={roleIds.includes(option.id)} onChange={() => toggleRole(option.id)} className="h-4 w-4 accent-gold-500" />
+                <label key={option.id} className="flex items-center gap-2 text-sm text-slate-800">
+                  <input type="checkbox" checked={roleIds.includes(option.id)} onChange={() => toggleRole(option.id)} className="h-4 w-4 accent-navy-700" />
                   {option.libelle}
                 </label>
               ))}
@@ -143,7 +143,7 @@ export function Component() {
         actions={mayCreate ? <button className="btn" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nouvel utilisateur</button> : null} />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative min-w-52 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-cream-300" aria-hidden />
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-600" aria-hidden />
           <input className="input pl-9" type="search" placeholder="Rechercher un compte, un agent, un service…" aria-label="Rechercher un utilisateur" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <select className="input w-auto" aria-label="Rôle du compte" value={role} onChange={(e) => setRole(e.target.value)}>
@@ -169,10 +169,10 @@ export function Component() {
             <thead><tr><th className="th">Compte</th><th className="th">Rôle</th><th className="th">Agent</th><th className="th">Poste</th><th className="th">Dernière connexion</th><th className="th">État</th><th className="th" /></tr></thead>
             <tbody>
               {visibles.map((u) => (
-                <tr key={u.id} className="hover:bg-leaf-700/40">
-                  <td className="td font-medium"><Link className="hover:text-gold-300" to={`/admin/utilisateurs/${u.id}`}>{u.nom_utilisateur}</Link>{u.id === me?.id && <span className="ml-2 text-xs text-cream-300">(vous)</span>}</td>
+                <tr key={u.id} className="hover:bg-slate-50">
+                  <td className="td font-medium"><Link className="hover:text-navy-600" to={`/admin/utilisateurs/${u.id}`}>{u.nom_utilisateur}</Link>{u.id === me?.id && <span className="ml-2 text-xs text-slate-600">(vous)</span>}</td>
                   <td className="td"><Badge tone={u.role === 'ADMIN' ? 'gold' : 'gray'}>{u.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur'}</Badge></td>
-                  <td className="td text-sm">{u.agent ? <>{u.agent.nom} {u.agent.prenom}<br /><span className="text-xs text-cream-300">{u.agent.service_nom ?? 'Sans service'}</span></> : '—'}</td>
+                  <td className="td text-sm">{u.agent ? <>{u.agent.nom} {u.agent.prenom}<br /><span className="text-xs text-slate-600">{u.agent.service_nom ?? 'Sans service'}</span></> : '—'}</td>
                   <td className="td text-sm">{u.agent?.titre === 'CHEF_SERVICE' ? <Badge tone="gold">Chef de service</Badge> : u.agent?.titre === 'CHEF_DIVISION' ? <Badge tone="gold">Chef de division</Badge> : '—'}</td>
                   <td className="td text-xs">{formatDate(u.derniere_connexion)}</td>
                   <td className="td">{u.actif ? <Badge tone="green">Actif</Badge> : <Badge tone="red">Désactivé</Badge>}</td>

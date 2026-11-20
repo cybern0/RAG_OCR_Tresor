@@ -24,17 +24,17 @@ function Sources({ message }: { message: ChatMessage }) {
   if (message.sources.length === 0) return null
   return (
     <details className="mt-3 text-sm">
-      <summary className="cursor-pointer text-gold-400 hover:text-gold-300">Sources ({message.sources.length})</summary>
+      <summary className="cursor-pointer text-navy-700 hover:text-navy-600">Sources ({message.sources.length})</summary>
       <ul className="mt-2 space-y-2">
         {message.sources.map((s) => (
-          <li key={s.ref} className="rounded-lg border border-gold-500/30 bg-leaf-950/50 p-2.5">
-            <p className="font-medium text-gold-300">
+          <li key={s.ref} className="rounded-lg border border-line bg-slate-50 p-2.5">
+            <p className="font-medium text-navy-600">
               [{s.ref}]{' '}
               {<Link className="underline decoration-dotted underline-offset-2" to={`/fichiers/${s.document_id}`}>{s.titre}</Link>}
-              {s.version ? <span className="text-cream-300"> · version {s.version}{s.date ? ` du ${formatDay(s.date)}` : ''}</span> : null}
-              {s.page ? <span className="text-cream-300"> · page {s.page}</span> : null}
+              {s.version ? <span className="text-slate-600"> · version {s.version}{s.date ? ` du ${formatDay(s.date)}` : ''}</span> : null}
+              {s.page ? <span className="text-slate-600"> · page {s.page}</span> : null}
             </p>
-            <p className="mt-1 text-xs text-cream-300">{s.extrait}…</p>
+            <p className="mt-1 text-xs text-slate-600">{s.extrait}…</p>
           </li>
         ))}
       </ul>
@@ -48,15 +48,15 @@ function Options() {
   const change = useMutation({ mutationFn: (patch: Partial<ChatPreferences>) => setPreferences(patch), onSuccess: (data) => qc.setQueryData(keys.preferences, data) })
   if (!prefs.data) return <ErrorBox message={prefs.error ? errorMessage(prefs.error) : null} />
   return (
-    <div className="space-y-2 rounded-lg border border-gold-500/30 p-3 text-sm">
+    <div className="space-y-2 rounded-lg border border-line p-3 text-sm">
       <ErrorBox message={change.error ? errorMessage(change.error) : null} />
       <label className="flex items-start gap-2">
-        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-gold-500" checked={prefs.data.derniere_version_seulement} onChange={(e) => change.mutate({ derniere_version_seulement: e.target.checked })} />
-        <span>Dernière version seulement<span className="block text-xs text-cream-300">Ignorer les anciennes versions des fichiers dans les réponses.</span></span>
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-navy-700" checked={prefs.data.derniere_version_seulement} onChange={(e) => change.mutate({ derniere_version_seulement: e.target.checked })} />
+        <span>Dernière version seulement<span className="block text-xs text-slate-600">Ignorer les anciennes versions des fichiers dans les réponses.</span></span>
       </label>
       <label className="flex items-start gap-2">
-        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-gold-500" checked={prefs.data.memoire_inter_sessions} onChange={(e) => change.mutate({ memoire_inter_sessions: e.target.checked })} />
-        <span>Mémoire entre sessions<span className="block text-xs text-cream-300">Retenir le résultat de mes échanges pour enrichir mes prochaines conversations.</span></span>
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-navy-700" checked={prefs.data.memoire_inter_sessions} onChange={(e) => change.mutate({ memoire_inter_sessions: e.target.checked })} />
+        <span>Mémoire entre sessions<span className="block text-xs text-slate-600">Retenir le résultat de mes échanges pour enrichir mes prochaines conversations.</span></span>
       </label>
     </div>
   )
@@ -109,13 +109,13 @@ export function Component() {
           {(history.data ?? []).map((c) => (
             <li key={c.id} className="group flex items-center gap-1">
               <Link to={`/chat/${c.id}`} title={c.titre ?? ''}
-                className={cn('flex-1 truncate rounded-lg px-2 py-1.5 text-sm hover:bg-gold-500/15', conversationId === c.id ? 'bg-gold-500/20 text-gold-300' : 'text-cream-100')}>
+                className={cn('flex-1 truncate rounded-lg px-2 py-1.5 text-sm hover:bg-navy-100', conversationId === c.id ? 'bg-navy-100 text-navy-600' : 'text-black')}>
                 {c.titre || 'Conversation'}
               </Link>
               <button onClick={() => setToDelete(c)} aria-label="Supprimer la conversation" className="btn-icon opacity-0 focus:opacity-100 group-hover:opacity-100"><Trash2 className="h-4 w-4" /></button>
             </li>
           ))}
-          {history.data?.length === 0 && <li className="px-2 text-sm text-cream-300">Aucune conversation.</li>}
+          {history.data?.length === 0 && <li className="px-2 text-sm text-slate-600">Aucune conversation.</li>}
         </ul>
       </aside>
 
@@ -131,21 +131,21 @@ export function Component() {
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto pr-1" aria-live="polite">
           {chat.messages.length === 0 && !chat.loading && (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-cream-300">
-              <Bot className="h-10 w-10 text-gold-400" aria-hidden />
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-slate-600">
+              <Bot className="h-10 w-10 text-navy-700" aria-hidden />
               <p className="max-w-md">Posez une question : la réponse s’appuie uniquement sur les fichiers de votre division classés selon vos rôles — un chef interroge toute sa division, un chef de service toutes les divisions de son service. La conversation est mémorisée et retrouvée après une reconnexion.</p>
             </div>
           )}
           {chat.messages.map((m) => (
             <div key={m.id} className={cn('flex gap-2', m.role === 'utilisateur' ? 'justify-end' : 'justify-start')}>
-              {m.role === 'assistant' && <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-500/20 text-gold-400"><Bot className="h-4 w-4" /></span>}
-              <div className={cn('max-w-[85%] rounded-2xl px-4 py-3', m.role === 'utilisateur' ? 'bg-gold-500 text-leaf-950' : 'border border-gold-500/30 bg-leaf-900 text-cream-50')}>
-                <p className={cn('whitespace-pre-wrap text-sm leading-relaxed', m.masque && 'italic text-cream-300')}>
+              {m.role === 'assistant' && <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy-100 text-navy-700"><Bot className="h-4 w-4" /></span>}
+              <div className={cn('max-w-[85%] rounded-2xl px-4 py-3', m.role === 'utilisateur' ? 'bg-navy-700 text-white' : 'border border-line bg-slate-100 text-black')}>
+                <p className={cn('whitespace-pre-wrap text-sm leading-relaxed', m.masque && 'italic text-slate-600')}>
                   {m.text || (m.role === 'assistant' && chat.busy ? 'Recherche dans les documents…' : '')}
                 </p>
                 {m.role === 'assistant' && <Sources message={m} />}
               </div>
-              {m.role === 'utilisateur' && <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-500/20 text-gold-400"><User className="h-4 w-4" /></span>}
+              {m.role === 'utilisateur' && <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy-100 text-navy-700"><User className="h-4 w-4" /></span>}
             </div>
           ))}
           <div ref={bottom} />
@@ -155,7 +155,7 @@ export function Component() {
           {showOptions && <Options />}
           <ErrorBox message={chat.error} />
           <div className="flex items-center justify-between">
-            <button type="button" className="inline-flex items-center gap-1.5 text-xs text-cream-300 hover:text-gold-300" onClick={() => setShowOptions((v) => !v)} aria-expanded={showOptions}><Settings2 className="h-3.5 w-3.5" /> Options</button>
+            <button type="button" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-navy-600" onClick={() => setShowOptions((v) => !v)} aria-expanded={showOptions}><Settings2 className="h-3.5 w-3.5" /> Options</button>
             <ExampleButton onFill={() => setQuestion(exempleQuestion())} />
           </div>
           <form onSubmit={(e) => void submit(e)} className="flex gap-2">

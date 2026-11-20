@@ -35,6 +35,6 @@ export function RequireRoot() {
 export function Home() {
   const { user, can } = useAuth()
   const target = homePath(can, user?.niveau)
-  if (!target) return <p className="card p-8 text-center text-cream-300">Votre compte n’a accès à aucune fonctionnalité.</p>
+  if (!target) return <p className="card p-8 text-center text-slate-600">Votre compte n’a accès à aucune fonctionnalité.</p>
   return <Navigate to={target} replace />
 }

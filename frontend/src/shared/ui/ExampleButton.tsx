@@ -6,7 +6,7 @@ import { cn } from '../lib/cn'
 export default function ExampleButton({ onFill, className }: { onFill: () => void; className?: string }) {
   return (
     <button type="button" onClick={onFill}
-      className={cn('inline-flex items-center gap-1.5 text-xs font-medium text-gold-400 underline decoration-dotted underline-offset-4 hover:text-gold-300', className)}>
+      className={cn('inline-flex items-center gap-1.5 text-xs font-medium text-navy-700 underline decoration-dotted underline-offset-4 hover:text-navy-600', className)}>
       <Wand2 className="h-3.5 w-3.5" aria-hidden /> Remplir avec exemple
     </button>
   )

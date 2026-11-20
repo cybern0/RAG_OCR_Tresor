@@ -92,13 +92,13 @@ export default function AgentsPanel() {
               {(agents.data ?? []).map((a) => (
                 <tr key={a.id}>
                   <td className="td text-sm">{a.matricule}</td>
-                  <td className="td"><p className="font-medium">{a.nom} {a.prenom}</p><p className="text-xs text-cream-300">{a.fonction ?? ''}</p></td>
+                  <td className="td"><p className="font-medium">{a.nom} {a.prenom}</p><p className="text-xs text-slate-600">{a.fonction ?? ''}</p></td>
                   <td className="td">
                     <select aria-label={`Service de ${a.nom}`} className="input w-auto" value={a.service_id ?? ''} onChange={(e) => void patch(a.id, { service_id: Number(e.target.value) })}>
                       {(services.data ?? []).filter((s) => s.actif || s.id === a.service_id).map((s) => <option key={s.id} value={s.id}>{s.nom}</option>)}
                     </select>
                   </td>
-                  <td className="td text-sm">{a.nom_utilisateur ?? <span className="text-cream-300">—</span>}</td>
+                  <td className="td text-sm">{a.nom_utilisateur ?? <span className="text-slate-600">—</span>}</td>
                   <td className="td">
                     <button className={a.actif ? 'btn-ghost' : 'btn-danger'} onClick={() => void patch(a.id, { actif: !a.actif })}>{a.actif ? 'Actif' : 'Inactif'}</button>
                   </td>

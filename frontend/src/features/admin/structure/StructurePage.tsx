@@ -113,33 +113,33 @@ export function Component() {
       <ErrorBox message={directions.error ? errorMessage(directions.error) : services.error ? errorMessage(services.error) : divisions.error ? errorMessage(divisions.error) : null} />
       <div className="grid gap-5 xl:grid-cols-3">
         <section>
-          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-gold-400">Directions</h2><button className="btn-ghost" onClick={() => setModal('direction')}><Plus className="h-4 w-4" /> Direction</button></div>
+          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-navy-700">Directions</h2><button className="btn-ghost" onClick={() => setModal('direction')}><Plus className="h-4 w-4" /> Direction</button></div>
           {directions.isPending ? <Loading /> : (
             <div className="card overflow-x-auto"><table className="w-full border-collapse"><thead><tr><th className="th">Code</th><th className="th">Nom</th><th className="th">État</th><th className="th" /></tr></thead><tbody>
               {directions.data!.map((d) => (
-                <tr key={d.id} className="hover:bg-leaf-700/40"><td className="td font-mono text-xs">{d.code}</td><td className="td">{d.nom}</td><td className="td"><Badge tone={d.actif ? 'green' : 'gray'}>{d.actif ? 'Active' : 'Désactivée'}</Badge></td>
+                <tr key={d.id} className="hover:bg-slate-50"><td className="td font-mono text-xs">{d.code}</td><td className="td">{d.nom}</td><td className="td"><Badge tone={d.actif ? 'green' : 'gray'}>{d.actif ? 'Active' : 'Désactivée'}</Badge></td>
                   <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleDirection.mutateAsync({ id: d.id, actif: !d.actif }).catch(fail)}>{d.actif ? 'Désactiver' : 'Réactiver'}</button><button className="btn-ghost" onClick={() => setConfirm({ kind: 'direction', id: d.id, nom: d.nom })}>Supprimer</button></td></tr>
               ))}
             </tbody></table></div>
           )}
         </section>
         <section>
-          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-gold-400">Services</h2><button className="btn-ghost" onClick={() => setModal('service')}><Plus className="h-4 w-4" /> Service</button></div>
+          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-navy-700">Services</h2><button className="btn-ghost" onClick={() => setModal('service')}><Plus className="h-4 w-4" /> Service</button></div>
           {services.isPending ? <Loading /> : (
             <div className="card overflow-x-auto"><table className="w-full border-collapse"><thead><tr><th className="th">Service</th><th className="th">Direction</th><th className="th">État</th><th className="th" /></tr></thead><tbody>
               {services.data!.map((s) => (
-                <tr key={s.id} className="hover:bg-leaf-700/40"><td className="td">{s.nom}<br /><span className="font-mono text-xs text-cream-300">{s.code}{s.site ? ` · ${s.site}` : ''}</span></td><td className="td text-sm">{s.direction_nom}</td><td className="td"><Badge tone={s.actif ? 'green' : 'gray'}>{s.actif ? 'Actif' : 'Désactivé'}</Badge></td>
+                <tr key={s.id} className="hover:bg-slate-50"><td className="td">{s.nom}<br /><span className="font-mono text-xs text-slate-600">{s.code}{s.site ? ` · ${s.site}` : ''}</span></td><td className="td text-sm">{s.direction_nom}</td><td className="td"><Badge tone={s.actif ? 'green' : 'gray'}>{s.actif ? 'Actif' : 'Désactivé'}</Badge></td>
                   <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleService.mutateAsync({ id: s.id, actif: !s.actif }).catch(fail)}>{s.actif ? 'Désactiver' : 'Réactiver'}</button><button className="btn-ghost" onClick={() => setConfirm({ kind: 'service', id: s.id, nom: s.nom })}>Supprimer</button></td></tr>
               ))}
             </tbody></table></div>
           )}
         </section>
         <section>
-          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-gold-400">Divisions</h2><button className="btn-ghost" onClick={() => setModal('division')}><Plus className="h-4 w-4" /> Division</button></div>
+          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-navy-700">Divisions</h2><button className="btn-ghost" onClick={() => setModal('division')}><Plus className="h-4 w-4" /> Division</button></div>
           {divisions.isPending ? <Loading /> : (
             <div className="card overflow-x-auto"><table className="w-full border-collapse"><thead><tr><th className="th">Division</th><th className="th">Service</th><th className="th">État</th><th className="th" /></tr></thead><tbody>
               {divisions.data!.map((d) => (
-                <tr key={d.id} className="hover:bg-leaf-700/40"><td className="td">{d.nom}<br /><span className="font-mono text-xs text-cream-300">{d.code ?? '—'}</span></td><td className="td text-sm">{d.service_nom ?? '—'}{d.direction_nom ? <><br /><span className="text-xs text-cream-300">{d.direction_nom}</span></> : null}</td><td className="td"><Badge tone={d.actif ? 'green' : 'gray'}>{d.actif ? 'Active' : 'Désactivée'}</Badge></td>
+                <tr key={d.id} className="hover:bg-slate-50"><td className="td">{d.nom}<br /><span className="font-mono text-xs text-slate-600">{d.code ?? '—'}</span></td><td className="td text-sm">{d.service_nom ?? '—'}{d.direction_nom ? <><br /><span className="text-xs text-slate-600">{d.direction_nom}</span></> : null}</td><td className="td"><Badge tone={d.actif ? 'green' : 'gray'}>{d.actif ? 'Active' : 'Désactivée'}</Badge></td>
                   <td className="td text-right"><button className="btn-ghost" onClick={() => void toggleDivision.mutateAsync({ id: d.id, actif: !d.actif }).catch(fail)}>{d.actif ? 'Désactiver' : 'Réactiver'}</button><button className="btn-ghost" onClick={() => setConfirm({ kind: 'division', id: d.id, nom: d.nom })}>Supprimer</button></td></tr>
               ))}
             </tbody></table></div>

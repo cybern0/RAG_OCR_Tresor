@@ -43,8 +43,8 @@ export default function NewVersionForm({ doc, onClose, onDone }: Props) {
     <Modal title={`Nouvelle version de « ${doc.titre} »`} onClose={onClose} wide>
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-sm text-cream-300">
-            Version actuelle : <span className="font-medium text-gold-300">v{doc.version.numero}</span>. La nouvelle version s’ajoute :
+          <p className="text-sm text-slate-600">
+            Version actuelle : <span className="font-medium text-navy-600">v{doc.version.numero}</span>. La nouvelle version s’ajoute :
             l’ancienne reste consultable, téléchargeable et interrogeable par le chatbot.
           </p>
           <ExampleButton className="shrink-0" onFill={() => { setFile(exempleFichier()); setTableaux(false); setImages(false) }} />
@@ -55,8 +55,8 @@ export default function NewVersionForm({ doc, onClose, onDone }: Props) {
         </div>
         <FlagsFields idPrefix="nv" fileName={file?.name ?? null} tableaux={tableaux} images={images} onTableaux={setTableaux} onImages={setImages} />
         {file && (
-          <details className="rounded-lg border border-gold-500/30 p-3">
-            <summary className="cursor-pointer text-sm text-gold-400">Aperçu du fichier avant l’envoi</summary>
+          <details className="rounded-lg border border-line p-3">
+            <summary className="cursor-pointer text-sm text-navy-700">Aperçu du fichier avant l’envoi</summary>
             <div className="mt-3"><PreviewLocal file={file} /></div>
           </details>
         )}

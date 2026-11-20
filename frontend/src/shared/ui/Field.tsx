@@ -8,7 +8,7 @@ export default function Field({ label, hint, children, className }: { label: str
     <div className={className}>
       <label className="label" htmlFor={id}>{label}</label>
       {children(id)}
-      {hint && <p className="mt-1 text-xs text-cream-300">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-slate-600">{hint}</p>}
     </div>
   )
 }

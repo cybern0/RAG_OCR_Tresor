@@ -46,14 +46,14 @@ export default function ReindexModal({ doc, version, onClose }: { doc: DocumentM
   return (
     <Modal title={`${enErreur ? 'Relancer l’indexation' : 'Réindexer'} · version ${version.numero}`} onClose={onClose} size="lg">
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
-        <p className="text-sm text-cream-300">
-          Le fichier <span className="font-medium text-gold-300">{version.nom_fichier}</span> déjà enregistré est relu : <strong>aucune nouvelle version n’est créée</strong>.
+        <p className="text-sm text-slate-600">
+          Le fichier <span className="font-medium text-navy-600">{version.nom_fichier}</span> déjà enregistré est relu : <strong>aucune nouvelle version n’est créée</strong>.
           Pendant la relecture, cette version n’est pas interrogeable.
         </p>
-        {enErreur && version.message_erreur && <p className="rounded-lg border border-red-300/30 p-2 text-xs text-red-200">Dernière erreur : {version.message_erreur}</p>}
+        {enErreur && version.message_erreur && <p className="rounded-lg border border-red-200 p-2 text-xs text-red-700">Dernière erreur : {version.message_erreur}</p>}
         <FlagsFields idPrefix="ri" fileName={version.nom_fichier} tableaux={tableaux} images={images} onTableaux={setTableaux} onImages={setImages} />
         {inchange && (
-          <p className="rounded-lg border border-amber-300/40 p-2 text-sm text-amber-100" role="status">
+          <p className="rounded-lg border border-amber-300 p-2 text-sm text-amber-800" role="status">
             Déjà indexée avec ces paramètres (tableaux : {oui(deja.tableaux)}, images : {oui(deja.images)}). Modifiez au moins une case pour relancer l’indexation.
           </p>
         )}

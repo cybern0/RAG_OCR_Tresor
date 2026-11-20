@@ -37,13 +37,13 @@ export default function NotificationBell() {
         {n > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{n > 99 ? '99+' : n}</span>}
       </button>
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-80 max-w-[90vw] rounded-lg border border-gold-500/30 bg-leaf-950 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-gold-500/20 px-3 py-2">
-            <span className="text-sm font-semibold text-gold-300">Notifications</span>
+        <div className="absolute right-0 z-50 mt-2 w-80 max-w-[90vw] rounded-lg border border-line bg-white text-black shadow-float">
+          <div className="flex items-center justify-between border-b border-line px-3 py-2">
+            <span className="text-sm font-semibold text-navy-600">Notifications</span>
             <div className="flex items-center gap-3">
-              {n > 0 && <button className="text-xs text-cream-300 underline" onClick={() => toutes.mutate()}>Tout marquer comme lu</button>}
+              {n > 0 && <button className="text-xs text-slate-600 underline" onClick={() => toutes.mutate()}>Tout marquer comme lu</button>}
               {(q.data?.items ?? []).length > 0 && (
-                <button className="text-xs text-cream-300 underline" title="Supprime les notifications lues et celles des demandes déjà tranchées ou annulées"
+                <button className="text-xs text-slate-600 underline" title="Supprime les notifications lues et celles des demandes déjà tranchées ou annulées"
                   onClick={() => nettoyer.mutate()}>
                   Nettoyer
                 </button>
@@ -51,11 +51,11 @@ export default function NotificationBell() {
             </div>
           </div>
           <ul className="max-h-96 overflow-y-auto">
-            {(q.data?.items ?? []).length === 0 && <li className="p-4 text-center text-sm text-cream-300">Rien de nouveau.</li>}
+            {(q.data?.items ?? []).length === 0 && <li className="p-4 text-center text-sm text-slate-600">Rien de nouveau.</li>}
             {(q.data?.items ?? []).map((x) => (
               <li key={x.id}>
-                <button className={cn('w-full px-3 py-2 text-left text-sm hover:bg-gold-500/10', !x.lu && 'bg-gold-500/5 font-medium')} onClick={() => ouvrir(x)}>
-                  {x.message}<br /><span className="text-xs text-cream-300">{formatDate(x.cree_le)}</span>
+                <button className={cn('w-full px-3 py-2 text-left text-sm hover:bg-navy-50', !x.lu && 'bg-navy-50 font-medium')} onClick={() => ouvrir(x)}>
+                  {x.message}<br /><span className="text-xs text-slate-600">{formatDate(x.cree_le)}</span>
                 </button>
               </li>
             ))}

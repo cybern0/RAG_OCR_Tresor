@@ -13,16 +13,16 @@ import { cn } from '../../shared/lib/cn'
 import { fetchTableauDeBord } from './api'
 import type { ErreursIndexation, FichierBrief } from './api'
 
-const TON = { neutre: 'border-gold-500/20', attention: 'border-amber-400/60', alerte: 'border-red-400/70' } as const
+const TON = { neutre: 'border-line', attention: 'border-amber-300', alerte: 'border-red-300' } as const
 
 function Fichiers({ titre, items }: { titre: string; items: FichierBrief[] }) {
   if (items.length === 0) return null
   return (
-    <section className="card p-4"><h2 className="mb-2 font-semibold text-gold-300">{titre}</h2>
-      <ul className="divide-y divide-gold-500/10 text-sm">
+    <section className="card p-4"><h2 className="mb-2 font-semibold text-navy-600">{titre}</h2>
+      <ul className="divide-y divide-slate-200 text-sm">
         {items.map((f) => (
-          <li key={f.id} className="py-1.5"><Link className="text-gold-300 hover:underline" to={`/fichiers/${f.id}`}>{f.titre}</Link>
-            <span className="text-cream-300"> · {f.division_nom}{f.depose_par ? ` · ${f.depose_par}` : ''} · {formatDate(f.depose_le)}</span></li>
+          <li key={f.id} className="py-1.5"><Link className="text-navy-600 hover:underline" to={`/fichiers/${f.id}`}>{f.titre}</Link>
+            <span className="text-slate-600"> · {f.division_nom}{f.depose_par ? ` · ${f.depose_par}` : ''} · {formatDate(f.depose_le)}</span></li>
         ))}
       </ul></section>
   )
@@ -32,10 +32,10 @@ function Erreurs({ erreurs, restreint }: { erreurs: ErreursIndexation; restreint
   if (erreurs.total === 0) return null
   const groupes = [erreurs.par_service, erreurs.par_division, erreurs.par_auteur]
   return (
-    <section className="card border-red-400/40 p-4" id="erreurs">
-      <h2 className="mb-1 font-semibold text-gold-300">{restreint ? 'Mes fichiers en échec d’indexation' : 'Erreurs d’indexation'}</h2>
-      {!restreint && <p className="mb-2 text-xs text-cream-300">Traçage par service, division et rôle : retrouvez chaque échec d’ingestion et son message.</p>}
-      <p className="mb-3 text-sm text-red-200">{erreurs.total} version(s) en échec{restreint ? '' : ' dans votre périmètre'} — vérifiez le service (OCR, Ollama) puis redéposez comme nouvelle version.</p>
+    <section className="card border-red-300 p-4" id="erreurs">
+      <h2 className="mb-1 font-semibold text-navy-600">{restreint ? 'Mes fichiers en échec d’indexation' : 'Erreurs d’indexation'}</h2>
+      {!restreint && <p className="mb-2 text-xs text-slate-600">Traçage par service, division et rôle : retrouvez chaque échec d’ingestion et son message.</p>}
+      <p className="mb-3 text-sm text-red-700">{erreurs.total} version(s) en échec{restreint ? '' : ' dans votre périmètre'} — vérifiez le service (OCR, Ollama) puis redéposez comme nouvelle version.</p>
       {!restreint && groupes.some((g) => g.length > 0) && (
         <div className="mb-3 flex flex-wrap gap-2">
           {groupes.map((groupe, i) => groupe.slice(0, 6).map((g) => (
@@ -43,12 +43,12 @@ function Erreurs({ erreurs, restreint }: { erreurs: ErreursIndexation; restreint
           )))}
         </div>
       )}
-      <ul className="divide-y divide-gold-500/10 text-sm">
+      <ul className="divide-y divide-slate-200 text-sm">
         {erreurs.items.map((e) => (
           <li key={`${e.document_id}-${e.version_numero}`} className="py-2">
-            <Link className="text-gold-300 hover:underline" to={`/fichiers/${e.document_id}`}>{e.titre}</Link>
-            <span className="text-cream-300"> · v{e.version_numero} · {e.division_nom}{e.service_nom ? ` (${e.service_nom})` : ''}{e.depose_par ? ` · déposé par ${e.depose_par}` : ''} · {formatDate(e.cree_le)}</span>
-            {e.message_erreur && <p className="mt-0.5 text-xs text-red-200">{e.message_erreur}</p>}
+            <Link className="text-navy-600 hover:underline" to={`/fichiers/${e.document_id}`}>{e.titre}</Link>
+            <span className="text-slate-600"> · v{e.version_numero} · {e.division_nom}{e.service_nom ? ` (${e.service_nom})` : ''}{e.depose_par ? ` · déposé par ${e.depose_par}` : ''} · {formatDate(e.cree_le)}</span>
+            {e.message_erreur && <p className="mt-0.5 text-xs text-red-700">{e.message_erreur}</p>}
           </li>
         ))}
       </ul>
@@ -67,28 +67,28 @@ export function Component() {
   return (
     <div className="space-y-6">
       <PageHeader title={t.titre} description={t.sous_titre} />
-      {t.alertes.length > 0 && <div className="space-y-1">{t.alertes.map((a) => <p key={a} className="rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">{a}</p>)}</div>}
+      {t.alertes.length > 0 && <div className="space-y-1">{t.alertes.map((a) => <p key={a} className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">{a}</p>)}</div>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {t.indicateurs.map((i) => {
-          const body = <><p className="text-3xl font-bold text-cream-50">{i.valeur}</p><p className="text-sm text-cream-300">{i.libelle}</p></>
+          const body = <><p className="text-3xl font-bold text-black">{i.valeur}</p><p className="text-sm text-slate-600">{i.libelle}</p></>
           const cls = cn('card block border p-4', TON[i.ton])
-          return i.lien ? <Link key={i.cle} to={i.lien} className={cn(cls, 'hover:bg-leaf-700/40')}>{body}</Link> : <div key={i.cle} className={cls}>{body}</div>
+          return i.lien ? <Link key={i.cle} to={i.lien} className={cn(cls, 'hover:bg-slate-50')}>{body}</Link> : <div key={i.cle} className={cls}>{body}</div>
         })}
       </div>
       {t.repartition && (
-        <section className="card overflow-x-auto"><h2 className="px-4 pt-3 font-semibold text-gold-300">{t.repartition.titre}</h2>
+        <section className="card overflow-x-auto"><h2 className="px-4 pt-3 font-semibold text-navy-600">{t.repartition.titre}</h2>
           <table className="w-full text-left text-sm"><thead><tr><th className="th" />{t.repartition.colonnes.map((c) => <th key={c.cle} className="th text-right">{c.libelle}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gold-500/10">{t.repartition.lignes.map((l) => (
-              <tr key={`${l.id}-${l.libelle}`} className={l.alerte ? 'bg-red-400/10' : undefined}>
-                <td className="td">{l.libelle}{l.sous_titre && <><br /><span className="text-xs text-cream-300">{l.sous_titre}</span></>}</td>
+            <tbody className="divide-y divide-slate-200">{t.repartition.lignes.map((l) => (
+              <tr key={`${l.id}-${l.libelle}`} className={l.alerte ? 'bg-red-50' : undefined}>
+                <td className="td">{l.libelle}{l.sous_titre && <><br /><span className="text-xs text-slate-600">{l.sous_titre}</span></>}</td>
                 {t.repartition!.colonnes.map((c) => <td key={c.cle} className="td text-right">{l.valeurs[c.cle] ?? 0}</td>)}
               </tr>))}</tbody></table></section>
       )}
       {t.erreurs_indexation && <Erreurs erreurs={t.erreurs_indexation} restreint={t.niveau === 'AGENT'} />}
       <Fichiers titre="Fichiers à affecter" items={t.a_affecter} />
       <Fichiers titre="Mes fichiers récents" items={t.mes_fichiers} />
-      {t.mes_roles.length > 0 && <section className="card p-4"><h2 className="mb-2 font-semibold text-gold-300">Mes rôles</h2><div className="flex flex-wrap gap-2">{t.mes_roles.map((r) => <Badge key={r.id} tone="gold">{r.libelle}</Badge>)}</div></section>}
-      {t.acces_ponctuels.length > 0 && <section className="card p-4"><h2 className="mb-2 font-semibold text-gold-300">Accès ponctuels</h2><ul className="text-sm">{t.acces_ponctuels.map((a) => <li key={a.document_id}>{a.document_titre} <span className="text-cream-300">· jusqu’au {formatDate(a.expire_le)}</span></li>)}</ul></section>}
+      {t.mes_roles.length > 0 && <section className="card p-4"><h2 className="mb-2 font-semibold text-navy-600">Mes rôles</h2><div className="flex flex-wrap gap-2">{t.mes_roles.map((r) => <Badge key={r.id} tone="gold">{r.libelle}</Badge>)}</div></section>}
+      {t.acces_ponctuels.length > 0 && <section className="card p-4"><h2 className="mb-2 font-semibold text-navy-600">Accès ponctuels</h2><ul className="text-sm">{t.acces_ponctuels.map((a) => <li key={a.document_id}>{a.document_titre} <span className="text-slate-600">· jusqu’au {formatDate(a.expire_le)}</span></li>)}</ul></section>}
     </div>
   )
 }

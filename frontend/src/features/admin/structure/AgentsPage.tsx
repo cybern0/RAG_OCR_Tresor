@@ -136,7 +136,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
               {f.poste === 'CHEF_SERVICE' ? '✓ ' : ''}Chef de service
             </button>
           </div>
-          <p className="mt-1 text-xs text-cream-300">Par défaut : aucun poste (agent). Nommer un chef remplace le titulaire précédent ; le chef de service couvre toutes les divisions de son service, sans division propre. Le matricule n'est pas modifiable.</p>
+          <p className="mt-1 text-xs text-slate-600">Par défaut : aucun poste (agent). Nommer un chef remplace le titulaire précédent ; le chef de service couvre toutes les divisions de son service, sans division propre. Le matricule n'est pas modifiable.</p>
         </div>
         <ErrorBox message={error} />
         <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={onClose}>Annuler</button><button className="btn" disabled={save.isPending}>{save.isPending ? 'Enregistrement…' : 'Enregistrer'}</button></div>
@@ -187,7 +187,7 @@ export function Component() {
         actions={<button className="btn" onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Nouvel agent</button>} />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative min-w-52 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-cream-300" aria-hidden />
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-600" aria-hidden />
           <input className="input pl-9" type="search" placeholder="Rechercher un agent (matricule, nom, email…)" aria-label="Rechercher un agent" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <select className="input w-auto" aria-label="Service" value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
@@ -212,10 +212,10 @@ export function Component() {
           <thead><tr><th className="th">Matricule</th><th className="th">Agent</th><th className="th">Service / division</th><th className="th">Poste</th><th className="th">Compte</th><th className="th">État</th><th className="th" /></tr></thead>
           <tbody>
             {visibles.map((a) => (
-              <tr key={a.id} className="hover:bg-leaf-700/40">
+              <tr key={a.id} className="hover:bg-slate-50">
                 <td className="td font-mono text-xs">{a.matricule}</td>
-                <td className="td">{a.nom} {a.prenom}<br /><span className="text-xs text-cream-300">{a.fonction ?? ''}{a.email ? ` · ${a.email}` : ''}</span></td>
-                <td className="td text-sm">{a.service_nom ?? '—'}{a.division_nom ? <><br /><span className="text-xs text-cream-300">{a.division_nom}</span></> : null}</td>
+                <td className="td">{a.nom} {a.prenom}<br /><span className="text-xs text-slate-600">{a.fonction ?? ''}{a.email ? ` · ${a.email}` : ''}</span></td>
+                <td className="td text-sm">{a.service_nom ?? '—'}{a.division_nom ? <><br /><span className="text-xs text-slate-600">{a.division_nom}</span></> : null}</td>
                 <td className="td text-sm">{a.titre === 'CHEF_DIVISION' ? <Badge tone="gold">Chef de division</Badge> : a.titre === 'CHEF_SERVICE' ? <Badge tone="gold">Chef de service</Badge> : '—'}</td>
                 <td className="td text-sm">{a.nom_utilisateur ?? '—'}</td>
                 <td className="td"><Badge tone={a.actif ? 'green' : 'gray'}>{a.actif ? 'Actif' : 'Désactivé'}</Badge></td>

@@ -18,18 +18,18 @@ function Sources({ message }: { message: ChatMessage }) {
   if (message.sources.length === 0) return null
   return (
     <details className="mt-3 text-sm">
-      <summary className="cursor-pointer text-gold-400 hover:text-gold-300">
+      <summary className="cursor-pointer text-navy-700 hover:text-navy-600">
         Sources ({message.sources.length})
       </summary>
       <ul className="mt-2 space-y-2">
         {message.sources.map((s) => (
-          <li key={s.ref} className="rounded-lg border border-gold-500/30 bg-leaf-950/50 p-2.5">
-            <p className="font-medium text-gold-300">
+          <li key={s.ref} className="rounded-lg border border-line bg-slate-50 p-2.5">
+            <p className="font-medium text-navy-600">
               [{s.ref}] {s.titre}
-              {s.version ? <span className="text-cream-300"> · version {s.version}{s.date ? ` du ${formatDay(s.date)}` : ''}</span> : null}
-              {s.page ? <span className="text-cream-300"> · page {s.page}</span> : null}
+              {s.version ? <span className="text-slate-600"> · version {s.version}{s.date ? ` du ${formatDay(s.date)}` : ''}</span> : null}
+              {s.page ? <span className="text-slate-600"> · page {s.page}</span> : null}
             </p>
-            <p className="mt-1 text-xs text-cream-300">{s.extrait}…</p>
+            <p className="mt-1 text-xs text-slate-600">{s.extrait}…</p>
           </li>
         ))}
       </ul>
@@ -54,17 +54,17 @@ function Options() {
 
   if (!prefs.data) return <ErrorBox message={prefs.error} />
   return (
-    <div className="space-y-1 rounded-lg border border-gold-500/30 p-2.5 text-sm">
+    <div className="space-y-1 rounded-lg border border-line p-2.5 text-sm">
       <ErrorBox message={error} />
       <label className="flex items-start gap-2">
-        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-gold-500" checked={prefs.data.derniere_version_seulement}
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-navy-700" checked={prefs.data.derniere_version_seulement}
           onChange={(e) => void change({ derniere_version_seulement: e.target.checked })} />
-        <span>Dernière version seulement<span className="block text-xs text-cream-300">Ignorer les anciennes versions des fichiers dans les réponses.</span></span>
+        <span>Dernière version seulement<span className="block text-xs text-slate-600">Ignorer les anciennes versions des fichiers dans les réponses.</span></span>
       </label>
       <label className="flex items-start gap-2">
-        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-gold-500" checked={prefs.data.memoire_inter_sessions}
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-navy-700" checked={prefs.data.memoire_inter_sessions}
           onChange={(e) => void change({ memoire_inter_sessions: e.target.checked })} />
-        <span>Mémoire entre sessions<span className="block text-xs text-cream-300">Retenir le résultat de mes échanges pour enrichir mes prochaines conversations.</span></span>
+        <span>Mémoire entre sessions<span className="block text-xs text-slate-600">Retenir le résultat de mes échanges pour enrichir mes prochaines conversations.</span></span>
       </label>
     </div>
   )
@@ -117,24 +117,24 @@ export default function Chatbot() {
             <li key={c.id} className="group flex items-center gap-1">
               <button
                 onClick={() => void chat.load(c.id)}
-                className={`flex-1 truncate rounded-lg px-2 py-1.5 text-left text-sm hover:bg-gold-500/15 ${
-                  chat.conversationId === c.id ? 'bg-gold-500/20 text-gold-300' : 'text-cream-100'
+                className={`flex-1 truncate rounded-lg px-2 py-1.5 text-left text-sm hover:bg-navy-100 ${
+                  chat.conversationId === c.id ? 'bg-navy-100 text-navy-600' : 'text-black'
                 }`}
                 title={c.titre ?? ''}
               >
                 {c.titre || 'Conversation'}
               </button>
-              <button onClick={() => void remove(c.id)} aria-label="Supprimer la conversation" className="px-1 text-cream-300 hover:text-red-300">×</button>
+              <button onClick={() => void remove(c.id)} aria-label="Supprimer la conversation" className="px-1 text-slate-600 hover:text-red-600">×</button>
             </li>
           ))}
-          {history.data?.length === 0 && <li className="px-2 text-sm text-cream-300">Aucune conversation.</li>}
+          {history.data?.length === 0 && <li className="px-2 text-sm text-slate-600">Aucune conversation.</li>}
         </ul>
       </aside>
 
       <section className="card flex min-h-[60svh] flex-col p-4">
         <div className="flex-1 space-y-4 overflow-y-auto pr-1">
           {chat.messages.length === 0 && (
-            <p className="py-16 text-center text-cream-300">
+            <p className="py-16 text-center text-slate-600">
               Posez une question : la réponse s'appuie uniquement sur les fichiers des dossiers auxquels vous avez accès.
               La conversation est mémorisée et retrouvée après une reconnexion.
             </p>
@@ -144,11 +144,11 @@ export default function Chatbot() {
               <div
                 className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                   m.role === 'utilisateur'
-                    ? 'bg-gold-500 text-leaf-950'
-                    : 'border border-gold-500/30 bg-leaf-900 text-cream-50'
+                    ? 'bg-navy-700 text-white'
+                    : 'border border-line bg-slate-100 text-black'
                 }`}
               >
-                <p className={`whitespace-pre-wrap text-sm leading-relaxed ${m.masque ? 'italic text-cream-300' : ''}`}>
+                <p className={`whitespace-pre-wrap text-sm leading-relaxed ${m.masque ? 'italic text-slate-600' : ''}`}>
                   {m.text || (m.role === 'assistant' && chat.busy ? 'Recherche dans les documents…' : '')}
                 </p>
                 {m.role === 'assistant' && <Sources message={m} />}

@@ -18,7 +18,7 @@ export default function Modal({ title, onClose, children, wide = false }: Props)
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-leaf-950/80 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-navy-900/60 p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
@@ -28,8 +28,8 @@ export default function Modal({ title, onClose, children, wide = false }: Props)
         className={`card w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} p-6`}
       >
         <div className="mb-4 flex items-start justify-between gap-4">
-          <h2 className="text-lg font-semibold text-gold-400">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Fermer" className="text-xl leading-none text-cream-300 hover:text-gold-300">
+          <h2 className="text-lg font-semibold text-navy-700">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Fermer" className="text-xl leading-none text-slate-600 hover:text-navy-600">
             ×
           </button>
         </div>

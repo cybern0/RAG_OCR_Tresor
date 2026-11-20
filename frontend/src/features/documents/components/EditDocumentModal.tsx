@@ -45,8 +45,8 @@ export default function EditDocumentModal({ doc, onClose }: { doc: DocumentMeta;
         <div className="flex justify-end"><ExampleButton onFill={() => setTitre(exempleTitreFichier())} /></div>
         <Field label="Titre">{(id) => <input id={id} className="input" required maxLength={250} value={titre} onChange={(e) => setTitre(e.target.value)} />}</Field>
         <FlagsFields idPrefix="up" fileName={doc.version.nom_fichier} tableaux={tableaux} images={images} onTableaux={setTableaux} onImages={setImages} />
-        {flagsChanged && <p className="text-xs text-gold-300">La version la plus récente sera relue et réindexée avec ces options.</p>}
-        <p className="text-xs text-cream-300">Pour changer le contenu, ajouter une nouvelle version : l’ancienne est conservée.</p>
+        {flagsChanged && <p className="text-xs text-navy-600">La version la plus récente sera relue et réindexée avec ces options.</p>}
+        <p className="text-xs text-slate-600">Pour changer le contenu, ajouter une nouvelle version : l’ancienne est conservée.</p>
         <ErrorBox message={error} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>

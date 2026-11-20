@@ -70,12 +70,12 @@ export default function AddUserForm({ agents, onClose, onDone }: Props) {
         <div>
           <label className="label" htmlFor="nu-name">Nom d'utilisateur</label>
           <input id="nu-name" className="input" required autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} />
-          <p className="mt-1 text-xs text-cream-300">Minuscules, chiffres, point, tiret (3 à 80 caractères).</p>
+          <p className="mt-1 text-xs text-slate-600">Minuscules, chiffres, point, tiret (3 à 80 caractères).</p>
         </div>
         <div>
           <label className="label" htmlFor="nu-pass">Mot de passe initial</label>
           <input id="nu-pass" type="password" className="input" required minLength={10} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <p className="mt-1 text-xs text-cream-300">10 caractères minimum.</p>
+          <p className="mt-1 text-xs text-slate-600">10 caractères minimum.</p>
         </div>
         <div>
           <label className="label" htmlFor="nu-role">Rôle</label>
@@ -94,15 +94,15 @@ export default function AddUserForm({ agents, onClose, onDone }: Props) {
             <option value="">— Choisir —</option>
             {free.map((a) => <option key={a.id} value={a.id}>{a.nom} {a.prenom} — {a.service_nom}</option>)}
           </select>
-          {free.length === 0 && <p className="mt-1 text-xs text-gold-300">Aucun agent disponible : créer d'abord un agent (onglet Agents).</p>}
+          {free.length === 0 && <p className="mt-1 text-xs text-navy-600">Aucun agent disponible : créer d'abord un agent (onglet Agents).</p>}
         </div>
         {divisionId !== null && roleQuery.data && roleQuery.data.length > 0 && (
           <div>
             <label className="label">Rôles de division</label>
-            <div className="space-y-2 rounded-lg border border-gold-500/30 bg-ink-900/40 p-3">
+            <div className="space-y-2 rounded-lg border border-line bg-ink-900/40 p-3">
               {roleQuery.data.map((roleOption) => (
-                <label key={roleOption.id} className="flex items-center gap-2 text-sm text-cream-200">
-                  <input type="checkbox" checked={roleIds.includes(roleOption.id)} onChange={() => toggleRole(roleOption.id)} className="h-4 w-4 accent-gold-500" />
+                <label key={roleOption.id} className="flex items-center gap-2 text-sm text-slate-800">
+                  <input type="checkbox" checked={roleIds.includes(roleOption.id)} onChange={() => toggleRole(roleOption.id)} className="h-4 w-4 accent-navy-700" />
                   {roleOption.libelle}
                 </label>
               ))}

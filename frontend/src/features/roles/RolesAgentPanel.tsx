@@ -26,11 +26,11 @@ export default function RolesAgentPanel({ userId, divisionId, divisionNom }: { u
   const roles = (dispo.data ?? []).filter((r) => r.actif || base.has(r.id))
   return (
     <section className="card space-y-3 p-5">
-      <h2 className="font-semibold text-gold-400">Rôles de division · {divisionNom}</h2>
-      {roles.length === 0 ? <p className="text-sm text-cream-300">Aucun rôle défini dans cette division.</p> : (
+      <h2 className="font-semibold text-navy-700">Rôles de division · {divisionNom}</h2>
+      {roles.length === 0 ? <p className="text-sm text-slate-600">Aucun rôle défini dans cette division.</p> : (
         <ul className="space-y-1">{roles.map((r) => (
           <li key={r.id}><label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" className="h-4 w-4 accent-gold-500" checked={sel.has(r.id)}
+            <input type="checkbox" className="h-4 w-4 accent-navy-700" checked={sel.has(r.id)}
               onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(r.id); else n.delete(r.id); setEdit(n) }} /> {r.libelle}{!r.actif && ' (inactif)'}
           </label></li>
         ))}</ul>

@@ -25,11 +25,11 @@ export default function FlagsFields({ fileName, tableaux, images, onTableaux, on
       {rows.map((r) => (
         <div key={r.id}>
           <label className="flex items-center gap-2 text-sm">
-            <input id={`${idPrefix}-${r.id}`} type="checkbox" className="h-4 w-4 accent-gold-500" checked={r.value} disabled={r.locked}
+            <input id={`${idPrefix}-${r.id}`} type="checkbox" className="h-4 w-4 accent-navy-700" checked={r.value} disabled={r.locked}
               onChange={(e) => r.set(e.target.checked)} />
             {r.label}
           </label>
-          <p className="ml-6 text-xs text-cream-300">{r.locked ? r.imposeAide : r.aide}</p>
+          <p className="ml-6 text-xs text-slate-600">{r.locked ? r.imposeAide : r.aide}</p>
         </div>
       ))}
     </fieldset>

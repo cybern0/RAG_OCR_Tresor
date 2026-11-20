@@ -62,13 +62,13 @@ function EditUserForm({ target, agents, isSelf, onClose, onDone }: { target: Use
           </select>
         </div>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" className="h-4 w-4 accent-gold-500" disabled={isSelf} checked={actif} onChange={(e) => setActif(e.target.checked)} />
+          <input type="checkbox" className="h-4 w-4 accent-navy-700" disabled={isSelf} checked={actif} onChange={(e) => setActif(e.target.checked)} />
           Compte actif
         </label>
         <div>
           <label className="label" htmlFor="eu-pass">Nouveau mot de passe (facultatif)</label>
           <input id="eu-pass" type="password" className="input" minLength={10} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <p className="mt-1 text-xs text-cream-300">Les sessions ouvertes de cet utilisateur seront coupées.</p>
+          <p className="mt-1 text-xs text-slate-600">Les sessions ouvertes de cet utilisateur seront coupées.</p>
         </div>
         <ErrorBox message={error} />
         <div className="flex justify-end gap-2">
@@ -106,10 +106,10 @@ export default function UsersPanel() {
               {(users.data ?? []).map((u) => (
                 <tr key={u.id}>
                   <td className="td font-medium">{u.nom_utilisateur}</td>
-                  <td className="td"><span className="badge border-gold-500/60 text-gold-300">{u.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur'}</span></td>
+                  <td className="td"><span className="badge border-slate-300 text-navy-600">{u.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur'}</span></td>
                   <td className="td text-sm">{u.agent ? `${u.agent.nom} ${u.agent.prenom} — ${u.agent.service_nom ?? 'sans service'}` : '—'}</td>
-                  <td className="td text-xs text-cream-300">{u.derniere_connexion ? new Date(u.derniere_connexion).toLocaleString('fr-FR') : 'Jamais'}</td>
-                  <td className="td"><span className={`badge ${u.actif ? 'border-emerald-300/70 text-emerald-100' : 'border-red-300/70 text-red-100'}`}>{u.actif ? 'Actif' : 'Désactivé'}</span></td>
+                  <td className="td text-xs text-slate-600">{u.derniere_connexion ? new Date(u.derniere_connexion).toLocaleString('fr-FR') : 'Jamais'}</td>
+                  <td className="td"><span className={`badge ${u.actif ? 'border-emerald-300 text-emerald-800' : 'border-red-300 text-red-800'}`}>{u.actif ? 'Actif' : 'Désactivé'}</span></td>
                   <td className="td text-right"><button className="btn-ghost" onClick={() => setEditing(u)}>Modifier</button></td>
                 </tr>
               ))}

@@ -22,8 +22,8 @@ export default function SousDossiers({ d }: { d: DossierDetail }) {
     <section className="mb-4 space-y-2">
       <div className="flex flex-wrap gap-2">
         {sousDossiers.map((s) => (
-          <Link key={s.id} to={`/dossiers/${s.id}`} className="card flex items-center gap-2 px-3 py-2 text-sm hover:border-gold-400">
-            <FolderOpen className="h-4 w-4 text-gold-400" aria-hidden /> {s.nom} <span className="text-xs text-cream-300">({s.nb_fichiers})</span>
+          <Link key={s.id} to={`/dossiers/${s.id}`} className="card flex items-center gap-2 px-3 py-2 text-sm hover:border-navy-600">
+            <FolderOpen className="h-4 w-4 text-navy-700" aria-hidden /> {s.nom} <span className="text-xs text-slate-600">({s.nb_fichiers})</span>
           </Link>
         ))}
       </div>

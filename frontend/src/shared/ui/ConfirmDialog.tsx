@@ -32,7 +32,7 @@ export default function ConfirmDialog({ title, children, confirmLabel, danger = 
 
   return (
     <Modal title={title} onClose={onClose} size="sm">
-      <div className="text-sm text-cream-100">{children}</div>
+      <div className="text-sm text-black">{children}</div>
       <ErrorBox message={error} className="mt-4" />
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>

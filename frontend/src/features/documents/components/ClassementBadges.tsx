@@ -10,7 +10,7 @@ export function ClassementBadges({ doc, max = 3 }: { doc: DocumentMeta; max?: nu
       {doc.type_nom && <Badge tone="gray">{doc.type_nom}</Badge>}
       <Badge tone={CONF_TONE[doc.confidentialite] ?? 'gray'}>{doc.confidentialite.charAt(0) + doc.confidentialite.slice(1).toLowerCase()}</Badge>
       {doc.tags.slice(0, max).map((t) => <Badge key={t} tone="gray" className="font-normal">#{t}</Badge>)}
-      {doc.tags.length > max && <span className="text-xs text-cream-300">+{doc.tags.length - max}</span>}
+      {doc.tags.length > max && <span className="text-xs text-slate-600">+{doc.tags.length - max}</span>}
     </div>
   )
 }

@@ -31,7 +31,7 @@ export default function DeleteDocumentDialog({ doc, onClose, onDone }: Props) {
   return (
     <Modal title="Supprimer le fichier" onClose={onClose}>
       <p className="text-sm">
-        Mettre <span className="font-semibold text-gold-300">« {doc.titre} »</span> dans la corbeille ?
+        Mettre <span className="font-semibold text-navy-600">« {doc.titre} »</span> dans la corbeille ?
         Il restera accessible depuis l’administration locale pour restauration, mais il ne sera plus visible dans le dossier actif ni dans le chatbot.
       </p>
       <div className="mt-4"><ErrorBox message={error} /></div>

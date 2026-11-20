@@ -68,13 +68,13 @@ export default function VersionsDialog({ doc, canDelete, onClose, onChanged }: P
           <ul className="max-h-56 space-y-2 overflow-y-auto">
             {list.map((v) => (
               <li key={v.numero}
-                className={`rounded-lg border p-2.5 ${current?.numero === v.numero ? 'border-gold-400 bg-gold-500/10' : 'border-gold-500/30'}`}>
+                className={`rounded-lg border p-2.5 ${current?.numero === v.numero ? 'border-navy-600 bg-navy-50' : 'border-line'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <button className="text-left" onClick={() => setSelected(v.numero)} aria-label={`Afficher la version ${v.numero}`}>
-                    <span className="font-semibold text-gold-300">v{v.numero}</span>
-                    {v.est_courante && <span className="ml-2 badge border-emerald-300/70 bg-emerald-400/15 text-emerald-100">version qui fait foi</span>}
+                    <span className="font-semibold text-navy-600">v{v.numero}</span>
+                    {v.est_courante && <span className="ml-2 badge border-emerald-300 bg-emerald-50 text-emerald-800">version qui fait foi</span>}
                     <span className="ml-2 text-sm">{v.nom_fichier}</span>
-                    <span className="block text-xs text-cream-300">
+                    <span className="block text-xs text-slate-600">
                       {formatDate(v.cree_le)} · {v.cree_par_nom ?? 'auteur inconnu'} · {formatSize(v.taille_octets)}
                       {v.nb_pages ? ` · ${v.nb_pages} p.` : ''}{v.ocr_utilise ? ' · OCR' : ''}
                     </span>
@@ -87,14 +87,14 @@ export default function VersionsDialog({ doc, canDelete, onClose, onChanged }: P
                     )}
                   </div>
                 </div>
-                {v.statut === 'error' && v.message_erreur && <p className="mt-1 text-xs text-red-200">{v.message_erreur}</p>}
+                {v.statut === 'error' && v.message_erreur && <p className="mt-1 text-xs text-red-700">{v.message_erreur}</p>}
               </li>
             ))}
           </ul>
         )}
         {current && (
           <div>
-            <p className="mb-2 text-sm font-medium text-gold-400">Aperçu de la version {current.numero}</p>
+            <p className="mb-2 text-sm font-medium text-navy-700">Aperçu de la version {current.numero}</p>
             <PreviewStored key={`${doc.id}-${current.numero}`} documentId={doc.id} numero={current.numero} mode={current.apercu} />
           </div>
         )}

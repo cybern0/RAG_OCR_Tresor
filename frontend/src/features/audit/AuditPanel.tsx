@@ -15,11 +15,11 @@ export default function AuditPanel() {
           <tbody>
             {(audit.data ?? []).map((r) => (
               <tr key={r.id}>
-                <td className="td whitespace-nowrap text-xs text-cream-300">{new Date(r.cree_le).toLocaleString('fr-FR')}</td>
+                <td className="td whitespace-nowrap text-xs text-slate-600">{new Date(r.cree_le).toLocaleString('fr-FR')}</td>
                 <td className="td text-sm">{r.nom_utilisateur ?? '—'}</td>
-                <td className="td text-sm font-medium text-gold-300">{r.action}</td>
-                <td className="td max-w-sm break-words text-xs text-cream-300">{r.entite ? `${r.entite} #${r.entite_id ?? ''} ` : ''}{Object.keys(r.detail).length ? JSON.stringify(r.detail) : ''}</td>
-                <td className="td text-xs text-cream-300">{r.adresse_ip ?? ''}</td>
+                <td className="td text-sm font-medium text-navy-600">{r.action}</td>
+                <td className="td max-w-sm break-words text-xs text-slate-600">{r.entite ? `${r.entite} #${r.entite_id ?? ''} ` : ''}{Object.keys(r.detail).length ? JSON.stringify(r.detail) : ''}</td>
+                <td className="td text-xs text-slate-600">{r.adresse_ip ?? ''}</td>
               </tr>
             ))}
           </tbody>

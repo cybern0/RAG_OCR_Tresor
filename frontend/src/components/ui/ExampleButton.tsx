@@ -6,7 +6,7 @@ export default function ExampleButton({ onFill, className = '' }: { onFill: () =
     <button
       type="button"
       onClick={onFill}
-      className={`text-xs font-medium text-gold-400 underline decoration-dotted underline-offset-4 hover:text-gold-300 ${className}`}
+      className={`text-xs font-medium text-navy-700 underline decoration-dotted underline-offset-4 hover:text-navy-600 ${className}`}
     >
       ✎ Remplir avec exemple
     </button>

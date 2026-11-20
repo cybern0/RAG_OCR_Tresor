@@ -26,7 +26,7 @@ function Unite({ u }: { u: UniteSecret }) {
   return (
     <li className="card space-y-2 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div><span className="font-medium">{u.nom}</span> <span className="text-xs text-cream-300">Division · {u.service_nom}</span></div>
+        <div><span className="font-medium">{u.nom}</span> <span className="text-xs text-slate-600">Division · {u.service_nom}</span></div>
         {u.deverrouille
           ? <Badge tone="green"><Unlock className="mr-1 inline h-3 w-3" />Ouverte{u.valide_jusqua ? ` jusqu’à ${formatDate(u.valide_jusqua)}` : ''}</Badge>
           : <Badge tone="amber"><Lock className="mr-1 inline h-3 w-3" />Verrouillée</Badge>}
@@ -41,7 +41,7 @@ function Unite({ u }: { u: UniteSecret }) {
         {u.deverrouille && !edition && <button className="btn-ghost" disabled={lock.isPending} onClick={() => void run(lock.mutateAsync(), 'Verrouillé.')}>Verrouiller</button>}
         <button className="btn-ghost" onClick={() => { setEdition((e) => !e); setMdp(''); setAncien('') }}>{edition ? 'Annuler' : u.secret_defini ? 'Changer mon mot de passe' : 'Définir mon mot de passe'}</button>
       </div>
-      {!u.secret_defini && !edition && <p className="text-xs text-cream-300">Aucun mot de passe de dossier défini : définissez-le pour pouvoir ouvrir cette unité.</p>}
+      {!u.secret_defini && !edition && <p className="text-xs text-slate-600">Aucun mot de passe de dossier défini : définissez-le pour pouvoir ouvrir cette unité.</p>}
     </li>
   )
 }

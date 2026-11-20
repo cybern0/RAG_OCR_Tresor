@@ -4,7 +4,7 @@ export default function Pagination({ page, taille, total, onPage }: { page: numb
   const pages = Math.max(1, Math.ceil(total / taille))
   if (total <= taille) return null
   return (
-    <nav className="flex items-center justify-between gap-3 px-1 pt-3 text-sm text-cream-300" aria-label="Pagination">
+    <nav className="flex items-center justify-between gap-3 px-1 pt-3 text-sm text-slate-600" aria-label="Pagination">
       <span>{(page - 1) * taille + 1}–{Math.min(page * taille, total)} sur {total}</span>
       <div className="flex items-center gap-1">
         <button className="btn-icon" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Page précédente"><ChevronLeft className="h-4 w-4" /></button>

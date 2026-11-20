@@ -38,7 +38,7 @@ export function Component() {
               </select>
             )}
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-cream-300" aria-hidden />
+              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-600" aria-hidden />
               <input className="input w-64 pl-9" type="search" placeholder="Rechercher un dossier…" aria-label="Rechercher un dossier" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
@@ -61,16 +61,16 @@ export function Component() {
             <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {list.map((d) => (
                 <li key={d.id}>
-                  <Link to={`/dossiers/${d.id}`} className="card group block h-full p-4 transition hover:border-gold-400 hover:bg-leaf-700/60">
+                  <Link to={`/dossiers/${d.id}`} className="card group block h-full p-4 transition hover:border-navy-600 hover:bg-slate-50">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-500/15 text-gold-400">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-navy-100 text-navy-700">
                         {d.archive ? <Archive className="h-5 w-5" /> : <FolderOpen className="h-5 w-5" />}
                       </span>
                       <Badge tone="gold">{d.division_nom}</Badge>
                     </div>
-                    <h2 className="mt-3 truncate font-semibold text-cream-50 group-hover:text-gold-300">{d.nom}</h2>
-                    <p className="mt-0.5 line-clamp-2 min-h-10 text-sm text-cream-300">{d.description ?? 'Aucune description.'}</p>
-                    <p className="mt-2 flex items-center gap-2 text-xs text-cream-300">
+                    <h2 className="mt-3 truncate font-semibold text-black group-hover:text-navy-600">{d.nom}</h2>
+                    <p className="mt-0.5 line-clamp-2 min-h-10 text-sm text-slate-600">{d.description ?? 'Aucune description.'}</p>
+                    <p className="mt-2 flex items-center gap-2 text-xs text-slate-600">
                       <FileText className="h-3.5 w-3.5" aria-hidden /> {plural(d.nb_fichiers, 'fichier')}
                       {d.nb_fichiers_masques > 0 && <span>· {d.nb_fichiers_masques} non accessible(s)</span>}
                       {d.archive && <Badge tone="amber">Archivé</Badge>}
@@ -81,7 +81,7 @@ export function Component() {
             </ul>
           )}
           {canChooseDivision && (
-            <p className="mt-4 text-xs text-cream-300">
+            <p className="mt-4 text-xs text-slate-600">
               Les dossiers sont créés automatiquement à la création d’une division, d’après le modèle fixe configuré côté serveur
               (DOSSIERS_DEFAUT) ; aucun dossier ne se crée à la main.
             </p>

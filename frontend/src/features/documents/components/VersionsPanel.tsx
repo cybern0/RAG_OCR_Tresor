@@ -24,17 +24,17 @@ export function VersionsPanel({ documentId, versions, selected, onSelect, canDel
     <>
       <ul className="space-y-2">
         {versions.map((v) => (
-          <li key={v.numero} className={cn('rounded-lg border p-2.5', selected === v.numero ? 'border-gold-400 bg-gold-500/10' : 'border-gold-500/25')}>
+          <li key={v.numero} className={cn('rounded-lg border p-2.5', selected === v.numero ? 'border-navy-600 bg-navy-50' : 'border-line')}>
             <button className="block w-full text-left" onClick={() => onSelect(v.numero)} aria-pressed={selected === v.numero}>
               <span className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold text-gold-300">v{v.numero}</span>
+                <span className="font-semibold text-navy-600">v{v.numero}</span>
                 {v.est_courante && <Badge tone="green">fait foi</Badge>}
                 <StatusBadge statut={v.statut} />
               </span>
               <span className="mt-1 block truncate text-sm">{v.nom_fichier}</span>
-              <span className="block text-xs text-cream-300">{formatDate(v.cree_le)} · {v.cree_par_nom ?? 'auteur inconnu'} · {formatSize(v.taille_octets)}{v.nb_pages ? ` · ${v.nb_pages} p.` : ''}{v.ocr_utilise ? ' · OCR' : ''}</span>
+              <span className="block text-xs text-slate-600">{formatDate(v.cree_le)} · {v.cree_par_nom ?? 'auteur inconnu'} · {formatSize(v.taille_octets)}{v.nb_pages ? ` · ${v.nb_pages} p.` : ''}{v.ocr_utilise ? ' · OCR' : ''}</span>
             </button>
-            {v.statut === 'error' && v.message_erreur && <p className="mt-1 text-xs text-red-200">{v.message_erreur}</p>}
+            {v.statut === 'error' && v.message_erreur && <p className="mt-1 text-xs text-red-700">{v.message_erreur}</p>}
             <div className="mt-1 flex justify-end gap-1">
               <button className="btn-icon" title="Télécharger" aria-label={`Télécharger la version ${v.numero}`}
                 onClick={() => void downloadVersion(documentId, v.numero, v.nom_fichier).catch((e) => toast.error(errorMessage(e)))}><Download className="h-4 w-4" /></button>
@@ -43,7 +43,7 @@ export function VersionsPanel({ documentId, versions, selected, onSelect, canDel
                   onClick={() => onReindex(v.numero)}><RefreshCw className="h-4 w-4" /></button>
               )}
               {canDelete && versions.length > 1 && (
-                <button className="btn-icon text-red-300" disabled={v.statut === 'processing'} title="Supprimer cette version" aria-label={`Supprimer la version ${v.numero}`} onClick={() => setToDelete(v.numero)}><Trash2 className="h-4 w-4" /></button>
+                <button className="btn-icon text-red-600" disabled={v.statut === 'processing'} title="Supprimer cette version" aria-label={`Supprimer la version ${v.numero}`} onClick={() => setToDelete(v.numero)}><Trash2 className="h-4 w-4" /></button>
               )}
             </div>
           </li>

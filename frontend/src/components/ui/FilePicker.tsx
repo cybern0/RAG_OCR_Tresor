@@ -14,7 +14,7 @@ export default function FilePicker({ id, file, onChange, required = false }: Pro
   return (
     <div className="flex items-center gap-3">
       <button type="button" className="btn-ghost shrink-0" onClick={() => input.current?.click()}>Choisir un fichier</button>
-      <span className="min-w-0 truncate text-sm text-cream-100">
+      <span className="min-w-0 truncate text-sm text-black">
         {file ? `${file.name} (${formatSize(file.size)})` : 'Aucun fichier choisi'}
       </span>
       <input

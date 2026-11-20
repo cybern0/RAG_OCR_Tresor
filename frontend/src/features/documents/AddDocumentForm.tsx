@@ -51,13 +51,13 @@ export default function AddDocumentForm({ dossier, onClose, onDone }: Props) {
     <Modal title="Ajouter un fichier" onClose={onClose} wide>
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-cream-300">Dossier : <span className="font-medium text-gold-300">{dossier.nom}</span></p>
+          <p className="text-sm text-slate-600">Dossier : <span className="font-medium text-navy-600">{dossier.nom}</span></p>
           <ExampleButton onFill={fillExample} />
         </div>
         <div>
           <label className="label" htmlFor="doc-file">Fichier</label>
           <FilePicker id="doc-file" file={file} onChange={setFile} required />
-          <p className="mt-1 text-xs text-cream-300">PDF, Word, PowerPoint, Excel, CSV, texte, images (scans). Maximum 50 Mo.</p>
+          <p className="mt-1 text-xs text-slate-600">PDF, Word, PowerPoint, Excel, CSV, texte, images (scans). Maximum 50 Mo.</p>
         </div>
         <div>
           <label className="label" htmlFor="doc-title">Titre</label>
@@ -65,8 +65,8 @@ export default function AddDocumentForm({ dossier, onClose, onDone }: Props) {
         </div>
         <FlagsFields idPrefix="add" fileName={file?.name ?? null} tableaux={tableaux} images={images} onTableaux={setTableaux} onImages={setImages} />
         {file && (
-          <details className="rounded-lg border border-gold-500/30 p-3">
-            <summary className="cursor-pointer text-sm text-gold-400">Aperçu du fichier avant l’envoi</summary>
+          <details className="rounded-lg border border-line p-3">
+            <summary className="cursor-pointer text-sm text-navy-700">Aperçu du fichier avant l’envoi</summary>
             <div className="mt-3"><PreviewLocal file={file} /></div>
           </details>
         )}

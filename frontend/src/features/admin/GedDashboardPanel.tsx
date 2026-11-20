@@ -34,8 +34,8 @@ import type { AccesDossier, Dossier } from '../../types/dossier'
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="card p-4">
-      <div className="text-xs uppercase tracking-wide text-cream-300">{label}</div>
-      <div className="mt-3 text-2xl font-bold text-gold-400">{value}</div>
+      <div className="text-xs uppercase tracking-wide text-slate-600">{label}</div>
+      <div className="mt-3 text-2xl font-bold text-navy-700">{value}</div>
     </div>
   )
 }
@@ -45,17 +45,17 @@ function ListMetrics({ title, items }: { title: string; items: Array<{ label: st
 
   return (
     <div className="card p-4">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">{title}</h3>
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-700">{title}</h3>
       <div className="space-y-3">
-        {items.length === 0 && <p className="text-sm text-cream-300">Aucune donnée.</p>}
+        {items.length === 0 && <p className="text-sm text-slate-600">Aucune donnée.</p>}
         {items.map((item) => (
           <div key={item.label}>
-            <div className="mb-1 flex items-center justify-between gap-3 text-sm text-cream-100">
+            <div className="mb-1 flex items-center justify-between gap-3 text-sm text-black">
               <span className="truncate">{item.label}</span>
-              <span className="font-medium text-gold-300">{item.value}</span>
+              <span className="font-medium text-navy-600">{item.value}</span>
             </div>
-            <div className="h-2 rounded-full bg-leaf-900">
-              <div className="h-2 rounded-full bg-gold-500" style={{ width: `${(item.value / total) * 100}%` }} />
+            <div className="h-2 rounded-full bg-slate-100">
+              <div className="h-2 rounded-full bg-navy-700" style={{ width: `${(item.value / total) * 100}%` }} />
             </div>
           </div>
         ))}
@@ -66,9 +66,9 @@ function ListMetrics({ title, items }: { title: string; items: Array<{ label: st
 
 function LabelValue({ label, value }: { label: string; value: string | number | null }) {
   return (
-    <div className="rounded-lg border border-gold-500/30 bg-leaf-950/40 p-2">
-      <div className="text-[10px] uppercase tracking-wide text-cream-300">{label}</div>
-      <div className="mt-1 text-sm font-medium text-cream-50">{value ?? '—'}</div>
+    <div className="rounded-lg border border-line bg-slate-50 p-2">
+      <div className="text-[10px] uppercase tracking-wide text-slate-600">{label}</div>
+      <div className="mt-1 text-sm font-medium text-black">{value ?? '—'}</div>
     </div>
   )
 }
@@ -86,7 +86,7 @@ export default function GedDashboardPanel() {
   const [accessByDossier, setAccessByDossier] = useState<Record<number, AccesDossier>>({})
   const [generatedLinks, setGeneratedLinks] = useState<Record<number, string>>({})
   const [error, setError] = useState<string | null>(null)
-  const [categoryForm, setCategoryForm] = useState({ nom: '', couleur: '#d9a92b', ordre: '0', actif: true })
+  const [categoryForm, setCategoryForm] = useState({ nom: '', couleur: '#173f78', ordre: '0', actif: true })
   const [typeForm, setTypeForm] = useState({ nom: '', actif: true })
   const [tagForm, setTagForm] = useState({ nom: '' })
   const [ruleForm, setRuleForm] = useState({
@@ -132,7 +132,7 @@ export default function GedDashboardPanel() {
         ordre: Number(categoryForm.ordre || 0),
         actif: categoryForm.actif,
       })
-      setCategoryForm({ nom: '', couleur: '#d9a92b', ordre: '0', actif: true })
+      setCategoryForm({ nom: '', couleur: '#173f78', ordre: '0', actif: true })
       await refreshMetadata()
     } catch (err) {
       setError(errorMessage(err))
@@ -394,21 +394,21 @@ export default function GedDashboardPanel() {
             <ListMetrics title="Par type" items={typeEntries} />
             <ListMetrics title="Par extension" items={extensionEntries} />
             <div className="card p-4">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Services / directions</h3>
-              <div className="space-y-3 text-sm text-cream-100">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-700">Services / directions</h3>
+              <div className="space-y-3 text-sm text-black">
                 {(data.par_service ?? []).map((item) => (
                   <div key={item.service_id} className="flex items-center justify-between gap-3">
                     <span>Service #{item.service_id}</span>
-                    <span className="font-medium text-gold-300">{item.total}</span>
+                    <span className="font-medium text-navy-600">{item.total}</span>
                   </div>
                 ))}
                 {(data.par_direction ?? []).map((item) => (
                   <div key={item.direction_id} className="flex items-center justify-between gap-3">
                     <span>Direction #{item.direction_id}</span>
-                    <span className="font-medium text-gold-300">{item.total}</span>
+                    <span className="font-medium text-navy-600">{item.total}</span>
                   </div>
                 ))}
-                {(!data.par_service?.length && !data.par_direction?.length) && <p className="text-cream-300">Aucune donnée de service ou de direction.</p>}
+                {(!data.par_service?.length && !data.par_direction?.length) && <p className="text-slate-600">Aucune donnée de service ou de direction.</p>}
               </div>
             </div>
           </div>
@@ -418,21 +418,21 @@ export default function GedDashboardPanel() {
       {tab === 'gestion' && (
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="card p-4">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Catégories</h3>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-700">Catégories</h3>
             <form className="space-y-3" onSubmit={(e) => void submitCategory(e)}>
               <div><label className="label" htmlFor="cat-nom">Nom</label><input id="cat-nom" className="input" value={categoryForm.nom} onChange={(e) => setCategoryForm({ ...categoryForm, nom: e.target.value })} required /></div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div><label className="label" htmlFor="cat-couleur">Couleur</label><input id="cat-couleur" type="color" className="input h-10 px-2" value={categoryForm.couleur} onChange={(e) => setCategoryForm({ ...categoryForm, couleur: e.target.value })} /></div>
                 <div><label className="label" htmlFor="cat-ordre">Ordre</label><input id="cat-ordre" type="number" className="input" value={categoryForm.ordre} onChange={(e) => setCategoryForm({ ...categoryForm, ordre: e.target.value })} /></div>
               </div>
-              <label className="flex items-center gap-2 text-sm text-cream-100"><input type="checkbox" checked={categoryForm.actif} onChange={(e) => setCategoryForm({ ...categoryForm, actif: e.target.checked })} /> Actif</label>
+              <label className="flex items-center gap-2 text-sm text-black"><input type="checkbox" checked={categoryForm.actif} onChange={(e) => setCategoryForm({ ...categoryForm, actif: e.target.checked })} /> Actif</label>
               <button className="btn" type="submit">Ajouter</button>
             </form>
             <div className="mt-4 space-y-2">
               {(categories.data ?? []).map((item: CategoryItem) => (
-                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-gold-500/30 bg-leaf-950/40 p-2 text-sm md:flex-row md:items-center md:justify-between">
-                  <span className="flex items-center gap-2"><span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: item.couleur ?? '#d9a92b' }} /> {item.nom}</span>
-                  <span className="text-cream-300">{item.actif ? 'Actif' : 'Inactif'}</span>
+                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-line bg-slate-50 p-2 text-sm md:flex-row md:items-center md:justify-between">
+                  <span className="flex items-center gap-2"><span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: item.couleur ?? '#173f78' }} /> {item.nom}</span>
+                  <span className="text-slate-600">{item.actif ? 'Actif' : 'Inactif'}</span>
                   <div className="flex gap-2">
                     <button type="button" className="btn-ghost" onClick={() => void renameCategory(item)}>Renommer</button>
                     <button type="button" className="btn-ghost" onClick={() => void toggleCategory(item)}>{item.actif ? 'Désactiver' : 'Réactiver'}</button>
@@ -444,17 +444,17 @@ export default function GedDashboardPanel() {
           </div>
 
           <div className="card p-4">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Types de document</h3>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-700">Types de document</h3>
             <form className="space-y-3" onSubmit={(e) => void submitType(e)}>
               <div><label className="label" htmlFor="type-nom">Nom</label><input id="type-nom" className="input" value={typeForm.nom} onChange={(e) => setTypeForm({ ...typeForm, nom: e.target.value })} required /></div>
-              <label className="flex items-center gap-2 text-sm text-cream-100"><input type="checkbox" checked={typeForm.actif} onChange={(e) => setTypeForm({ ...typeForm, actif: e.target.checked })} /> Actif</label>
+              <label className="flex items-center gap-2 text-sm text-black"><input type="checkbox" checked={typeForm.actif} onChange={(e) => setTypeForm({ ...typeForm, actif: e.target.checked })} /> Actif</label>
               <button className="btn" type="submit">Ajouter</button>
             </form>
             <div className="mt-4 space-y-2">
               {(types.data ?? []).map((item: TypeItem) => (
-                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-gold-500/30 bg-leaf-950/40 p-2 text-sm md:flex-row md:items-center md:justify-between">
+                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-line bg-slate-50 p-2 text-sm md:flex-row md:items-center md:justify-between">
                   <span>{item.nom}</span>
-                  <span className="text-cream-300">{item.actif ? 'Actif' : 'Inactif'}</span>
+                  <span className="text-slate-600">{item.actif ? 'Actif' : 'Inactif'}</span>
                   <div className="flex gap-2">
                     <button type="button" className="btn-ghost" onClick={() => void renameType(item)}>Renommer</button>
                     <button type="button" className="btn-ghost" onClick={() => void toggleType(item)}>{item.actif ? 'Désactiver' : 'Réactiver'}</button>
@@ -466,14 +466,14 @@ export default function GedDashboardPanel() {
           </div>
 
           <div className="card p-4">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Tags</h3>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-700">Tags</h3>
             <form className="space-y-3" onSubmit={(e) => void submitTag(e)}>
               <div><label className="label" htmlFor="tag-nom">Nom du tag</label><input id="tag-nom" className="input" value={tagForm.nom} onChange={(e) => setTagForm({ nom: e.target.value })} required /></div>
               <button className="btn" type="submit">Ajouter</button>
             </form>
             <div className="mt-4 flex flex-wrap gap-2">
               {(tags.data ?? []).map((item: TagItem) => (
-                <span key={item.id} className="badge flex items-center gap-2 border-gold-500/40 bg-gold-500/10 text-gold-300">
+                <span key={item.id} className="badge flex items-center gap-2 border-line bg-navy-50 text-navy-600">
                   {item.nom}
                   <button type="button" className="text-xs underline" onClick={() => void renameTag(item)}>✎</button>
                   <button type="button" className="text-xs underline" onClick={() => void removeTag(item)}>×</button>
@@ -483,7 +483,7 @@ export default function GedDashboardPanel() {
           </div>
 
           <div className="card p-4 xl:col-span-2">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Règles de classement</h3>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-700">Règles de classement</h3>
             <form className="grid gap-3 md:grid-cols-2" onSubmit={(e) => void submitRule(e)}>
               <div className="md:col-span-2"><label className="label" htmlFor="rule-nom">Nom</label><input id="rule-nom" className="input" value={ruleForm.nom} onChange={(e) => setRuleForm({ ...ruleForm, nom: e.target.value })} required /></div>
               <div><label className="label" htmlFor="rule-prio">Priorité</label><input id="rule-prio" type="number" className="input" value={ruleForm.priorite} onChange={(e) => setRuleForm({ ...ruleForm, priorite: e.target.value })} /></div>
@@ -492,15 +492,15 @@ export default function GedDashboardPanel() {
               <div><label className="label" htmlFor="rule-type">Type</label><select id="rule-type" className="input" value={ruleForm.type_document_id} onChange={(e) => setRuleForm({ ...ruleForm, type_document_id: e.target.value })}><option value="">Aucune</option>{(types.data ?? []).map((item: TypeItem) => <option key={item.id} value={item.id}>{item.nom}</option>)}</select></div>
               <div className="md:col-span-2"><label className="label" htmlFor="rule-tags">Tags</label><input id="rule-tags" className="input" value={ruleForm.tags} onChange={(e) => setRuleForm({ ...ruleForm, tags: e.target.value })} placeholder="finance, rh, dossier admin" /></div>
               <div className="md:col-span-2"><label className="label" htmlFor="rule-critere">Critère JSON</label><textarea id="rule-critere" className="input min-h-32" value={ruleForm.critere} onChange={(e) => setRuleForm({ ...ruleForm, critere: e.target.value })} /></div>
-              <label className="md:col-span-2 flex items-center gap-2 text-sm text-cream-100"><input type="checkbox" checked={ruleForm.actif} onChange={(e) => setRuleForm({ ...ruleForm, actif: e.target.checked })} /> Règle active</label>
+              <label className="md:col-span-2 flex items-center gap-2 text-sm text-black"><input type="checkbox" checked={ruleForm.actif} onChange={(e) => setRuleForm({ ...ruleForm, actif: e.target.checked })} /> Règle active</label>
               <div className="md:col-span-2 flex flex-wrap items-center gap-2">
                 <button className="btn" type="submit">Créer</button>
                 <button type="button" className="btn-ghost" onClick={() => void handleSimulation()}>Tester la règle</button>
               </div>
             </form>
             {simulation && (
-              <div className="mt-4 rounded-lg border border-gold-500/30 bg-leaf-950/40 p-3">
-                <div className="mb-2 text-xs uppercase tracking-wide text-gold-400">Simulation</div>
+              <div className="mt-4 rounded-lg border border-line bg-slate-50 p-3">
+                <div className="mb-2 text-xs uppercase tracking-wide text-navy-700">Simulation</div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <LabelValue label="Catégorie" value={simulation.categorie_id ?? '—'} />
                   <LabelValue label="Type" value={simulation.type_document_id ?? '—'} />
@@ -511,13 +511,13 @@ export default function GedDashboardPanel() {
             )}
             <div className="mt-4 space-y-2">
               {(rules.data ?? []).map((item: RuleItem) => (
-                <div key={item.id} className="rounded-lg border border-gold-500/30 bg-leaf-950/40 p-3 text-sm">
+                <div key={item.id} className="rounded-lg border border-line bg-slate-50 p-3 text-sm">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="font-medium text-gold-300">{item.nom}</span>
-                    <span className="text-cream-300">priorité {item.priorite}</span>
+                    <span className="font-medium text-navy-600">{item.nom}</span>
+                    <span className="text-slate-600">priorité {item.priorite}</span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {item.tags.map((tag) => <span key={`${item.id}-${tag}`} className="badge border-gold-500/40 bg-gold-500/10 text-gold-300">{tag}</span>)}
+                    {item.tags.map((tag) => <span key={`${item.id}-${tag}`} className="badge border-line bg-navy-50 text-navy-600">{tag}</span>)}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button type="button" className="btn-ghost" onClick={() => void toggleRule(item)}>{item.actif ? 'Désactiver' : 'Réactiver'}</button>
@@ -533,15 +533,15 @@ export default function GedDashboardPanel() {
       {tab === 'partage' && (
         <div className="space-y-4">
           <div className="card p-4">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Demandes d’accès en attente</h3>
-            {(accessRequests.data ?? []).length === 0 && <p className="text-sm text-cream-300">Aucune demande en attente.</p>}
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-700">Demandes d’accès en attente</h3>
+            {(accessRequests.data ?? []).length === 0 && <p className="text-sm text-slate-600">Aucune demande en attente.</p>}
             <div className="space-y-3">
               {(accessRequests.data ?? []).map((request: AccessRequestItem) => (
-                <div key={request.id} className="rounded-lg border border-gold-500/30 bg-leaf-950/40 p-3">
+                <div key={request.id} className="rounded-lg border border-line bg-slate-50 p-3">
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <div className="text-sm font-medium text-gold-300">{request.subject_type === 'document' ? 'Document' : 'Dossier'} #{request.subject_id}</div>
-                      <div className="text-xs text-cream-300">Demande de rôle {request.requested_role} · message : {request.message || '—'}</div>
+                      <div className="text-sm font-medium text-navy-600">{request.subject_type === 'document' ? 'Document' : 'Dossier'} #{request.subject_id}</div>
+                      <div className="text-xs text-slate-600">Demande de rôle {request.requested_role} · message : {request.message || '—'}</div>
                     </div>
                     <div className="flex gap-2">
                       <button type="button" className="btn-ghost" onClick={() => void decideAccessRequest(request.id, 'accepted')}>Accepter</button>
@@ -560,35 +560,35 @@ export default function GedDashboardPanel() {
               <div key={dossier.id} className="card p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-semibold text-gold-300">{dossier.nom}</h3>
-                    <p className="text-sm text-cream-300">{dossier.nb_fichiers} document(s) · rôle actuel : {dossier.mon_role}</p>
+                    <h3 className="text-lg font-semibold text-navy-600">{dossier.nom}</h3>
+                    <p className="text-sm text-slate-600">{dossier.nb_fichiers} document(s) · rôle actuel : {dossier.mon_role}</p>
                   </div>
-                  <span className={`badge ${dossier.archive ? 'border-amber-300/50 bg-amber-500/10 text-amber-200' : 'border-green-300/50 bg-green-500/10 text-green-200'}`}>
+                  <span className={`badge ${dossier.archive ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-green-300 bg-green-50 text-green-700'}`}>
                     {dossier.archive ? 'Archivé' : 'Actif'}
                   </span>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-lg border border-gold-500/30 bg-leaf-950/40 p-3">
-                    <div className="mb-2 text-xs uppercase tracking-wide text-gold-400">Membres</div>
-                    <div className="space-y-2 text-sm text-cream-100">
-                      {(access?.membres ?? []).length === 0 && <p className="text-cream-300">Aucun accès direct.</p>}
+                  <div className="rounded-lg border border-line bg-slate-50 p-3">
+                    <div className="mb-2 text-xs uppercase tracking-wide text-navy-700">Membres</div>
+                    <div className="space-y-2 text-sm text-black">
+                      {(access?.membres ?? []).length === 0 && <p className="text-slate-600">Aucun accès direct.</p>}
                       {(access?.membres ?? []).map((member) => (
                         <div key={member.user_id} className="flex items-center justify-between gap-2">
                           <span>{member.nom_utilisateur}</span>
-                          <span className="text-gold-300">{member.role}</span>
+                          <span className="text-navy-600">{member.role}</span>
                         </div>
                       ))}
                     </div>
                   </div>
-                  <div className="rounded-lg border border-gold-500/30 bg-leaf-950/40 p-3">
-                    <div className="mb-2 text-xs uppercase tracking-wide text-gold-400">Services</div>
-                    <div className="space-y-2 text-sm text-cream-100">
-                      {(access?.services ?? []).length === 0 && <p className="text-cream-300">Aucun service autorisé.</p>}
+                  <div className="rounded-lg border border-line bg-slate-50 p-3">
+                    <div className="mb-2 text-xs uppercase tracking-wide text-navy-700">Services</div>
+                    <div className="space-y-2 text-sm text-black">
+                      {(access?.services ?? []).length === 0 && <p className="text-slate-600">Aucun service autorisé.</p>}
                       {(access?.services ?? []).map((service) => (
                         <div key={service.service_id} className="flex items-center justify-between gap-2">
                           <span>{service.service_nom}</span>
-                          <span className="text-gold-300">{service.role}</span>
+                          <span className="text-navy-600">{service.role}</span>
                         </div>
                       ))}
                     </div>
@@ -596,22 +596,22 @@ export default function GedDashboardPanel() {
                 </div>
 
                 <div className="mt-4 space-y-3">
-                  <h4 className="text-sm font-semibold uppercase tracking-wide text-gold-400">Documents du dossier</h4>
-                  {(dossierDocuments ?? []).length === 0 && <p className="text-sm text-cream-300">Aucun document.</p>}
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-navy-700">Documents du dossier</h4>
+                  {(dossierDocuments ?? []).length === 0 && <p className="text-sm text-slate-600">Aucun document.</p>}
                   {(dossierDocuments ?? []).map((doc) => (
-                    <div key={doc.id} className="rounded-lg border border-gold-500/30 bg-leaf-950/40 p-3">
+                    <div key={doc.id} className="rounded-lg border border-line bg-slate-50 p-3">
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
-                          <div className="font-medium text-gold-300">{doc.titre}</div>
-                          <div className="text-xs text-cream-300">#{doc.id}</div>
+                          <div className="font-medium text-navy-600">{doc.titre}</div>
+                          <div className="text-xs text-slate-600">#{doc.id}</div>
                         </div>
                         <div className="flex gap-2">
                           <button type="button" className="btn-ghost" onClick={() => void createShareLink(doc.id)}>Créer lien</button>
                         </div>
                       </div>
                       {generatedLinks[doc.id] && (
-                        <div className="mt-3 rounded border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-100">
-                          <div className="mb-1 text-xs uppercase tracking-wide text-green-200">Jeton de partage local</div>
+                        <div className="mt-3 rounded border border-green-300 bg-green-50 p-2 text-sm text-green-800">
+                          <div className="mb-1 text-xs uppercase tracking-wide text-green-700">Jeton de partage local</div>
                           <div className="break-all">{generatedLinks[doc.id]}</div>
                           <button type="button" className="mt-2 btn-ghost" onClick={() => void copyShareToken(generatedLinks[doc.id])}>Copier</button>
                         </div>

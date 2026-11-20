@@ -42,11 +42,11 @@ export default function Modal({ title, onClose, children, size = 'md' }: Props) 
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex animate-fade-in items-start justify-center overflow-y-auto bg-leaf-950/80 p-4 backdrop-blur-sm sm:items-center"
+    <div className="fixed inset-0 z-50 flex animate-fade-in items-start justify-center overflow-y-auto bg-navy-900/60 p-4 backdrop-blur-sm sm:items-center"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cn('card w-full animate-pop p-6', SIZES[size])}>
         <div className="mb-4 flex items-start justify-between gap-4">
-          <h2 id={titleId} className="text-lg font-semibold text-gold-400">{title}</h2>
+          <h2 id={titleId} className="text-lg font-semibold text-navy-700">{title}</h2>
           <button type="button" data-close onClick={onClose} aria-label="Fermer" className="btn-icon -mr-2 -mt-1"><X className="h-4 w-4" /></button>
         </div>
         {children}

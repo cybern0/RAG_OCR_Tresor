@@ -25,7 +25,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-full max-w-sm flex-col gap-2" aria-live="polite">
         {items.map((t) => (
           <div key={t.id} role={t.kind === 'error' ? 'alert' : 'status'}
-            className={`pointer-events-auto flex animate-pop items-start gap-2 rounded-lg border px-3 py-2.5 text-sm shadow-xl ${t.kind === 'error' ? 'border-red-300/60 bg-red-950 text-red-100' : 'border-emerald-300/50 bg-leaf-950 text-emerald-100'}`}>
+            className={`pointer-events-auto flex animate-pop items-start gap-2 rounded-lg border px-3 py-2.5 text-sm shadow-xl ${t.kind === 'error' ? 'border-red-300 bg-red-50 text-red-800' : 'border-emerald-300 bg-white text-emerald-800'}`}>
             {t.kind === 'error' ? <XCircle className="mt-0.5 h-4 w-4 shrink-0" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />}
             <span>{t.text}</span>
           </div>

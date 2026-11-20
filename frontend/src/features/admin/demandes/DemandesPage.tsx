@@ -21,10 +21,10 @@ function Row({ r }: { r: AccessRequest }) {
   const [label, tone] = STATUS[r.status as keyof typeof STATUS] ?? [r.status, 'gray' as const]
   const run = (decision: 'accepted' | 'rejected') => decide.mutateAsync({ decision }).then(() => toast.success(decision === 'accepted' ? 'Demande acceptée.' : 'Demande refusée.')).catch((e) => toast.error(errorMessage(e)))
   return (
-    <tr className="hover:bg-leaf-700/40">
-      <td className="td"><span className="font-medium">{r.requester_name ?? `Utilisateur ${r.requested_by}`}</span><br /><span className="text-xs text-cream-300">{formatDate(r.created_at)}</span></td>
-      <td className="td">{r.subject_type === 'dossier' ? 'Dossier' : 'Fichier'} · <span className="text-gold-300">{r.subject_name ?? `#${r.subject_id}`}</span></td>
-      <td className="td max-w-xs text-sm text-cream-300">{r.message || '—'}</td>
+    <tr className="hover:bg-slate-50">
+      <td className="td"><span className="font-medium">{r.requester_name ?? `Utilisateur ${r.requested_by}`}</span><br /><span className="text-xs text-slate-600">{formatDate(r.created_at)}</span></td>
+      <td className="td">{r.subject_type === 'dossier' ? 'Dossier' : 'Fichier'} · <span className="text-navy-600">{r.subject_name ?? `#${r.subject_id}`}</span></td>
+      <td className="td max-w-xs text-sm text-slate-600">{r.message || '—'}</td>
       <td className="td">
         {r.status === 'pending' ? (
           <select className="input w-auto" aria-label="Rôle accordé" value={role} onChange={(e) => setRole(e.target.value)}>
@@ -52,9 +52,9 @@ export function Component() {
     <>
       <PageHeader title="Demandes d’accès" description="Examiner les demandes d’accès des utilisateurs à un dossier ou à un fichier."
         actions={(
-          <div className="flex gap-1 rounded-lg border border-gold-500/30 p-0.5">
+          <div className="flex gap-1 rounded-lg border border-line p-0.5">
             {(['pending', 'all'] as const).map((f) => (
-              <button key={f} className={`rounded-md px-3 py-1 text-sm ${filter === f ? 'bg-gold-500 font-semibold text-leaf-950' : 'text-cream-100 hover:bg-gold-500/15'}`} onClick={() => setFilter(f)}>{f === 'pending' ? 'En attente' : 'Toutes'}</button>
+              <button key={f} className={`rounded-md px-3 py-1 text-sm ${filter === f ? 'bg-navy-700 font-semibold text-white' : 'text-black hover:bg-navy-100'}`} onClick={() => setFilter(f)}>{f === 'pending' ? 'En attente' : 'Toutes'}</button>
             ))}
           </div>
         )} />

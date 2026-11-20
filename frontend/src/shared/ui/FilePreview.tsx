@@ -31,17 +31,17 @@ export function BlobPreview({ kind, blob, tall = false }: { kind: PreviewKind; b
     }
   }, [kind, blob])
 
-  if (kind === 'pdf' && url) return <iframe title="Aperçu du fichier" src={url} className={`${height} w-full rounded-lg border border-gold-500/30 bg-white`} />
+  if (kind === 'pdf' && url) return <iframe title="Aperçu du fichier" src={url} className={`${height} w-full rounded-lg border border-line bg-white`} />
   if (kind === 'image' && url) return <img src={url} alt="Aperçu du fichier" className={`mx-auto ${maxHeight} max-w-full rounded-lg`} />
   if (kind === 'csv' && text !== null) {
     const rows = parseCsv(text)
     return (
-      <div className={`${maxHeight} overflow-auto rounded-lg border border-gold-500/30`}>
+      <div className={`${maxHeight} overflow-auto rounded-lg border border-line`}>
         <table className="w-full border-collapse text-xs">
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} className={i === 0 ? 'bg-leaf-900 font-semibold text-gold-300' : ''}>
-                {r.map((c, j) => <td key={j} className="border border-leaf-700 px-2 py-1">{c}</td>)}
+              <tr key={i} className={i === 0 ? 'bg-slate-100 font-semibold text-navy-600' : ''}>
+                {r.map((c, j) => <td key={j} className="border border-slate-200 px-2 py-1">{c}</td>)}
               </tr>
             ))}
           </tbody>
@@ -50,7 +50,7 @@ export function BlobPreview({ kind, blob, tall = false }: { kind: PreviewKind; b
     )
   }
   if (kind === 'texte' && text !== null) {
-    return <pre className={`${maxHeight} overflow-auto whitespace-pre-wrap rounded-lg border border-gold-500/30 bg-leaf-950/60 p-3 text-xs`}>{text}</pre>
+    return <pre className={`${maxHeight} overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-slate-50 p-3 text-xs`}>{text}</pre>
   }
   return <Loading />
 }
@@ -59,7 +59,7 @@ export function BlobPreview({ kind, blob, tall = false }: { kind: PreviewKind; b
 export function PreviewLocal({ file }: { file: File }) {
   const kind = localPreviewKind(file.name)
   if (kind === 'aucun') {
-    return <p className="rounded-lg border border-gold-500/30 p-3 text-xs text-cream-300">Aperçu disponible après l’envoi (le serveur convertit Word, PowerPoint et OpenDocument en PDF).</p>
+    return <p className="rounded-lg border border-line p-3 text-xs text-slate-600">Aperçu disponible après l’envoi (le serveur convertit Word, PowerPoint et OpenDocument en PDF).</p>
   }
   return <BlobPreview kind={kind} blob={file} />
 }

@@ -25,7 +25,7 @@ function Ligne({ r, onDone }: { r: RoleDivision; onDone: () => void }) {
   return (
     <tr>
       <td className="td"><input className="input" aria-label={`Libellé du rôle ${r.code}`} value={libelle} onChange={(e) => setLibelle(e.target.value)} /></td>
-      <td className="td text-cream-300">{r.code}</td>
+      <td className="td text-slate-600">{r.code}</td>
       <td className="td text-right">{r.nb_agents} agent(s)</td>
       <td className="td">{r.actif ? <Badge tone="green">Actif</Badge> : <Badge tone="gray">Inactif</Badge>}</td>
       <td className="td"><div className="flex justify-end gap-1">
@@ -42,12 +42,12 @@ function LigneFichier({ doc, onAffecter }: { doc: DocumentMeta; onAffecter: () =
   const mayAffect = doc.droits.includes('affecter') && !doc.corbeille_le
   return (
     <tr>
-      <td className="td"><span className="font-medium text-cream-50">{doc.titre}</span><p className="text-xs text-cream-300">{doc.cree_par_nom ? `déposé par ${doc.cree_par_nom}` : ''}</p></td>
+      <td className="td"><span className="font-medium text-black">{doc.titre}</span><p className="text-xs text-slate-600">{doc.cree_par_nom ? `déposé par ${doc.cree_par_nom}` : ''}</p></td>
       <td className="td">
         <div className="flex flex-wrap items-center gap-1">
           {doc.affectations.length === 0 ? <Badge tone="amber">À affecter</Badge>
             : doc.affectations.slice(0, 3).map((a) => <Badge key={a.id} tone="green">{a.prenom} {a.nom}</Badge>)}
-          {doc.affectations.length > 3 && <span className="text-xs text-cream-300">+{doc.affectations.length - 3}</span>}
+          {doc.affectations.length > 3 && <span className="text-xs text-slate-600">+{doc.affectations.length - 3}</span>}
         </div>
       </td>
       <td className="td text-right">
@@ -97,7 +97,7 @@ export function Component() {
         ) : null} />
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gold-400">Dictionnaire de rôles</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-navy-700">Dictionnaire de rôles</h2>
         <div className="flex gap-2">
           <input className="input w-72" placeholder="Nouveau rôle (ex. Paie)" aria-label="Libellé du nouveau rôle" value={libelle} onChange={(e) => setLibelle(e.target.value)} />
           <button className="btn" disabled={libelle.trim().length < 2 || add.isPending}
@@ -106,20 +106,20 @@ export function Component() {
         {roles.isLoading ? <Loading /> : roles.error ? <ErreurAcces error={roles.error} /> : (
           <div className="card overflow-x-auto"><table className="w-full text-left text-sm">
             <thead><tr><th className="th">Libellé</th><th className="th">Code</th><th className="th text-right">Utilisation</th><th className="th">État</th><th className="th" /></tr></thead>
-            <tbody className="divide-y divide-gold-500/10">{(roles.data ?? []).map((r) => <Ligne key={`${r.id}-${r.libelle}-${r.actif}`} r={r} onDone={() => void refresh()} />)}</tbody>
+            <tbody className="divide-y divide-slate-200">{(roles.data ?? []).map((r) => <Ligne key={`${r.id}-${r.libelle}-${r.actif}`} r={r} onDone={() => void refresh()} />)}</tbody>
           </table></div>
         )}
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gold-400">Affectation des fichiers de la division</h2>
-        <p className="text-sm text-cream-300">Un fichier affecté à un agent est lu par lui ; sans affectation, l'accès se demande. Les agents d'une autre division sont refusés par le serveur.</p>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-navy-700">Affectation des fichiers de la division</h2>
+        <p className="text-sm text-slate-600">Un fichier affecté à un agent est lu par lui ; sans affectation, l'accès se demande. Les agents d'une autre division sont refusés par le serveur.</p>
         {fichiers.isPending ? <Loading /> : fichiers.error ? <ErreurAcces error={fichiers.error} /> : items.length === 0 ? (
           <EmptyState icon={<UserSquare className="h-8 w-8" />} title="Aucun fichier dans cette division" />
         ) : (
           <div className="card overflow-x-auto"><table className="w-full text-left text-sm">
             <thead><tr><th className="th">Fichier</th><th className="th">Affectations</th><th className="th text-right" /></tr></thead>
-            <tbody className="divide-y divide-gold-500/10">
+            <tbody className="divide-y divide-slate-200">
               {items.map((d) => <LigneFichier key={d.id} doc={d} onAffecter={() => setAffectDoc(d)} />)}
             </tbody>
           </table></div>

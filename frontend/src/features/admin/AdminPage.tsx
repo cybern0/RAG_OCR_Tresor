@@ -25,7 +25,7 @@ export default function AdminPage() {
 
   return (
     <section className="space-y-4">
-      <h1 className="text-xl font-bold text-gold-400">Administration</h1>
+      <h1 className="text-xl font-bold text-navy-700">Administration</h1>
       <div className="flex flex-wrap gap-2" role="tablist">
         {visible.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}

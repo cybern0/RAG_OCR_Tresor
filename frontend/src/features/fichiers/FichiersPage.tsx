@@ -37,7 +37,7 @@ function AffectationBadges({ doc, max = 2 }: { doc: DocumentMeta; max?: number }
       {doc.affectations.slice(0, max).map((a) => (
         <Badge key={a.id} tone="green">{a.prenom} {a.nom}</Badge>
       ))}
-      {doc.affectations.length > max && <span className="text-xs text-cream-300">+{doc.affectations.length - max}</span>}
+      {doc.affectations.length > max && <span className="text-xs text-slate-600">+{doc.affectations.length - max}</span>}
     </div>
   )
 }
@@ -98,12 +98,12 @@ export function Component() {
       <PageHeader title="Fichiers" description="Tous les fichiers auxquels vous avez accès, sans arborescence : déposez directement, le chef affecte chaque fichier aux agents de sa division, et filtrez par agent ou par division."
         actions={mayAdd && !corbeille ? <button className="btn" onClick={() => setDialog({ kind: 'add' })}><FilePlus2 className="h-4 w-4" /> Ajouter un fichier</button> : null} />
       {filtres.data && filtres.data.divisions.length > 1 && (
-        <p className="mb-3 text-sm text-cream-300">{filtres.data.divisions.length} divisions dans votre périmètre — utilisez le filtre « Division » pour vous concentrer sur l'une d'elles.</p>
+        <p className="mb-3 text-sm text-slate-600">{filtres.data.divisions.length} divisions dans votre périmètre — utilisez le filtre « Division » pour vous concentrer sur l'une d'elles.</p>
       )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative min-w-52 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-cream-300" aria-hidden />
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-600" aria-hidden />
           <input className="input pl-9" type="search" placeholder="Rechercher par titre ou nom de fichier…" aria-label="Rechercher un fichier" value={q}
             onChange={(e) => { setQ(e.target.value); setParam('q', e.target.value || null) }} />
         </div>
@@ -127,19 +127,19 @@ export function Component() {
       </div>
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-1 rounded-lg border border-gold-500/30 p-0.5" role="tablist">
-          <button role="tab" aria-selected={!corbeille} className={`rounded-md px-3 py-1 text-sm ${!corbeille ? 'bg-gold-500 font-semibold text-leaf-950' : 'text-cream-100 hover:bg-gold-500/15'}`} onClick={() => setParam('vue', null)}>Fichiers</button>
-          <button role="tab" aria-selected={corbeille} className={`rounded-md px-3 py-1 text-sm ${corbeille ? 'bg-gold-500 font-semibold text-leaf-950' : 'text-cream-100 hover:bg-gold-500/15'}`} onClick={() => setParam('vue', 'corbeille')}>Corbeille</button>
-          <button role="tab" aria-selected={filters.a_affecter} className={`rounded-md px-3 py-1 text-sm ${filters.a_affecter ? 'bg-gold-500 font-semibold text-leaf-950' : 'text-cream-100 hover:bg-gold-500/15'}`} onClick={() => setParam('a_affecter', filters.a_affecter ? null : '1')}>À affecter</button>
+        <div className="flex gap-1 rounded-lg border border-line p-0.5" role="tablist">
+          <button role="tab" aria-selected={!corbeille} className={`rounded-md px-3 py-1 text-sm ${!corbeille ? 'bg-navy-700 font-semibold text-white' : 'text-black hover:bg-navy-100'}`} onClick={() => setParam('vue', null)}>Fichiers</button>
+          <button role="tab" aria-selected={corbeille} className={`rounded-md px-3 py-1 text-sm ${corbeille ? 'bg-navy-700 font-semibold text-white' : 'text-black hover:bg-navy-100'}`} onClick={() => setParam('vue', 'corbeille')}>Corbeille</button>
+          <button role="tab" aria-selected={filters.a_affecter} className={`rounded-md px-3 py-1 text-sm ${filters.a_affecter ? 'bg-navy-700 font-semibold text-white' : 'text-black hover:bg-navy-100'}`} onClick={() => setParam('a_affecter', filters.a_affecter ? null : '1')}>À affecter</button>
         </div>
         {chosen.length > 0 && !corbeille && (
-          <div className="flex items-center gap-2 text-sm text-cream-300">
+          <div className="flex items-center gap-2 text-sm text-slate-600">
             {plural(chosen.length, 'fichier sélectionné', 'fichiers sélectionnés')}
             <button className="btn-ghost" onClick={() => setDialog({ kind: 'classify-many' })}><Tags className="h-4 w-4" /> Métadonnées</button>
           </div>
         )}
       </div>
-      {agentChoisi && <p className="mb-3 text-sm text-cream-300">Filtré par affectation : <Badge tone="green">{agentChoisi.prenom} {agentChoisi.nom}{agentChoisi.division_nom ? ` · ${agentChoisi.division_nom}` : ''}</Badge> — seuls les fichiers affectés à cet agent (et accessibles avec vos droits) apparaissent.</p>}
+      {agentChoisi && <p className="mb-3 text-sm text-slate-600">Filtré par affectation : <Badge tone="green">{agentChoisi.prenom} {agentChoisi.nom}{agentChoisi.division_nom ? ` · ${agentChoisi.division_nom}` : ''}</Badge> — seuls les fichiers affectés à cet agent (et accessibles avec vos droits) apparaissent.</p>}
 
       <ErrorBox message={docs.error ? errorMessage(docs.error) : null} />
       {docs.isPending ? <Loading /> : items.length === 0 ? (
@@ -152,33 +152,33 @@ export function Component() {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                {!corbeille && <th className="th w-8"><input type="checkbox" aria-label="Tout sélectionner" className="accent-gold-500" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(items.map((i) => i.id)))} /></th>}
+                {!corbeille && <th className="th w-8"><input type="checkbox" aria-label="Tout sélectionner" className="accent-navy-700" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(items.map((i) => i.id)))} /></th>}
                 <th className="th">Fichier</th><th className="th">Division</th><th className="th">Affectations</th><th className="th">Métadonnées</th><th className="th">Statut</th><th className="th">Modifié</th><th className="th text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.map((doc) => (
-                <tr key={doc.id} className={selected.has(doc.id) ? 'bg-gold-500/10' : 'hover:bg-leaf-700/40'}>
-                  {!corbeille && <td className="td"><input type="checkbox" aria-label={`Sélectionner ${doc.titre}`} className="accent-gold-500" checked={selected.has(doc.id)} onChange={() => toggle(doc.id)} /></td>}
+                <tr key={doc.id} className={selected.has(doc.id) ? 'bg-navy-50' : 'hover:bg-slate-50'}>
+                  {!corbeille && <td className="td"><input type="checkbox" aria-label={`Sélectionner ${doc.titre}`} className="accent-navy-700" checked={selected.has(doc.id)} onChange={() => toggle(doc.id)} /></td>}
                   <td className="td min-w-56">
-                    <Link to={`/fichiers/${doc.id}`} className="font-medium text-cream-50 hover:text-gold-300">{doc.titre}</Link>
-                    <p className="text-xs text-cream-300">{doc.version.nom_fichier} · {formatSize(doc.version.taille_octets)}{doc.version.nb_pages ? ` · ${doc.version.nb_pages} p.` : ''}{doc.version.ocr_utilise ? ' · OCR' : ''}</p>
-                    <p className="text-xs text-cream-300">v{doc.version.numero} · {plural(doc.nb_versions, 'version')}</p>
+                    <Link to={`/fichiers/${doc.id}`} className="font-medium text-black hover:text-navy-600">{doc.titre}</Link>
+                    <p className="text-xs text-slate-600">{doc.version.nom_fichier} · {formatSize(doc.version.taille_octets)}{doc.version.nb_pages ? ` · ${doc.version.nb_pages} p.` : ''}{doc.version.ocr_utilise ? ' · OCR' : ''}</p>
+                    <p className="text-xs text-slate-600">v{doc.version.numero} · {plural(doc.nb_versions, 'version')}</p>
                   </td>
-                  <td className="td text-sm text-cream-200">{doc.division_nom}</td>
+                  <td className="td text-sm text-slate-800">{doc.division_nom}</td>
                   <td className="td"><AffectationBadges doc={doc} /></td>
                   <td className="td"><ClassementBadges doc={doc} /></td>
                   <td className="td">
                     <StatusBadge statut={doc.version.statut} />
-                    {doc.version.statut === 'error' && doc.version.message_erreur && <p className="mt-1 max-w-48 text-xs text-red-200">{doc.version.message_erreur}</p>}
+                    {doc.version.statut === 'error' && doc.version.message_erreur && <p className="mt-1 max-w-48 text-xs text-red-700">{doc.version.message_erreur}</p>}
                   </td>
-                  <td className="td whitespace-nowrap text-xs text-cream-300">{formatDate(doc.modifie_le)}<br />{doc.cree_par_nom ?? ''}</td>
+                  <td className="td whitespace-nowrap text-xs text-slate-600">{formatDate(doc.modifie_le)}<br />{doc.cree_par_nom ?? ''}</td>
                   <td className="td">
                     <div className="flex justify-end gap-0.5">
                       {corbeille ? (
                         <>
                           {doc.droits.includes('supprimer') && <button className="btn-icon" title="Restaurer" aria-label={`Restaurer ${doc.titre}`} onClick={() => void mutations.restore.mutateAsync(doc.id).then(() => toast.success('Fichier restauré.')).catch((e) => toast.error(errorMessage(e)))}><RotateCcw className="h-4 w-4" /></button>}
-                          {doc.droits.includes('purger') && <button className="btn-icon text-red-300" title="Supprimer définitivement" aria-label={`Supprimer définitivement ${doc.titre}`} onClick={() => setDialog({ kind: 'purge', doc })}><Trash2 className="h-4 w-4" /></button>}
+                          {doc.droits.includes('purger') && <button className="btn-icon text-red-600" title="Supprimer définitivement" aria-label={`Supprimer définitivement ${doc.titre}`} onClick={() => setDialog({ kind: 'purge', doc })}><Trash2 className="h-4 w-4" /></button>}
                         </>
                       ) : (
                         <>
@@ -192,7 +192,7 @@ export function Component() {
                           )}
                           {doc.droits.includes('classer') && <button className="btn-icon" title="Métadonnées" aria-label={`Métadonnées de ${doc.titre}`} onClick={() => setDialog({ kind: 'classify', doc })}><Tags className="h-4 w-4" /></button>}
                           {doc.droits.includes('affecter') && <button className="btn-icon" title="Affecter à des agents" aria-label={`Affecter ${doc.titre}`} onClick={() => setDialog({ kind: 'affect', doc })}><UserSquare className="h-4 w-4" /></button>}
-                          {doc.droits.includes('supprimer') && <button className="btn-icon text-red-300" title="Mettre à la corbeille" aria-label={`Supprimer ${doc.titre}`} onClick={() => setDialog({ kind: 'trash', doc })}><Trash2 className="h-4 w-4" /></button>}
+                          {doc.droits.includes('supprimer') && <button className="btn-icon text-red-600" title="Mettre à la corbeille" aria-label={`Supprimer ${doc.titre}`} onClick={() => setDialog({ kind: 'trash', doc })}><Trash2 className="h-4 w-4" /></button>}
                         </>
                       )}
                     </div>
@@ -204,7 +204,7 @@ export function Component() {
         </div>
       )}
       {docs.data && <Pagination page={docs.data.page} taille={docs.data.taille} total={docs.data.total} onPage={(p) => setParam('page', p === 1 ? null : String(p))} />}
-      {corbeille && <p className="mt-3 text-xs text-cream-300"><Badge tone="gray">Info</Badge> Les fichiers de la corbeille ne sont plus visibles dans la liste ni interrogés par l’assistant.</p>}
+      {corbeille && <p className="mt-3 text-xs text-slate-600"><Badge tone="gray">Info</Badge> Les fichiers de la corbeille ne sont plus visibles dans la liste ni interrogés par l’assistant.</p>}
 
       {dialog?.kind === 'add' && <AddDocumentModal divisions={divisionsDepot} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'edit' && <EditDocumentModal doc={dialog.doc} onClose={() => setDialog(null)} />}
@@ -215,13 +215,13 @@ export function Component() {
       {dialog?.kind === 'trash' && (
         <ConfirmDialog title="Mettre à la corbeille" confirmLabel="Mettre à la corbeille" onClose={() => setDialog(null)}
           onConfirm={async () => { await mutations.remove.mutateAsync(dialog.doc.id); toast.success('Fichier placé dans la corbeille.') }}>
-          Mettre <span className="font-semibold text-gold-300">« {dialog.doc.titre} »</span> dans la corbeille ? Il ne sera plus visible ni interrogé par l’assistant, mais pourra être restauré.
+          Mettre <span className="font-semibold text-navy-600">« {dialog.doc.titre} »</span> dans la corbeille ? Il ne sera plus visible ni interrogé par l’assistant, mais pourra être restauré.
         </ConfirmDialog>
       )}
       {dialog?.kind === 'purge' && (
         <ConfirmDialog title="Supprimer définitivement" confirmLabel="Supprimer définitivement" onClose={() => setDialog(null)}
           onConfirm={async () => { await mutations.purge.mutateAsync(dialog.doc.id); toast.success('Fichier supprimé définitivement.') }}>
-          Supprimer définitivement <span className="font-semibold text-gold-300">« {dialog.doc.titre} »</span>, toutes ses versions et leurs passages indexés ? Cette action est irréversible.
+          Supprimer définitivement <span className="font-semibold text-navy-600">« {dialog.doc.titre} »</span>, toutes ses versions et leurs passages indexés ? Cette action est irréversible.
         </ConfirmDialog>
       )}
     </>

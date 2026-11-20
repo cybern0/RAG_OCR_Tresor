@@ -36,9 +36,9 @@ function Row({ children, onDelete, label }: { children: React.ReactNode; onDelet
   const toast = useToast()
   const [confirm, setConfirm] = useState(false)
   return (
-    <li className="flex items-center justify-between gap-2 rounded-lg border border-gold-500/25 px-3 py-2">
+    <li className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>
-      <button className="btn-icon text-red-300" aria-label={`Supprimer ${label}`} onClick={() => setConfirm(true)}><Trash2 className="h-4 w-4" /></button>
+      <button className="btn-icon text-red-600" aria-label={`Supprimer ${label}`} onClick={() => setConfirm(true)}><Trash2 className="h-4 w-4" /></button>
       {confirm && <ConfirmDialog title="Supprimer" confirmLabel="Supprimer" onClose={() => setConfirm(false)} onConfirm={async () => { await onDelete(); toast.success('Supprimé.') }}>Supprimer « {label} » ? Les fichiers déjà classés perdent cette valeur.</ConfirmDialog>}
     </li>
   )
@@ -46,7 +46,7 @@ function Row({ children, onDelete, label }: { children: React.ReactNode; onDelet
 
 function Categories() {
   const cats = useCategories()
-  const [couleur, setCouleur] = useState('#d9a92b')
+  const [couleur, setCouleur] = useState('#173f78')
   const create = useAdminMutation((v: { nom: string }) => api.createCategory({ nom: v.nom, couleur }), [adminKeys.categories])
   const update = useAdminMutation((v: { id: number; actif: boolean }) => api.updateCategory(v.id, { actif: v.actif }), [adminKeys.categories])
   const remove = useAdminMutation(api.deleteCategory, [adminKeys.categories])
@@ -54,11 +54,11 @@ function Categories() {
   return (
     <>
       <AddLine placeholder="Nouvelle catégorie" onAdd={(nom) => create.mutateAsync({ nom })}
-        extra={<input type="color" aria-label="Couleur" className="h-10 w-12 cursor-pointer rounded-lg border border-gold-500/40 bg-leaf-950 p-1" value={couleur} onChange={(e) => setCouleur(e.target.value)} />} />
-      {cats.isPending ? <Loading /> : (cats.data ?? []).length === 0 ? <p className="text-sm text-cream-300">Aucune catégorie.</p> : (
+        extra={<input type="color" aria-label="Couleur" className="h-10 w-12 cursor-pointer rounded-lg border border-line bg-white p-1" value={couleur} onChange={(e) => setCouleur(e.target.value)} />} />
+      {cats.isPending ? <Loading /> : (cats.data ?? []).length === 0 ? <p className="text-sm text-slate-600">Aucune catégorie.</p> : (
         <ul className="space-y-2">{cats.data!.map((c) => (
           <Row key={c.id} label={c.nom} onDelete={() => remove.mutateAsync(c.id)}>
-            <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: c.couleur ?? 'var(--color-gold-500)' }} />
+            <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: c.couleur ?? 'var(--color-navy-700)' }} />
             <span className="truncate text-sm">{c.nom}</span>
             <button className="ml-auto" onClick={() => void update.mutateAsync({ id: c.id, actif: !c.actif }).catch((e) => toast.error(errorMessage(e)))}><Badge tone={c.actif ? 'green' : 'gray'}>{c.actif ? 'Active' : 'Désactivée'}</Badge></button>
           </Row>
@@ -77,7 +77,7 @@ function Types() {
   return (
     <>
       <AddLine placeholder="Nouveau type (ex. Facture)" onAdd={(nom) => create.mutateAsync({ nom })} />
-      {types.isPending ? <Loading /> : (types.data ?? []).length === 0 ? <p className="text-sm text-cream-300">Aucun type.</p> : (
+      {types.isPending ? <Loading /> : (types.data ?? []).length === 0 ? <p className="text-sm text-slate-600">Aucun type.</p> : (
         <ul className="space-y-2">{types.data!.map((t) => (
           <Row key={t.id} label={t.nom} onDelete={() => remove.mutateAsync(t.id)}>
             <span className="truncate text-sm">{t.nom}</span>
@@ -96,7 +96,7 @@ function Tags() {
   return (
     <>
       <AddLine placeholder="Nouvelle étiquette" onAdd={(nom) => create.mutateAsync({ nom })} />
-      {tags.isPending ? <Loading /> : (tags.data ?? []).length === 0 ? <p className="text-sm text-cream-300">Aucune étiquette.</p> : (
+      {tags.isPending ? <Loading /> : (tags.data ?? []).length === 0 ? <p className="text-sm text-slate-600">Aucune étiquette.</p> : (
         <ul className="grid gap-2 sm:grid-cols-2">{tags.data!.map((t) => <Row key={t.id} label={t.nom} onDelete={() => remove.mutateAsync(t.id)}><span className="truncate text-sm">#{t.nom}</span></Row>)}</ul>
       )}
     </>
@@ -141,7 +141,7 @@ function RuleModal({ target, onClose }: { target: RuleItem | null; onClose: () =
         <Field label="Critères (JSON)" hint="Tous les critères doivent être vrais. Champs : texte, nom_fichier, extension. Opérateurs : =, dans, contient_un_de, regex.">
           {(id) => <textarea id={id} className="input min-h-32 font-mono text-xs" spellCheck={false} value={critere} onChange={(e) => setCritere(e.target.value)} />}
         </Field>
-        <p className="text-xs text-cream-300">Si les critères sont vrais, le fichier reçoit :</p>
+        <p className="text-xs text-slate-600">Si les critères sont vrais, le fichier reçoit :</p>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Catégorie">{(id) => <select id={id} className="input" value={categorie} onChange={(e) => setCategorie(e.target.value ? Number(e.target.value) : '')}><option value="">—</option>{cats.data?.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}</select>}</Field>
           <Field label="Type">{(id) => <select id={id} className="input" value={type} onChange={(e) => setType(e.target.value ? Number(e.target.value) : '')}><option value="">—</option>{types.data?.map((t) => <option key={t.id} value={t.id}>{t.nom}</option>)}</select>}</Field>
@@ -163,11 +163,11 @@ function Rules() {
   const remove = useAdminMutation(api.deleteRule, [adminKeys.rules])
   return (
     <>
-      <div className="mb-3 flex justify-between gap-2"><p className="text-sm text-cream-300">Appliquées à l’indexation, par ordre de priorité. Un classement manuel n’est jamais écrasé.</p><button className="btn shrink-0" onClick={() => setModal({ target: null })}><Plus className="h-4 w-4" /> Règle</button></div>
+      <div className="mb-3 flex justify-between gap-2"><p className="text-sm text-slate-600">Appliquées à l’indexation, par ordre de priorité. Un classement manuel n’est jamais écrasé.</p><button className="btn shrink-0" onClick={() => setModal({ target: null })}><Plus className="h-4 w-4" /> Règle</button></div>
       {rules.isPending ? <Loading /> : (rules.data ?? []).length === 0 ? <EmptyState title="Aucune règle" /> : (
         <ul className="space-y-2">{rules.data!.map((r) => (
           <Row key={r.id} label={r.nom} onDelete={() => remove.mutateAsync(r.id)}>
-            <button className="min-w-0 flex-1 text-left" onClick={() => setModal({ target: r })}><span className="block truncate text-sm font-medium hover:text-gold-300">{r.nom}</span><span className="text-xs text-cream-300">Priorité {r.priorite}{r.confidentialite ? ` · ${r.confidentialite}` : ''}{r.tags.length ? ` · ${r.tags.map((t) => '#' + t).join(' ')}` : ''}</span></button>
+            <button className="min-w-0 flex-1 text-left" onClick={() => setModal({ target: r })}><span className="block truncate text-sm font-medium hover:text-navy-600">{r.nom}</span><span className="text-xs text-slate-600">Priorité {r.priorite}{r.confidentialite ? ` · ${r.confidentialite}` : ''}{r.tags.length ? ` · ${r.tags.map((t) => '#' + t).join(' ')}` : ''}</span></button>
             <button onClick={() => void toggle.mutateAsync({ id: r.id, actif: !r.actif }).catch((e) => toast.error(errorMessage(e)))}><Badge tone={r.actif ? 'green' : 'gray'}>{r.actif ? 'Active' : 'Inactive'}</Badge></button>
           </Row>
         ))}</ul>
@@ -188,17 +188,17 @@ function Simulation() {
   async function submit(e: FormEvent) { e.preventDefault(); setError(null); try { setResult(await run.mutateAsync(undefined)) } catch (err) { setError(errorMessage(err)) } }
   return (
     <form onSubmit={(e) => void submit(e)} className="max-w-xl space-y-4">
-      <p className="text-sm text-cream-300">Teste les règles actives sur un fichier fictif, sans rien enregistrer.</p>
+      <p className="text-sm text-slate-600">Teste les règles actives sur un fichier fictif, sans rien enregistrer.</p>
       <Field label="Nom du fichier">{(id) => <input id={id} className="input" value={nomFichier} onChange={(e) => setNomFichier(e.target.value)} />}</Field>
       <Field label="Extrait du texte">{(id) => <textarea id={id} className="input min-h-24" value={texte} onChange={(e) => setTexte(e.target.value)} />}</Field>
       <ErrorBox message={error} />
       <button className="btn" disabled={run.isPending}>Simuler</button>
       {result && (
         <div className="card space-y-1 p-4 text-sm" role="status">
-          <p>Catégorie : <b className="text-gold-300">{cats.data?.find((c) => c.id === result.categorie_id)?.nom ?? 'aucune'}</b></p>
-          <p>Type : <b className="text-gold-300">{types.data?.find((t) => t.id === result.type_document_id)?.nom ?? 'aucun'}</b></p>
-          <p>Confidentialité : <b className="text-gold-300">{result.confidentialite ?? 'inchangée'}</b></p>
-          <p>Étiquettes : <b className="text-gold-300">{result.tags.length ? result.tags.map((t) => '#' + t).join(' ') : 'aucune'}</b></p>
+          <p>Catégorie : <b className="text-navy-600">{cats.data?.find((c) => c.id === result.categorie_id)?.nom ?? 'aucune'}</b></p>
+          <p>Type : <b className="text-navy-600">{types.data?.find((t) => t.id === result.type_document_id)?.nom ?? 'aucun'}</b></p>
+          <p>Confidentialité : <b className="text-navy-600">{result.confidentialite ?? 'inchangée'}</b></p>
+          <p>Étiquettes : <b className="text-navy-600">{result.tags.length ? result.tags.map((t) => '#' + t).join(' ') : 'aucune'}</b></p>
         </div>
       )}
     </form>
@@ -210,10 +210,10 @@ export function Component() {
   return (
     <>
       <PageHeader title="Classement" description="Catégories, types, étiquettes et règles qui classent automatiquement les fichiers à l’indexation." />
-      <div className="mb-4 flex flex-wrap gap-1 border-b border-gold-500/20" role="tablist">
+      <div className="mb-4 flex flex-wrap gap-1 border-b border-line" role="tablist">
         {TABS.map(([id, label]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
-            className={cn('-mb-px border-b-2 px-4 py-2 text-sm font-medium transition', tab === id ? 'border-gold-400 text-gold-300' : 'border-transparent text-cream-100 hover:text-gold-300')}>{label}</button>
+            className={cn('-mb-px border-b-2 px-4 py-2 text-sm font-medium transition', tab === id ? 'border-navy-600 text-navy-600' : 'border-transparent text-black hover:text-navy-600')}>{label}</button>
         ))}
       </div>
       <div className="max-w-3xl" role="tabpanel">

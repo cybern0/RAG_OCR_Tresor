@@ -63,18 +63,18 @@ export default function AccesDossierModal({ dossier, onClose }: { dossier: Dossi
         {acces.loading ? <Loading /> : (
           <>
             <section className="space-y-3">
-              <h3 className="font-semibold text-gold-400">Utilisateurs</h3>
-              <ul className="divide-y divide-leaf-700">
+              <h3 className="font-semibold text-navy-700">Utilisateurs</h3>
+              <ul className="divide-y divide-slate-200">
                 {membres.map((m) => (
                   <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
-                    <span>{m.nom_utilisateur}{m.nom_complet ? <span className="ml-2 text-xs text-cream-300">{m.nom_complet}</span> : null}</span>
+                    <span>{m.nom_utilisateur}{m.nom_complet ? <span className="ml-2 text-xs text-slate-600">{m.nom_complet}</span> : null}</span>
                     <span className="flex items-center gap-2">
                       <RoleSelect id={`m-${m.user_id}`} label={`Rôle de ${m.nom_utilisateur}`} value={m.role} onChange={(r) => void run(() => setMembre(dossier.id, m.user_id, r))} />
                       <button className="btn-danger" onClick={() => void run(() => removeMembre(dossier.id, m.user_id))}>Retirer</button>
                     </span>
                   </li>
                 ))}
-                {membres.length === 0 && <li className="py-2 text-sm text-cream-300">Aucun utilisateur n’a de rôle direct dans ce dossier.</li>}
+                {membres.length === 0 && <li className="py-2 text-sm text-slate-600">Aucun utilisateur n’a de rôle direct dans ce dossier.</li>}
               </ul>
               <form onSubmit={addUser} className="flex flex-wrap items-center gap-2">
                 <select aria-label="Utilisateur à ajouter" className="input min-w-0 flex-1" value={newUser} onChange={(e) => setNewUser(e.target.value ? Number(e.target.value) : '')}>
@@ -88,19 +88,19 @@ export default function AccesDossierModal({ dossier, onClose }: { dossier: Dossi
             </section>
 
             <section className="space-y-3">
-              <h3 className="font-semibold text-gold-400">Services entiers</h3>
-              <p className="text-xs text-cream-300">Tous les agents actifs du service reçoivent ce rôle. En cas de double rôle, le plus élevé s’applique.</p>
-              <ul className="divide-y divide-leaf-700">
+              <h3 className="font-semibold text-navy-700">Services entiers</h3>
+              <p className="text-xs text-slate-600">Tous les agents actifs du service reçoivent ce rôle. En cas de double rôle, le plus élevé s’applique.</p>
+              <ul className="divide-y divide-slate-200">
                 {serviceAcces.map((s) => (
                   <li key={s.service_id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
-                    <span><span className="mr-2 text-xs text-gold-300">{s.service_code}</span>{s.service_nom}</span>
+                    <span><span className="mr-2 text-xs text-navy-600">{s.service_code}</span>{s.service_nom}</span>
                     <span className="flex items-center gap-2">
                       <RoleSelect id={`s-${s.service_id}`} label={`Rôle du service ${s.service_nom}`} value={s.role} onChange={(r) => void run(() => setServiceAcces(dossier.id, s.service_id, r))} />
                       <button className="btn-danger" onClick={() => void run(() => removeServiceAcces(dossier.id, s.service_id))}>Retirer</button>
                     </span>
                   </li>
                 ))}
-                {serviceAcces.length === 0 && <li className="py-2 text-sm text-cream-300">Aucun service n’a accès à ce dossier.</li>}
+                {serviceAcces.length === 0 && <li className="py-2 text-sm text-slate-600">Aucun service n’a accès à ce dossier.</li>}
               </ul>
               <form onSubmit={addService} className="flex flex-wrap items-center gap-2">
                 <select aria-label="Service à ajouter" className="input min-w-0 flex-1" value={newService} onChange={(e) => setNewService(e.target.value ? Number(e.target.value) : '')}>
