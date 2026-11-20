@@ -22,10 +22,13 @@ export interface SimulationResult { categorie_id: number | null; type_document_i
 
 /** Ligne groupée des statistiques : le serveur fournit le libellé (nom), jamais seulement un numéro. */
 export interface StatLine { total: number; nom: string | null; couleur?: string | null; categorie_id?: number; type_document_id?: number; service_id?: number; direction_id?: number }
+/** Ligne de classement : rang (1 = premier), libellé et total de fichiers actifs déposés. */
+export interface ClassementLine { rang: number; nom: string; total: number }
 export interface DashboardStats {
   total_documents: number; actifs: number; corbeille: number; sans_classement: number; stockage_octets: number; nb_versions: number
   statut: Record<string, number>
   par_categorie: StatLine[]; par_type: StatLine[]; par_service: StatLine[]; par_direction: StatLine[]
+  par_role: StatLine[]; classement: ClassementLine[]
   par_confidentialite: Record<string, number>; par_extension: Record<string, number>
 }
 

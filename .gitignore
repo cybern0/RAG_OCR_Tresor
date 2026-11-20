@@ -5,3 +5,4 @@
 Backend/storage/uploads/*
 !Backend/storage/uploads/.gitkeep
 .DS_Store
+*.patch

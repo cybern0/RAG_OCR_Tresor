@@ -28,7 +28,7 @@ from app.schemas.classement import (
     TypeDocumentOut,
     TypeDocumentUpdate,
 )
-from app.services.classement import build_dashboard_stats, charger_noms
+from app.services.classement import build_dashboard_stats, charger_noms, charger_roles_et_classement
 from app.services.classement.moteur import evaluer_regles
 from app.api.deps import get_principal
 
@@ -294,7 +294,9 @@ def stats_dashboard(
             "SELECT document_id, division_id, categorie_id, type_document_id, confidentialite, statut, extension, service_id, direction_id, corbeille_le, taille_octets, nb_versions FROM rag_sys.vue_document_stats"
         )
     ).mappings().all()
-    return build_dashboard_stats([dict(item) for item in rows], charger_noms(db))
+    stats = build_dashboard_stats([dict(item) for item in rows], charger_noms(db))
+    stats.update(charger_roles_et_classement(db))
+    return stats
 
 
 @router.post("/reclasser")

@@ -204,6 +204,41 @@ def charger_noms(db) -> dict[str, dict[int, dict[str, Any]]]:
     }
 
 
+def charger_roles_et_classement(db, limite: int = 10) -> dict[str, list[dict[str, Any]]]:
+    """Données complémentaires du tableau de bord /admin.
+
+    par_role   : nombre d'utilisateurs actifs par rôle de division (libellé du rôle, tous services confondus).
+    classement : les `limite` utilisateurs ayant déposé le plus de fichiers actifs (hors corbeille), du plus au moins actif.
+    """
+    from sqlalchemy import func, select
+
+    from app.db.metier import RoleDivision, User, UserRoleDivision
+    from app.db.vecteur import Document
+
+    par_role = db.execute(
+        select(RoleDivision.libelle, func.count(func.distinct(UserRoleDivision.user_id)))
+        .join(UserRoleDivision, UserRoleDivision.role_division_id == RoleDivision.id)
+        .join(User, User.id == UserRoleDivision.user_id)
+        .where(RoleDivision.actif.is_(True), User.actif.is_(True))
+        .group_by(RoleDivision.libelle)
+    ).all()
+
+    depots = db.execute(
+        select(User.nom_utilisateur, func.count(Document.id))
+        .join(Document, Document.cree_par == User.id)
+        .where(Document.corbeille_le.is_(None))
+        .group_by(User.nom_utilisateur)
+    ).all()
+
+    return {
+        "par_role": [{"nom": nom, "total": int(total)} for nom, total in sorted(par_role, key=lambda r: (-r[1], r[0]))],
+        "classement": [
+            {"rang": i, "nom": nom, "total": int(total)}
+            for i, (nom, total) in enumerate(sorted(depots, key=lambda r: (-r[1], r[0]))[:limite], start=1)
+        ],
+    }
+
+
 def build_dashboard_stats(rows: list[dict[str, Any]], noms: dict[str, dict[int, dict[str, Any]]] | None = None) -> dict[str, Any]:
     """Construit les métriques de tableau de bord à partir d'une liste de lignes de vue stats.
 
@@ -265,4 +300,6 @@ def build_dashboard_stats(rows: list[dict[str, Any]], noms: dict[str, dict[int, 
         "par_extension": dict(sorted(par_extension.items())),
         "par_service": lignes("service", "service_id"),
         "par_direction": lignes("direction", "direction_id"),
+        "par_role": [],
+        "classement": [],
     }

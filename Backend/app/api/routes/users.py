@@ -17,9 +17,12 @@ def list_users(principal: Principal = Depends(require(UTILISATEUR_LISTER)), db: 
 
 
 @router.get("/agents-disponibles", response_model=list[AgentBrief])
-def agents_disponibles(principal: Principal = Depends(require(UTILISATEUR_CREER)), db: Session = Depends(get_db)):
-    """Agents sans compte que l'on peut doter d'un compte."""
-    return crud.agents_disponibles(db, principal)
+def agents_disponibles(
+    pour_user: int | None = None,
+    principal: Principal = Depends(require(UTILISATEUR_CREER)), db: Session = Depends(get_db),
+):
+    """Agents sans compte que l'on peut doter d'un compte (+ l'agent actuel de `pour_user`, pour le changer)."""
+    return crud.agents_disponibles(db, principal, pour_user)
 
 
 @router.get("/{user_id}", response_model=UserOut)

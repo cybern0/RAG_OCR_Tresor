@@ -1,9 +1,11 @@
 import { api, query } from '../../shared/api/client'
-import type { UserCreate, UserOut, UserUpdate } from '../auth/types'
+import type { AgentBrief, UserCreate, UserOut, UserUpdate } from '../auth/types'
 import type { Agent, AuditRow, CategoryItem, DashboardStats, Direction, Health, RuleItem, ServiceItem, SimulationResult, TagItem, TypeItem } from './types'
 
 // --- utilisateurs
 export const listUsers = () => api<UserOut[]>('/users')
+// Agents que l'appelant peut affecter (périmètre du chef de service / de division) ; pourUser ajoute l'agent actuel du compte.
+export const listAgentsDisponibles = (pourUser?: number) => api<AgentBrief[]>(pourUser ? `/users/agents-disponibles?pour_user=${pourUser}` : '/users/agents-disponibles')
 export const getUser = (id: number) => api<UserOut>(`/users/${id}`)
 export const createUser = (data: UserCreate) => api<UserOut>('/users', { method: 'POST', json: data })
 export const updateUser = (id: number, data: UserUpdate) => api<UserOut>(`/users/${id}`, { method: 'PATCH', json: data })

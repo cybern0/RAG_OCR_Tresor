@@ -9,7 +9,7 @@ Règles :
 """
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.acces import divisions_gerees
@@ -108,13 +108,22 @@ def get_user_visible(db: Session, principal: Principal, user_id: int) -> User:
     return user
 
 
-def agents_disponibles(db: Session, principal: Principal) -> list[AgentBrief]:
-    """Agents actifs sans compte que l'on peut doter d'un compte : c'est la liste du formulaire de création."""
+def agents_disponibles(db: Session, principal: Principal, pour_user_id: int | None = None) -> list[AgentBrief]:
+    """Agents actifs sans compte que l'on peut doter d'un compte : c'est la liste du formulaire de création.
+
+    `pour_user_id` (changement d'agent d'un compte existant) ajoute l'agent actuellement lié à ce compte, pour qu'il
+    reste sélectionnable ; il doit être dans le périmètre de l'appelant, sinon il n'est pas ajouté.
+    """
+    condition_libre = User.id.is_(None)
+    if pour_user_id is not None:
+        agent_actuel = db.scalar(select(User.agent_id).where(User.id == pour_user_id))
+        if agent_actuel is not None:
+            condition_libre = or_(User.id.is_(None), Agent.id == agent_actuel)
     stmt = (
         select(Agent)
         .options(joinedload(Agent.service), joinedload(Agent.division))
         .outerjoin(User, User.agent_id == Agent.id)
-        .where(User.id.is_(None), Agent.actif.is_(True))
+        .where(condition_libre, Agent.actif.is_(True))
         .order_by(Agent.nom, Agent.prenom)
     )
     perimetre = filtre_comptes_visibles(principal)
@@ -190,10 +199,17 @@ def _active_admin_count(db: Session) -> int:
 
 def update_user(db: Session, actor: Principal, user_id: int, data: UserUpdate, ip: str | None) -> User:
     user = get_user(db, user_id)
-    if user.id != actor.user.id or data.role is not None or data.agent_id is not None or data.retirer_agent:
+    change_agent = data.agent_id is not None or data.retirer_agent
+    if user.id != actor.user.id or data.role is not None or change_agent:
         exiger_gestion_compte(actor, user)
-    if not actor.is_admin and (data.role is not None or data.agent_id is not None or data.retirer_agent):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul un super administrateur change le rôle ou l'agent d'un compte.")
+    if not actor.is_admin and data.role is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul un super administrateur change le rôle d'un compte.")
+    if not actor.is_admin and change_agent:
+        # chef de service ET chef de division : l'agent des comptes de leur service, jamais le leur ni celui d'un super administrateur
+        if user.id == actor.user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Vous ne pouvez pas changer votre propre agent.")
+        if user.role.code == ROLE_ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Seul un super administrateur modifie un super administrateur.")
     changes: dict = {}
     new_role = data.role or user.role.code
     new_agent_id = None if data.retirer_agent else (data.agent_id if data.agent_id is not None else user.agent_id)
@@ -214,7 +230,12 @@ def update_user(db: Session, actor: Principal, user_id: int, data: UserUpdate, i
         pass
 
     if new_agent_id is not None and new_agent_id != user.agent_id:
-        _check_agent(db, new_agent_id, ignore_user_id=user.id)
+        nouvel_agent = _check_agent(db, new_agent_id, ignore_user_id=user.id)
+        if not actor.is_admin:
+            if not voit_agent(actor, nouvel_agent):
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent introuvable ou inactif.")
+            if not gere_agent(actor, nouvel_agent):
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "Vous ne pouvez pas affecter cet agent.")
     if new_agent_id != user.agent_id:
         user.agent_id = new_agent_id
         changes["agent_id"] = new_agent_id

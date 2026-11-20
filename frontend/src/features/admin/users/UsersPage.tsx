@@ -21,13 +21,13 @@ import { useAuth } from '../../auth/session'
 import type { Role, UserOut } from '../../auth/types'
 import { listRoles } from '../../roles/api'
 import { createUser, updateUser } from '../api'
-import { adminKeys, useAdminMutation, useAgents, useUsers } from '../queries'
+import { adminKeys, useAdminMutation, useAgentsDisponibles, useUsers } from '../queries'
 
 function CreateUserModal({ onClose }: { onClose: () => void }) {
   const toast = useToast()
   const { user: me } = useAuth()
   const navigate = useNavigate()
-  const agents = useAgents()
+  const agents = useAgentsDisponibles()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<Role>('UTILISATEUR')
@@ -35,7 +35,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
   const [roleIds, setRoleIds] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
   const save = useAdminMutation(() => createUser({ nom_utilisateur: username, mot_de_passe: password, role, agent_id: agentId || null, role_ids: roleIds }), [adminKeys.users, adminKeys.agents])
-  const free = (agents.data ?? []).filter((a) => a.actif && a.service_id !== null && !a.nom_utilisateur)
+  const free = agents.data ?? []
   const selectedAgent = free.find((a) => a.id === Number(agentId)) ?? (agents.data ?? []).find((a) => a.id === Number(agentId)) ?? null
   const divisionId = selectedAgent?.division_id ?? null
   const roleQuery = useQuery({

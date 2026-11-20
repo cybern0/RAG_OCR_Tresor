@@ -13,6 +13,7 @@ export const useUsers = () => useQuery({ queryKey: adminKeys.users, queryFn: api
 export const useUser = (id: number) => useQuery({ queryKey: [...adminKeys.users, id], queryFn: () => api.getUser(id), enabled: Number.isFinite(id) })
 export const useDirections = () => useQuery({ queryKey: adminKeys.directions, queryFn: api.listDirections })
 export const useServices = () => useQuery({ queryKey: adminKeys.services, queryFn: api.listServices })
+export const useAgentsDisponibles = (pourUser?: number) => useQuery({ queryKey: [...adminKeys.agents, 'disponibles', pourUser ?? null], queryFn: () => api.listAgentsDisponibles(pourUser) })
 export const useAgents = () => useQuery({ queryKey: adminKeys.agents, queryFn: api.listAgents })
 export const useAudit = () => useQuery({ queryKey: adminKeys.audit, queryFn: () => api.listAudit(200) })
 export const useStats = () => useQuery({ queryKey: adminKeys.stats, queryFn: api.fetchStats })

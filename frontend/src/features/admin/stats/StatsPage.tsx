@@ -1,6 +1,6 @@
 // Tableau de bord du super administrateur (/admin, première page du compte ROOT) :
 // indicateurs clés, statut d'indexation, TRAÇAGE DES ERREURS d'indexation par service / division / rôle,
-// répartitions (catégorie, type, confidentialité, format, direction, service) et état du système.
+// répartitions (confidentialité, format, direction, service, rôle), classement des contributeurs et état du système.
 // Les libellés viennent du serveur (jamais de simples numéros). Les erreurs viennent du tableau de bord ROOT.
 import { Activity, Archive, FileText, HardDrive, Layers, Trash2 } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -14,7 +14,7 @@ import PageHeader from '../../../shared/ui/PageHeader'
 import { fetchTableauDeBord } from '../../accueil/api'
 import type { ErreursIndexation } from '../../accueil/api'
 import { useHealth, useStats } from '../queries'
-import type { StatLine } from '../types'
+import type { ClassementLine, StatLine } from '../types'
 
 function Kpi({ icon, label, value, hint }: { icon: ReactNode; label: string; value: ReactNode; hint?: string }) {
   return (
@@ -78,6 +78,30 @@ function Donut({ data }: { data: Record<string, number> }) {
           ))}
         </ul>
       </div>
+    </section>
+  )
+}
+
+function Classement({ items }: { items: ClassementLine[] }) {
+  const max = Math.max(1, ...items.map((i) => i.total))
+  return (
+    <section className="card p-4">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gold-400">Classement · fichiers déposés</h2>
+      {items.length === 0 ? <p className="text-sm text-cream-300">Aucun fichier déposé.</p> : (
+        <ol className="space-y-2.5">
+          {items.map((i) => (
+            <li key={i.nom} className="flex items-center gap-3">
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i.rang === 1 ? 'bg-gold-500 text-leaf-950' : 'bg-leaf-950/70 text-cream-200'}`}>{i.rang}</span>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex justify-between gap-2 text-sm"><span className="truncate">{i.nom}</span><span className="font-semibold text-gold-300">{i.total}</span></div>
+                <div className="h-2 overflow-hidden rounded-full bg-leaf-950/70" role="img" aria-label={`${i.nom} : ${i.total}`}>
+                  <div className="h-full rounded-full" style={{ width: `${(i.total / max) * 100}%`, background: 'var(--color-gold-500)' }} />
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   )
 }
@@ -184,12 +208,12 @@ export function Component() {
           <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
             <Donut data={s.statut} />
             <SystemHealth />
-            <BarList title="Par catégorie" rows={lines(s.par_categorie, 'Catégorie supprimée')} />
-            <BarList title="Par type de document" rows={lines(s.par_type, 'Type supprimé')} />
             <BarList title="Par confidentialité" rows={entries(s.par_confidentialite, { PUBLIC: 'Public', INTERNE: 'Interne', CONFIDENTIEL: 'Confidentiel' })} />
             <BarList title="Par format" rows={entries(s.par_extension)} />
             <BarList title="Par direction" rows={lines(s.par_direction, 'Direction inconnue')} empty="Aucun fichier rattaché à une direction." />
             <BarList title="Par service" rows={lines(s.par_service, 'Service inconnu')} empty="Aucun fichier rattaché à un service." />
+            <BarList title="Par rôle" rows={lines(s.par_role, 'Rôle inconnu')} empty="Aucun utilisateur rattaché à un rôle." />
+            <Classement items={s.classement} />
           </div>
         </div>
       )}

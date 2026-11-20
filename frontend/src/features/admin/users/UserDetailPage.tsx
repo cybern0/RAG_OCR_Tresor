@@ -17,7 +17,7 @@ import { useAuth } from '../../auth/session'
 import type { Role, UserOut } from '../../auth/types'
 import RolesAgentPanel from '../../roles/RolesAgentPanel'
 import { updateUser } from '../api'
-import { adminKeys, useAdminMutation, useAgents, useUser } from '../queries'
+import { adminKeys, useAdminMutation, useAgentsDisponibles, useUser } from '../queries'
 
 const ALPHABET = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
@@ -35,7 +35,7 @@ function generatePassword(length = 14): string {
 
 function AccountForm({ target, canEdit, canChangeRole, isSelf }: { target: UserOut; canEdit: boolean; canChangeRole: boolean; isSelf: boolean }) {
   const toast = useToast()
-  const agents = useAgents()
+  const agents = useAgentsDisponibles(target.id)
   const [role, setRole] = useState<Role>(target.role)
   const [agentId, setAgentId] = useState<number | ''>(target.agent?.id ?? '')
   const [actif, setActif] = useState(target.actif)
@@ -46,7 +46,7 @@ function AccountForm({ target, canEdit, canChangeRole, isSelf }: { target: UserO
     retirer_agent: !agentId && target.agent !== null ? true : undefined,
     actif: actif !== target.actif ? actif : undefined,
   }), [adminKeys.users, adminKeys.agents])
-  const free = (agents.data ?? []).filter((a) => a.actif && a.service_id !== null && (!a.nom_utilisateur || a.id === target.agent?.id))
+  const free = agents.data ?? []
   const changed = role !== target.role || (agentId || null) !== (target.agent?.id ?? null) || actif !== target.actif
 
   async function submit(e: FormEvent) {
@@ -68,7 +68,7 @@ function AccountForm({ target, canEdit, canChangeRole, isSelf }: { target: UserO
       </Field>
       <Field label={`Agent${role === 'UTILISATEUR' ? '' : ' (facultatif)'}`} hint="Son service et sa division en découlent : ils déterminent les fichiers accessibles.">
         {(id) => (
-          <select id={id} className="input" disabled={!canEdit} required={role === 'UTILISATEUR'} value={agentId} onChange={(e) => setAgentId(e.target.value ? Number(e.target.value) : '')}>
+          <select id={id} className="input" disabled={!canEdit || (isSelf && !canChangeRole)} required={role === 'UTILISATEUR'} value={agentId} onChange={(e) => setAgentId(e.target.value ? Number(e.target.value) : '')}>
             <option value="">— Aucun —</option>
             {free.map((a) => <option key={a.id} value={a.id}>{a.nom} {a.prenom} — {a.service_nom}</option>)}
           </select>

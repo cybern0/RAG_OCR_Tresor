@@ -132,3 +132,29 @@ def test_delete_methods_mark_or_remove_ged_entities():
     assert deleted_tag is tag
     assert deleted_rule is rule
     assert len(db.deleted) == 2
+
+
+def test_charger_roles_et_classement_trie_et_numerote():
+    from app.services.classement import charger_roles_et_classement
+
+    class FakeResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def all(self):
+            return self._rows
+
+    class FakeDb:
+        def __init__(self):
+            self.answers = [
+                [("Agent", 2), ("Chef de division", 5)],  # utilisateurs par rôle
+                [("alice", 3), ("bob", 7), ("carl", 3)],  # fichiers déposés par utilisateur
+            ]
+
+        def execute(self, _statement):
+            return FakeResult(self.answers.pop(0))
+
+    out = charger_roles_et_classement(FakeDb(), limite=2)
+
+    assert out["par_role"] == [{"nom": "Chef de division", "total": 5}, {"nom": "Agent", "total": 2}]
+    assert out["classement"] == [{"rang": 1, "nom": "bob", "total": 7}, {"rang": 2, "nom": "alice", "total": 3}]
